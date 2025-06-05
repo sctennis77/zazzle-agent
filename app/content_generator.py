@@ -20,6 +20,7 @@ class ContentGenerator:
         logger.info("Initializing ContentGenerator")
 
     def generate_tweet_content(self, product_name: str, force_new_content: bool = False) -> str:
+        """Generate tweet content for a product name."""
         try:
             prompt = f"Create a tweet for the product: {product_name}"
             response = self.client.chat.completions.create(
@@ -31,7 +32,7 @@ class ContentGenerator:
             return tweet_text
         except Exception as e:
             logger.error(f"Error generating tweet content for {product_name}: {e}")
-            return "Error generating tweet content."
+            return "Error generating tweet content"
 
     def generate_content_batch(self, products: List[Product], force_new_content: bool = False) -> List[Product]:
         processed_products = []

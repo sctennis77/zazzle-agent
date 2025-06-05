@@ -62,74 +62,32 @@ def load_products(config_path: str = "app/products_config.json") -> List[Product
         raise
 
 def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
-    """Save processed products to a CSV file.
-    
-    Args:
-        products: List of processed Product objects
-        output_dir: Directory to save the CSV file
-        
-    Returns:
-        str: Path to the saved CSV file
-    """
+    """Save processed products to a CSV file."""
     try:
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"listings_{timestamp}.csv"
         filepath = os.path.join(output_dir, filename)
-        
-        # Convert products to DataFrame
-        data = []
-        for product in products:
-            data.append({
-                'product_id': product.product_id,
-                'name': product.name,
-                'affiliate_link': product.affiliate_link,
-                'tweet_text': product.tweet_text,
-                'identifier': product.identifier,
-                'screenshot_path': product.screenshot_path
-            })
-        
+        data = [product.to_dict() for product in products]
         df = pd.DataFrame(data)
-        
-        # Save to CSV
         df.to_csv(filepath, index=False)
         logger.info(f"Saved {len(products)} products to {filepath}")
         return filepath
-        
     except Exception as e:
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
 def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen: ContentGenerator) -> Product:
-    """Process a single product to generate affiliate link and tweet content.
-    
-    Args:
-        product: Product object to process
-        linker: ZazzleAffiliateLinker instance
-        content_gen: ContentGenerator instance
-        
-    Returns:
-        Product: Processed product with affiliate link and tweet content
-    """
+    """Process a single product to generate affiliate link and tweet content."""
     try:
-        # Generate affiliate link
         product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
-        
-        # Generate tweet content
         try:
             product.tweet_text = content_gen.generate_tweet_content(product.name)
         except Exception as e:
             logger.error(f"Error generating tweet content for product {product.product_id}: {str(e)}")
             product.tweet_text = "Error generating tweet content"
-        
-        # Generate unique identifier
-        product.identifier = f"{product.product_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
+        product.identifier = Product.generate_identifier(product.product_id)
         return product
-        
     except Exception as e:
         logger.error(f"Error processing product {product.product_id}: {str(e)}")
         raise

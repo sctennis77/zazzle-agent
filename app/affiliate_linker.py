@@ -2,18 +2,10 @@ import os
 import logging
 from typing import Dict, List, Optional
 from urllib.parse import quote, urljoin
-from dataclasses import dataclass
 from app.models import Product
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-@dataclass
-class ProductData:
-    """Data class to hold product information."""
-    title: str
-    product_id: str
-    affiliate_id: str
 
 class ZazzleAffiliateLinkerError(Exception):
     """Base exception for ZazzleAffiliateLinker errors."""
@@ -25,8 +17,6 @@ class InvalidProductDataError(ZazzleAffiliateLinkerError):
 
 class ZazzleAffiliateLinker:
     """Handles generation of Zazzle affiliate links."""
-    
-    BASE_URL = "https://www.zazzle.com/shop"
     
     def __init__(self, affiliate_id: str):
         """
@@ -43,7 +33,6 @@ class ZazzleAffiliateLinker:
             
         logger.info("Initializing ZazzleAffiliateLinker")
         self.affiliate_id = affiliate_id
-        self.base_url = self.BASE_URL
 
     def _validate_product_data(self, product_id: str, name: str) -> None:
         if not product_id:

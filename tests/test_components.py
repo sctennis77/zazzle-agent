@@ -7,8 +7,7 @@ from urllib.parse import quote
 from app.affiliate_linker import (
     ZazzleAffiliateLinker,
     ZazzleAffiliateLinkerError,
-    InvalidProductDataError,
-    ProductData
+    InvalidProductDataError
 )
 from app.content_generator import ContentGenerator, generate_content_from_config
 from app.models import Product
@@ -227,7 +226,7 @@ class TestComponents(unittest.TestCase):
         # Assert that an error message is returned for the product
         self.assertEqual(len(generated_content), 1)
         self.assertIn('ID_A', generated_content)
-        self.assertEqual(generated_content['ID_A'], "Error generating tweet content.")
+        self.assertEqual(generated_content['ID_A'], "Error generating tweet content")
 
     @patch('app.content_generator.OpenAI')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"product_id": "ID_A", "name": "Product A"}, {"product_id": "ID_B", "name": "Product B"}, {"product_id": "ID_C", "name": "Product C"}]')
