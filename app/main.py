@@ -32,14 +32,33 @@ def ensure_output_dir():
     """Ensure the outputs directory exists."""
     os.makedirs('outputs', exist_ok=True)
 
-def load_products_from_config(config_file: str = 'app/products_config.json') -> List[Product]:
+def load_products(config_path: str = "app/products_config.json") -> List[Product]:
+    """Load products from configuration file.
+    
+    Args:
+        config_path: Path to the products configuration file
+        
+    Returns:
+        List[Product]: List of Product objects
+    """
     try:
-        with open(config_file, 'r') as f:
-            products_data = json.load(f)
-        logging.info(f"Successfully loaded {len(products_data)} products from {config_file}")
-        return [Product.from_dict(product) for product in products_data]
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            
+        products = []
+        for product_data in config['products']:
+            product = Product(
+                product_id=product_data['product_id'],
+                name=product_data['name'],
+                screenshot_path=product_data.get('screenshot_path')  # Get screenshot path from config
+            )
+            products.append(product)
+            
+        logger.info(f"Loaded {len(products)} products from {config_path}")
+        return products
+        
     except Exception as e:
-        logging.error(f"Error loading products from config: {e}")
+        logger.error(f"Error loading products from {config_path}: {str(e)}")
         raise
 
 def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
@@ -134,7 +153,7 @@ def main():
     ensure_output_dir()
 
     # Load products from config
-    products = load_products_from_config()
+    products = load_products()
 
     if not products:
         logger.warning("No products found in the configuration file.")
