@@ -112,13 +112,9 @@ class ZazzleAffiliateLinker:
             try:
                 affiliate_link = self.generate_affiliate_link(product.product_id, product.name)
                 product.affiliate_link = affiliate_link
-                processed_products.append(product)
             except Exception as e:
                 logger.error(f"Error processing product {product.product_id}: {e}")
-                # Continue processing other products even if one fails
-                continue
+                product.affiliate_link = None
+            processed_products.append(product)
                 
-        if not processed_products:
-            raise ZazzleAffiliateLinkerError("No products were successfully processed")
-            
         return processed_products 

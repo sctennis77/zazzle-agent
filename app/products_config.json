@@ -1,0 +1,17 @@
+[
+    {
+        "product_id": "ID_A",
+        "name": "Product A",
+        "screenshot_path": "outputs/screenshots/ID_A.png"
+    },
+    {
+        "product_id": "ID_B",
+        "name": "Product B",
+        "screenshot_path": "outputs/screenshots/ID_B.png"
+    },
+    {
+        "product_id": "ID_C",
+        "name": "Product C",
+        "screenshot_path": "outputs/screenshots/ID_C.png"
+    }
+] 

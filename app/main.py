@@ -88,7 +88,8 @@ def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
                 'name': product.name,
                 'affiliate_link': product.affiliate_link,
                 'tweet_text': product.tweet_text,
-                'identifier': product.identifier
+                'identifier': product.identifier,
+                'screenshot_path': product.screenshot_path
             })
         
         df = pd.DataFrame(data)
@@ -118,7 +119,14 @@ def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen
         product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
         
         # Generate tweet content
-        product.tweet_text = content_gen.generate_tweet_content(product.name)
+        try:
+            product.tweet_text = content_gen.generate_tweet_content(product.name)
+        except Exception as e:
+            logger.error(f"Error generating tweet content for product {product.product_id}: {str(e)}")
+            product.tweet_text = "Error generating tweet content"
+        
+        # Generate unique identifier
+        product.identifier = f"{product.product_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
         return product
         
