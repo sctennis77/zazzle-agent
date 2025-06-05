@@ -4,7 +4,12 @@ import os
 import json
 from urllib.parse import quote
 
-from app.affiliate_linker import ZazzleAffiliateLinker
+from app.affiliate_linker import (
+    ZazzleAffiliateLinker,
+    ZazzleAffiliateLinkerError,
+    InvalidProductDataError,
+    ProductData
+)
 from app.content_generator import ContentGenerator, generate_content_from_config
 
 
@@ -30,40 +35,112 @@ class TestComponents(unittest.TestCase):
             {'title': 'Product C', 'product_id': 'ID_C'},
         ]
 
+    def test_affiliate_linker_initialization(self):
+        # Test successful initialization
+        linker = ZazzleAffiliateLinker('test_affiliate_id')
+        self.assertEqual(linker.affiliate_id, 'test_affiliate_id')
+
+        # Test initialization with empty affiliate ID
+        with self.assertRaises(ValueError):
+            ZazzleAffiliateLinker('')
+
+        # Test initialization with None affiliate ID
+        with self.assertRaises(ValueError):
+            ZazzleAffiliateLinker(None)
+
     def test_affiliate_linker_success(self):
         linker = ZazzleAffiliateLinker('test_affiliate_id')
         affiliate_link = linker.generate_affiliate_link(self.test_product)
+        
+        # Verify the link contains all required components
         self.assertIn('test_affiliate_id', affiliate_link)
         self.assertIn(self.test_product['product_id'], affiliate_link)
         encoded_title = quote(self.test_product['title'])
         self.assertIn(encoded_title, affiliate_link)
-        self.assertIn('https://www.zazzle.com/', affiliate_link)
+        self.assertIn('https://www.zazzle.com/shop', affiliate_link)
 
     def test_affiliate_linker_missing_data(self):
         linker = ZazzleAffiliateLinker('test_affiliate_id')
-        incomplete_product_title_only = {'title': 'Only Title'}
-        incomplete_product_id_only = {'product_id': 'Only ID'}
-
-        # Check that KeyError is raised when 'product_id' is missing
-        with self.assertRaises(KeyError) as cm:
+        
+        # Test missing title
+        incomplete_product_title_only = {'product_id': 'Only ID'}
+        with self.assertRaises(InvalidProductDataError) as cm:
             linker.generate_affiliate_link(incomplete_product_title_only)
-        self.assertIn('product_id', str(cm.exception))
-
-        # Check that KeyError is raised when 'title' is missing
-        with self.assertRaises(KeyError) as cm:
-            linker.generate_affiliate_link(incomplete_product_id_only)
         self.assertIn('title', str(cm.exception))
 
+        # Test missing product_id
+        incomplete_product_id_only = {'title': 'Only Title'}
+        with self.assertRaises(InvalidProductDataError) as cm:
+            linker.generate_affiliate_link(incomplete_product_id_only)
+        self.assertIn('product_id', str(cm.exception))
+
+        # Test empty data
+        with self.assertRaises(InvalidProductDataError):
+            linker.generate_affiliate_link({})
 
     def test_affiliate_linker_batch_processing(self):
         linker = ZazzleAffiliateLinker('test_affiliate_id')
-        # Correct the method name from generate_affiliate_links to generate_links_batch
+        
+        # Test successful batch processing
         links = linker.generate_links_batch(self.test_products)
         self.assertEqual(len(links), len(self.test_products))
+        
         for link_info in links:
             self.assertIn('affiliate_link', link_info)
             self.assertIn('test_affiliate_id', link_info['affiliate_link'])
-            self.assertIn('https://www.zazzle.com/', link_info['affiliate_link'])
+            self.assertIn('https://www.zazzle.com/shop', link_info['affiliate_link'])
+
+        # Test batch processing with some invalid products
+        mixed_products = self.test_products + [
+            {'title': 'Invalid Product'},  # Missing product_id
+            {'product_id': 'Invalid ID'}   # Missing title
+        ]
+        
+        # Should still process valid products and skip invalid ones
+        links = linker.generate_links_batch(mixed_products)
+        self.assertEqual(len(links), len(self.test_products))  # Only valid products processed
+
+        # Test batch processing with all invalid products
+        invalid_products = [
+            {'title': 'Invalid Product'},  # Missing product_id
+            {'product_id': 'Invalid ID'}   # Missing title
+        ]
+        
+        with self.assertRaises(ZazzleAffiliateLinkerError):
+            linker.generate_links_batch(invalid_products)
+
+    def test_product_data_validation(self):
+        linker = ZazzleAffiliateLinker('test_affiliate_id')
+        
+        # Test valid product data
+        product_data = linker._validate_product_data(self.test_product)
+        self.assertIsInstance(product_data, ProductData)
+        self.assertEqual(product_data.title, self.test_product['title'])
+        self.assertEqual(product_data.product_id, self.test_product['product_id'])
+        self.assertEqual(product_data.affiliate_id, 'test_affiliate_id')
+
+        # Test invalid product data
+        with self.assertRaises(InvalidProductDataError):
+            linker._validate_product_data({'title': ''})  # Empty title
+
+        with self.assertRaises(InvalidProductDataError):
+            linker._validate_product_data({'product_id': ''})  # Empty product_id
+
+    def test_affiliate_link_construction(self):
+        linker = ZazzleAffiliateLinker('test_affiliate_id')
+        product = ProductData(
+            title='Test Product',
+            product_id='TEST123',
+            affiliate_id='test_affiliate_id'
+        )
+        
+        link = linker._construct_affiliate_link(product)
+        
+        # Verify link structure
+        self.assertTrue(link.startswith('https://www.zazzle.com/shop?'))
+        self.assertIn('rf=test_affiliate_id', link)
+        self.assertIn('product_id=TEST123', link)
+        self.assertIn('title=Test%20Product', link)
 
     @patch('app.content_generator.OpenAI')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"product_id": "ID_A", "name": "Product A"}, {"product_id": "ID_B", "name": "Product B"}]')

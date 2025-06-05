@@ -35,15 +35,14 @@ class ContentGenerator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a marketing assistant generating tweet content."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=60, # Keep response short for tweets
-                temperature=0.7
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}]
             )
             tweet_text = response.choices[0].message.content.strip()
+            # Append the affiliate link to the tweet text
+            affiliate_link = product_details.get('affiliate_link', '')
+            if affiliate_link:
+                tweet_text += f" {affiliate_link}"
             logger.info(f"Successfully generated tweet for {title}")
             return tweet_text
 
