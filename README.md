@@ -1,93 +1,73 @@
 # Zazzle Affiliate Marketing Agent
 
-An automated system for scraping Zazzle bestsellers, generating affiliate links, and creating social media content.
+This project automates the process of scraping Zazzle bestseller pages, generating affiliate links, and creating tweet-sized descriptions using GPT-4.
 
 ## Features
 
-- Scrapes Zazzle bestseller pages and category pages
-- Extracts product titles and IDs
+- Scrapes Zazzle bestseller pages
 - Generates affiliate links with your Zazzle affiliate ID
-- Creates tweet-sized product descriptions using GPT-4
-- Exports data to CSV format
-- Containerized for easy deployment
+- Creates engaging tweet-sized descriptions using GPT-4
+- Saves results to CSV files
+- Comprehensive test suite with high coverage
 
 ## Prerequisites
 
-- Python 3.11+
-- Docker (for containerized deployment)
+- Python 3.8+
+- Chrome browser (for web scraping)
 - OpenAI API key
 - Zazzle affiliate ID
 
-## Setup
+## Environment Variables
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/zazzle-affiliate-agent.git
-cd zazzle-affiliate-agent
-```
+Create a `.env` file in the project root with the following variables:
 
-2. Create a `.env` file from the example:
-```bash
-cp .env.example .env
 ```
-
-3. Edit the `.env` file with your credentials:
-```
-OPENAI_API_KEY=your_openai_api_key_here
-ZAZZLE_AFFILIATE_ID=your_affiliate_id_here
+OPENAI_API_KEY=your_openai_api_key
+ZAZZLE_AFFILIATE_ID=your_affiliate_id
 SCRAPE_DELAY=2
 MAX_PRODUCTS=100
 ```
 
-## Usage
+## Development
 
-### Running with Docker
+This project uses a Makefile to simplify common development tasks. Here are the available commands:
 
-1. Build the Docker image:
-```bash
-docker build -t zazzle-affiliate-agent .
+- `make venv` — Create a Python virtual environment (if not already created)
+- `make install` — Install dependencies into the virtual environment
+- `make test` — Run the test suite with coverage
+- `make run` — Run the app locally
+- `make clean` — Remove the virtual environment, outputs, and coverage files
+- `make docker-build` — Build the Docker image (only if tests pass)
+- `make docker-run` — Run the Docker container, mounting the outputs directory
+
+Example usage:
+```sh
+make venv
+make install
+make test
+make run
+# or for Docker
+make docker-build
+make docker-run
 ```
 
-2. Run the container:
+## Docker
+
+Build and run the application using Docker:
+
 ```bash
+docker build -t zazzle-affiliate-agent .
 docker run -v $(pwd)/outputs:/app/outputs zazzle-affiliate-agent
 ```
 
-### Running Locally
+## Testing
 
-1. Install dependencies:
+Run the test suite:
+
 ```bash
-pip install -r requirements.txt
+python -m pytest tests/ --cov=app
 ```
-
-2. Run the script:
-```bash
-python app/main.py
-```
-
-## Output
-
-The script generates a CSV file in the `outputs` directory with the following columns:
-- Product title
-- Affiliate link
-- Tweet text
-
-Files are named with timestamps: `listings_YYYYMMDD_HHMMSS.csv`
-
-## Configuration
-
-You can adjust the following parameters in the `.env` file:
-- `SCRAPE_DELAY`: Delay between requests (in seconds)
-- `MAX_PRODUCTS`: Maximum number of products to scrape
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
 
 ## License
 
-MIT License 
+MIT 
