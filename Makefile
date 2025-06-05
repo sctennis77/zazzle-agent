@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run clean docker-build docker-run
+.PHONY: help test venv install run clean docker-build docker-run scrape
 
 help:
 	@echo "Available targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
 	@echo "  make docker-run   - Run Docker container"
+	@echo "  make scrape       - Run only the scraping part of the program"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -24,7 +25,7 @@ test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
 run:
-	. $(VENV_NAME)/bin/activate && $(PYTHON) app/main.py
+	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main
 
 clean:
 	rm -rf $(VENV_NAME) outputs/ .coverage
@@ -36,3 +37,6 @@ docker-build: test
 
 docker-run:
 	docker run -v $(PWD)/outputs:/app/outputs zazzle-affiliate-agent 
+
+scrape:
+	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.product_scraper 
