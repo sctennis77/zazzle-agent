@@ -2,6 +2,9 @@ import os
 import logging
 import json
 from typing import List, Dict
+import pandas as pd
+from datetime import datetime
+from dotenv import load_dotenv
 
 from app.affiliate_linker import ZazzleAffiliateLinker
 from app.content_generator import ContentGenerator
@@ -12,6 +15,32 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+def ensure_output_dir():
+    """Ensure the outputs directory exists."""
+    os.makedirs('outputs', exist_ok=True)
+
+def save_to_csv(products: List[Dict[str, str]]):
+    """
+    Save processed products to a CSV file.
+    
+    Args:
+        products: List of dictionaries containing product information.
+    """
+    if not products:
+        logger.info("No products to save to CSV.")
+        return
+        
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'outputs/listings_{timestamp}.csv'
+    
+    df = pd.DataFrame(products)
+    df = df[['product_id', 'name', 'affiliate_link', 'tweet_text']] # Ensure column order
+    df.to_csv(filename, index=False)
+    logger.info(f"Saved {len(products)} products to {filename}")
 
 def main():
     logger.info("Starting Zazzle Affiliate Marketing Agent")
@@ -26,6 +55,9 @@ def main():
     if not openai_api_key:
         logger.error("OPENAI_API_KEY environment variable not set.")
         return
+
+    # Ensure output directory exists
+    ensure_output_dir()
 
     try:
         # Read product data from config file
@@ -46,6 +78,8 @@ def main():
 
     if not products_data:
         logger.warning("No products found in the configuration file.")
+        # Still attempt to save an empty CSV or log this outcome
+        save_to_csv([]) # Save empty to indicate no data processed
         return
 
     # Initialize components
@@ -59,24 +93,29 @@ def main():
         product_name = product.get('name', f'Product {product_id}') # Use name from config as placeholder title
 
         # Add title to product dict for linker and generator compatibility
-        product['title'] = product_name
+        # Ensure the original product dictionary is copied or updated carefully
+        current_product_data = product.copy() # Work on a copy to not modify original list during iteration if needed
+        current_product_data['title'] = product_name # Add title for content generation
 
         # Generate affiliate link
-        affiliate_link = linker.generate_affiliate_link(product)
-        product['affiliate_link'] = affiliate_link
+        affiliate_link = linker.generate_affiliate_link(current_product_data)
+        current_product_data['affiliate_link'] = affiliate_link
 
         # Generate tweet content with error handling
         try:
-            tweet_text = content_gen.generate_tweet_content(product)
-            product['tweet_text'] = tweet_text
+            tweet_text = content_gen.generate_tweet_content(current_product_data)
+            current_product_data['tweet_text'] = tweet_text
         except Exception as e:
             logger.error(f"Error generating tweet content for product {product_id}: {e}")
-            product['tweet_text'] = "Error generating tweet content."
+            current_product_data['tweet_text'] = "Error generating tweet content."
 
-        processed_products.append(product)
+        processed_products.append(current_product_data)
 
-    # Output results (for now, just print)
-    logger.info("\n--- Processed Products ---")
+    # Save results to CSV
+    save_to_csv(processed_products)
+
+    # Output results (for now, also print)
+    logger.info("\n--- Processed Products Summary ---")
     for product in processed_products:
         print(f"Product ID: {product.get('product_id','N/A')}")
         print(f"Name: {product.get('name','N/A')}")

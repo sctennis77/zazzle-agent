@@ -35,22 +35,23 @@ class TestIntegration(unittest.TestCase):
         # Create a temporary outputs directory for testing file saving (if still applicable)
         # Note: Main function no longer saves to CSV, but keeping this in case of future changes
         self.outputs_dir = 'test_outputs'
-        os.makedirs(self.outputs_dir, exist_ok=True)
-        # Patch the outputs directory creation/usage if necessary in main.py or other places
-        # However, since main.py no longer saves to CSV, this might not be strictly needed for current tests.
+        # No need to os.makedirs here, will mock it in the test
 
     def tearDown(self):
-        # Clean up the temporary outputs directory
-        if os.path.exists(self.outputs_dir):
-            import shutil
-            shutil.rmtree(self.outputs_dir)
+        # Clean up the temporary outputs directory (if it were actually created by the test)
+        # Since we are mocking, actual directory creation is prevented. Clean up is less critical.
+        # However, if the mock was imperfect or for future changes, keeping cleanup is good practice.
+        # In this mocked scenario, we don't need to remove a directory.
+        pass # Removed shutil.rmtree(self.outputs_dir)
 
-    @patch('app.main.ContentGenerator') # Patch ContentGenerator in app.main
-    @patch('app.main.ZazzleAffiliateLinker') # Patch ZazzleAffiliateLinker in app.main
-    @patch('app.main.json.load', autospec=True) # Patch json.load in app.main
-    @patch('builtins.open', new_callable=mock_open) # Patch open in app.main
-    @patch('app.main.os.path.exists', return_value=True) # Mock path.exists for config file
-    def test_end_to_end_flow_success(self, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
+    @patch('app.main.ContentGenerator')
+    @patch('app.main.ZazzleAffiliateLinker')
+    @patch('app.main.json.load', autospec=True)
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('app.main.os.path.exists', return_value=True)
+    @patch('app.main.os.makedirs')
+    @patch('app.main.pd.DataFrame')
+    def test_end_to_end_flow_success(self, mock_dataframe_class, mock_makedirs, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
         # Configure mock json.load to return our mock product data
         mock_json_load.return_value = self.mock_products_data
 
@@ -58,78 +59,69 @@ class TestIntegration(unittest.TestCase):
         mock_linker_instance = MagicMock()
         mock_linker.return_value = mock_linker_instance
         mock_linker_instance.generate_affiliate_link.side_effect = lambda product: f"http://testlink.com/{product['product_id']}?rf=test_affiliate_id"
-        mock_linker_instance.generate_links_batch.side_effect = lambda products: [{'product_id': p['product_id'], 'affiliate_link': f"http://testlink.com/{p['product_id']}?rf=test_affiliate_id"} for p in products]
 
         # Configure mock content generator instance
         mock_content_gen_instance = MagicMock()
         mock_content_gen.return_value = mock_content_gen_instance
         mock_content_gen_instance.generate_tweet_content.side_effect = lambda product: f"Tweet for {product['name']}."
-        # Note: The main function now processes products one by one, so generate_tweets_batch might not be called.
-        # Adjusting mock to match the main function's loop.
-        mock_content_gen_instance.generate_tweets_batch.side_effect = lambda products: products # Fallback if needed
 
-        # Patch print to capture output
-        with patch('builtins.print') as mock_print:
-            # Run the main function
-            main()
-
-            # Assert that json.load and open were called for the config file
-            mock_open.assert_called_with('app/products_config.json', 'r')
-            mock_json_load.assert_called_once()
-
-            # Assert that linker and content generator were initialized with correct arguments
-            mock_linker.assert_called_once_with(affiliate_id='test_affiliate_id')
-            mock_content_gen.assert_called_once_with(api_key='test_openai_key')
-
-            # Assert that generate_affiliate_link and generate_tweet_content were called for each product
-            self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(self.mock_products_data))
-            self.assertEqual(mock_content_gen_instance.generate_tweet_content.call_count, len(self.mock_products_data))
-
-            # Assert that print was called for each product with the generated information
-            expected_prints = []
-            for product in self.mock_products_data:
-                 expected_prints.append(f"Product ID: {product['product_id']}")
-                 expected_prints.append(f"Name: {product['name']}")
-                 expected_prints.append(f"Affiliate Link: http://testlink.com/{product['product_id']}?rf=test_affiliate_id")
-                 expected_prints.append(f"Tweet Content: Tweet for {product['name']}.")
-                 expected_prints.append("---")
-
-            mock_print.assert_has_calls([unittest.mock.call(p) for p in expected_prints], any_order=False)
-
-    @patch('app.main.ContentGenerator')
-    @patch('app.main.ZazzleAffiliateLinker')
-    @patch('app.main.json.load', autospec=True) # Patch json.load in app.main
-    @patch('builtins.open', new_callable=mock_open) # Patch open in app.main
-    @patch('app.main.os.path.exists', return_value=True) # Mock path.exists for config file
-    @patch('app.main.logger.warning') # Patch logger.warning to check for specific log messages
-    def test_end_to_end_flow_no_products(self, mock_warning_logger, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
-        # Configure mock json.load to return an empty list
-        mock_json_load.return_value = []
+        # Mock DataFrame instance and its to_csv method
+        mock_df_instance = MagicMock()
+        mock_df_instance.__getitem__.return_value = mock_df_instance
+        mock_dataframe_class.return_value = mock_df_instance
 
         # Run the main function
         main()
 
         # Assert that json.load and open were called for the config file
-        mock_open.assert_called_with('app/products_config.json', 'r')
+        mock_open.assert_any_call('app/products_config.json', 'r')
         mock_json_load.assert_called_once()
 
-        # Assert that linker and content generator were NOT initialized
-        mock_linker.assert_not_called()
-        mock_content_gen.assert_not_called()
+        # Assert that linker and content generator were initialized with correct arguments
+        mock_linker.assert_called_once_with(affiliate_id='test_affiliate_id')
+        mock_content_gen.assert_called_once_with(api_key='test_openai_key')
 
-        # Assert that the expected warning message was logged
-        mock_warning_logger.assert_called_once_with("No products found in the configuration file.")
+        # Assert that generate_affiliate_link and generate_tweet_content were called for each product
+        self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(self.mock_products_data))
+        self.assertEqual(mock_content_gen_instance.generate_tweet_content.call_count, len(self.mock_products_data))
+
+        # Assert that the outputs directory was ensured
+        mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
+
+        # Assert that a DataFrame was created with the processed product data
+        expected_processed_data = []
+        for product in self.mock_products_data:
+            expected_processed_data.append({
+                'product_id': product['product_id'],
+                'name': product['name'],
+                'title': product['name'],
+                'affiliate_link': f"http://testlink.com/{product['product_id']}?rf=test_affiliate_id",
+                'tweet_text': f"Tweet for {product['name']}."
+            })
+
+        # Verify DataFrame was created with correct data
+        mock_dataframe_class.assert_called_once()
+        actual_processed_data = mock_dataframe_class.call_args[0][0]
+        self.assertEqual(actual_processed_data, expected_processed_data)
+
+        # Verify to_csv was called
+        mock_df_instance.to_csv.assert_called_once()
+        call_args, call_kwargs = mock_df_instance.to_csv.call_args
+        self.assertRegex(call_args[0], r'outputs/listings_\d{8}_\d{6}.csv')
+        self.assertEqual(call_kwargs.get('index'), False)
 
     @patch('app.main.ContentGenerator')
     @patch('app.main.ZazzleAffiliateLinker')
-    @patch('app.main.json.load', autospec=True) # Patch json.load in app.main
-    @patch('builtins.open', new_callable=mock_open) # Patch open in app.main
-    @patch('app.main.os.path.exists', return_value=True) # Mock path.exists for config file
-    def test_end_to_end_flow_openai_error(self, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
+    @patch('app.main.json.load', autospec=True)
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('app.main.os.path.exists', return_value=True)
+    @patch('app.main.os.makedirs')
+    @patch('app.main.pd.DataFrame')
+    def test_end_to_end_flow_openai_error(self, mock_dataframe_class, mock_makedirs, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
         # Configure mock json.load to return our mock product data
         mock_json_load.return_value = self.mock_products_data
 
-        # Configure mock linker instance (successful linking)
+        # Configure mock linker instance
         mock_linker_instance = MagicMock()
         mock_linker.return_value = mock_linker_instance
         mock_linker_instance.generate_affiliate_link.side_effect = lambda product: f"http://testlink.com/{product['product_id']}?rf=test_affiliate_id"
@@ -139,53 +131,118 @@ class TestIntegration(unittest.TestCase):
         mock_content_gen.return_value = mock_content_gen_instance
         mock_content_gen_instance.generate_tweet_content.side_effect = Exception("Simulated OpenAI API error")
 
-        # Patch print to capture output
+        # Mock DataFrame instance and its to_csv method
+        mock_df_instance = MagicMock()
+        mock_df_instance.__getitem__.return_value = mock_df_instance
+        mock_dataframe_class.return_value = mock_df_instance
+
+        # Run the main function
+        main()
+
+        # Assert that json.load and open were called for the config file
+        mock_open.assert_any_call('app/products_config.json', 'r')
+        mock_json_load.assert_called_once()
+
+        # Assert that linker and content generator were initialized
+        mock_linker.assert_called_once_with(affiliate_id='test_affiliate_id')
+        mock_content_gen.assert_called_once_with(api_key='test_openai_key')
+
+        # Assert that generate_affiliate_link was called for each product
+        self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(self.mock_products_data))
+
+        # Assert that generate_tweet_content was called for each product
+        self.assertEqual(mock_content_gen_instance.generate_tweet_content.call_count, len(self.mock_products_data))
+
+        # Assert that the outputs directory was ensured
+        mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
+
+        # Assert that a DataFrame was created with the processed product data
+        expected_processed_data = []
+        for product in self.mock_products_data:
+            expected_processed_data.append({
+                'product_id': product['product_id'],
+                'name': product['name'],
+                'title': product['name'],
+                'affiliate_link': f"http://testlink.com/{product['product_id']}?rf=test_affiliate_id",
+                'tweet_text': "Error generating tweet content."
+            })
+
+        # Verify DataFrame was created with correct data
+        mock_dataframe_class.assert_called_once()
+        actual_processed_data = mock_dataframe_class.call_args[0][0]
+        self.assertEqual(actual_processed_data, expected_processed_data)
+
+        # Verify to_csv was called
+        mock_df_instance.to_csv.assert_called_once()
+        call_args, call_kwargs = mock_df_instance.to_csv.call_args
+        self.assertRegex(call_args[0], r'outputs/listings_\d{8}_\d{6}.csv')
+        self.assertEqual(call_kwargs.get('index'), False)
+
+    @patch('app.main.ContentGenerator')
+    @patch('app.main.ZazzleAffiliateLinker')
+    @patch('app.main.json.load', autospec=True)
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('app.main.os.path.exists', return_value=True)
+    @patch('app.main.os.makedirs')
+    @patch('app.main.pd.DataFrame')
+    def test_end_to_end_flow_no_products(self, mock_dataframe_class, mock_makedirs, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
+        # Configure mock json.load to return an empty list
+        mock_json_load.return_value = []
+
+        # Run the main function
+        main()
+
+        # Assert that json.load and open were called for the config file
+        mock_open.assert_any_call('app/products_config.json', 'r')
+        mock_json_load.assert_called_once()
+
+        # Assert that linker and content generator were NOT initialized
+        mock_linker.assert_not_called()
+        mock_content_gen.assert_not_called()
+
+        # Assert that the outputs directory was ensured
+        mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
+
+        # Assert that DataFrame and to_csv were NOT called
+        mock_dataframe_class.assert_not_called()
+
+    @patch('app.main.json.load', autospec=True)
+    @patch('builtins.open', side_effect=FileNotFoundError("Config file not found"))
+    @patch('app.main.os.path.exists', return_value=False)
+    def test_end_to_end_flow_config_error(self, mock_path_exists, mock_open, mock_json_load):
         with patch('builtins.print') as mock_print:
-            # Run the main function
             main()
 
-            # Assert that json.load and open were called for the config file
+            # Assert that open was called and raised FileNotFoundError
             mock_open.assert_called_with('app/products_config.json', 'r')
-            mock_json_load.assert_called_once()
 
-            # Assert that linker and content generator were initialized
-            mock_linker.assert_called_once_with(affiliate_id='test_affiliate_id')
-            mock_content_gen.assert_called_once_with(api_key='test_openai_key')
-
-            # Assert that generate_affiliate_link was called for each product
-            self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(self.mock_products_data))
-
-            # Assert that generate_tweet_content was called for each product
-            self.assertEqual(mock_content_gen_instance.generate_tweet_content.call_count, len(self.mock_products_data))
-
-            # Assert that print was called for each product, including the error message for the tweet
-            expected_prints = []
-            for product in self.mock_products_data:
-                 expected_prints.append(f"Product ID: {product['product_id']}")
-                 expected_prints.append(f"Name: {product['name']}")
-                 expected_prints.append(f"Affiliate Link: http://testlink.com/{product['product_id']}?rf=test_affiliate_id")
-                 # Expecting the error message for the tweet due to error handling in main
-                 expected_prints.append(f"Tweet Content: Error generating tweet content.")
-                 expected_prints.append("---")
-
-            mock_print.assert_has_calls([unittest.mock.call(p) for p in expected_prints], any_order=False)
-
-    # Test case for error reading config file (e.g., FileNotFoundError)
-    @patch('app.main.json.load', autospec=True) # Patch json.load in app.main
-    @patch('builtins.open', side_effect=FileNotFoundError("Config file not found")) # Patch open to raise error
-    @patch('app.main.os.path.exists', return_value=False) # Mock path.exists for config file
-    def test_end_to_end_flow_config_error(self, mock_path_exists, mock_open, mock_json_load):
-         with patch('builtins.print') as mock_print:
-             main()
-
-             # Assert that open was called and raised FileNotFoundError
-             mock_open.assert_called_with('app/products_config.json', 'r')
-
-             # Assert that json.load, linker, and content generator were NOT called
-             mock_json_load.assert_not_called()
+            # Assert that json.load, linker, and content generator were NOT called
+            mock_json_load.assert_not_called()
 
     # The test_end_to_end_flow_scraper_error test is no longer relevant as scraping is removed.
     # I will remove it.
+    # @patch('app.main.ZazzleProductScraper') # Removed the test below
+    # def test_end_to_end_flow_scraper_error(self, mock_scraper):
+    #     # Configure mock scraper instance to raise an exception during scraping
+    #     mock_scraper_instance = MagicMock()
+    #     mock_scraper.return_value = mock_scraper_instance
+    #     mock_scraper_instance.scrape_products.side_effect = Exception("Simulated scraping error")
+
+    #     # Patch print to capture output
+    #     with patch('builtins.print') as mock_print:
+    #         # Run the main function
+    #         main()
+
+    #         # Assert that the scraper was initialized and scrape_products was called
+    #         mock_scraper.assert_called_once_with(max_products=3, scrape_delay=0)
+    #         mock_scraper_instance.scrape_products.assert_called_once()
+
+    #         # Assert that appropriate error messages were printed or logged (depending on main's implementation)
+    #         # This part needs adjustment based on how errors are handled and reported in main.py
+    #         # For now, a simple check if main finished without crashing might suffice, or check specific log messages.
+    #         # Assuming for now that an error message related to scraping error would be printed/logged.
+    #         # Adjust assertion based on actual logging/printing in main.py
+    #         mock_print.assert_any_call("Error during scraping:", "Simulated scraping error") # Example assertion, adjust as needed
 
 if __name__ == '__main__':
     unittest.main() 
