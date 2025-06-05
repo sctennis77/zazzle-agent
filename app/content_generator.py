@@ -1,10 +1,11 @@
 import os
 import json
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 import httpx
 from openai import OpenAI
 from dotenv import load_dotenv
+from app.models import Product
 
 load_dotenv()
 
@@ -13,42 +14,35 @@ logger = logging.getLogger(__name__)
 
 class ContentGenerator:
     def __init__(self, api_key: str):
+        if not api_key:
+            raise ValueError("OpenAI API key cannot be empty")
+        self.client = OpenAI(api_key=api_key)
         logger.info("Initializing ContentGenerator")
-        http_client = httpx.Client(proxies=None)
-        self.client = OpenAI(api_key=api_key, http_client=http_client)
 
-    def generate_tweet_content(self, product_details: Dict[str, str]) -> str:
-        """
-        Generates tweet-sized content for a given product.
-        
-        Args:
-            product_details: Dictionary containing product information (e.g., 'title', 'product_id').
-        
-        Returns:
-            Generated tweet content.
-        """
-        logger.info(f"Generating tweet content for product: {product_details.get('title', 'N/A')}")
-        title = product_details.get('title', 'Zazzle Product')
-        product_id = product_details.get('product_id', 'N/A')
-
-        prompt = f"Create a concise and engaging tweet (under 280 characters) for the following Zazzle product:\nTitle: {title}\n\nFocus on highlighting its appeal to potential buyers. Include relevant emojis and hashtags. Do not include any links or affiliate information, just the tweet text."
-
+    def generate_tweet_content(self, product_name: str, force_new_content: bool = False) -> str:
         try:
+            prompt = f"Create a tweet for the product: {product_name}"
             response = self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
             tweet_text = response.choices[0].message.content.strip()
-            # Append the affiliate link to the tweet text
-            affiliate_link = product_details.get('affiliate_link', '')
-            if affiliate_link:
-                tweet_text += f" {affiliate_link}"
-            logger.info(f"Successfully generated tweet for {title}")
+            logger.info(f"Successfully generated tweet for {product_name}")
             return tweet_text
-
         except Exception as e:
-            logger.error(f"Error generating tweet content for {title}: {e}")
+            logger.error(f"Error generating tweet content for {product_name}: {e}")
             return "Error generating tweet content."
+
+    def generate_content_batch(self, products: List[Product], force_new_content: bool = False) -> List[Product]:
+        processed_products = []
+        for product in products:
+            try:
+                tweet_text = self.generate_tweet_content(product.name, force_new_content)
+                product.tweet_text = tweet_text
+                processed_products.append(product)
+            except Exception as e:
+                logger.error(f"Error processing product {product.product_id}: {e}")
+        return processed_products
 
 def generate_content_from_config(config_file: str = 'app/products_config.json'):
     """
@@ -88,7 +82,7 @@ def generate_content_from_config(config_file: str = 'app/products_config.json'):
             'title': product.get('name', f"Product ID: {product.get('product_id', 'N/A')}"),
             'product_id': product.get('product_id', 'N/A')
         }
-        tweet = generator.generate_tweet_content(product_details)
+        tweet = generator.generate_tweet_content(product_details['title'])
         generated_content[product.get('product_id', 'N/A')] = tweet
         print(f"Product ID: {product.get('product_id', 'N/A')}\nTweet: {tweet}\n---")
 

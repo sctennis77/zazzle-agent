@@ -43,10 +43,10 @@ def load_products(config_path: str = "app/products_config.json") -> List[Product
     """
     try:
         with open(config_path, 'r') as f:
-            config = json.load(f)
+            products_data = json.load(f)
             
         products = []
-        for product_data in config['products']:
+        for product_data in products_data:
             product = Product(
                 product_id=product_data['product_id'],
                 name=product_data['name'],
@@ -88,8 +88,7 @@ def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
                 'name': product.name,
                 'affiliate_link': product.affiliate_link,
                 'tweet_text': product.tweet_text,
-                'identifier': product.identifier,
-                'screenshot_path': product.screenshot_path  # Add screenshot path
+                'identifier': product.identifier
             })
         
         df = pd.DataFrame(data)
@@ -120,12 +119,6 @@ def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen
         
         # Generate tweet content
         product.tweet_text = content_gen.generate_tweet_content(product.name)
-        
-        # Generate screenshot path if not exists
-        if not product.screenshot_path:
-            screenshot_dir = "outputs/screenshots"
-            os.makedirs(screenshot_dir, exist_ok=True)
-            product.screenshot_path = os.path.join(screenshot_dir, f"{product.product_id}.png")
         
         return product
         
@@ -194,9 +187,12 @@ def main():
         except Exception as e:
             logger.error(f"Error processing product {product.product_id}: {e}")
 
-    # Save results
-    if processed_products:
-        save_to_csv(processed_products, force=force_new_content)
+    # Save results to CSV
+    try:
+        save_to_csv(processed_products)
+        logger.info("Results saved to CSV.")
+    except Exception as e:
+        logger.error(f"Failed to save results to CSV: {str(e)}")
 
     # Log summary
     logger.info("\n--- Processed Products Summary ---")

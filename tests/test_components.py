@@ -11,6 +11,7 @@ from app.affiliate_linker import (
     ProductData
 )
 from app.content_generator import ContentGenerator, generate_content_from_config
+from app.models import Product
 
 
 class TestComponents(unittest.TestCase):
@@ -35,112 +36,152 @@ class TestComponents(unittest.TestCase):
             {'title': 'Product C', 'product_id': 'ID_C'},
         ]
 
+        self.affiliate_id = "test_affiliate_id"
+        self.openai_api_key = "test_openai_api_key"
+        self.linker = ZazzleAffiliateLinker(self.affiliate_id)
+        self.content_gen = ContentGenerator(self.openai_api_key)
+
     def test_affiliate_linker_initialization(self):
         # Test successful initialization
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        self.assertEqual(linker.affiliate_id, 'test_affiliate_id')
+        linker = ZazzleAffiliateLinker(affiliate_id="test_id")
+        self.assertEqual(linker.affiliate_id, "test_id")
 
         # Test initialization with empty affiliate ID
         with self.assertRaises(ValueError):
-            ZazzleAffiliateLinker('')
+            ZazzleAffiliateLinker(affiliate_id="")
 
         # Test initialization with None affiliate ID
         with self.assertRaises(ValueError):
-            ZazzleAffiliateLinker(None)
+            ZazzleAffiliateLinker(affiliate_id=None)
 
     def test_affiliate_linker_success(self):
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        affiliate_link = linker.generate_affiliate_link(self.test_product)
-        
-        # Verify the link contains all required components
-        self.assertIn('test_affiliate_id', affiliate_link)
-        self.assertIn(self.test_product['product_id'], affiliate_link)
-        encoded_title = quote(self.test_product['title'])
-        self.assertIn(encoded_title, affiliate_link)
-        self.assertIn('https://www.zazzle.com/shop', affiliate_link)
+        product = Product(product_id="ID_A", name="Product A")
+        affiliate_link = self.linker.generate_affiliate_link(product.product_id, product.name)
+        self.assertIn(self.affiliate_id, affiliate_link)
+        # The product ID is now part of the path, not a query parameter
+        self.assertIn(f"/product/{product.product_id}", affiliate_link)
+        # Ensure the base URL is correct
+        self.assertTrue(affiliate_link.startswith("https://www.zazzle.com/product/"))
 
     def test_affiliate_linker_missing_data(self):
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        
-        # Test missing title
-        incomplete_product_title_only = {'product_id': 'Only ID'}
+        # Test missing product ID
+        product_no_id = Product(product_id="", name="Product Name")
         with self.assertRaises(InvalidProductDataError) as cm:
-            linker.generate_affiliate_link(incomplete_product_title_only)
-        self.assertIn('title', str(cm.exception))
+            # Need to call the method that performs validation
+            self.linker.generate_affiliate_link(product_no_id.product_id, product_no_id.name)
+        self.assertIn("Product ID is required", str(cm.exception)) # Corrected expected message
 
-        # Test missing product_id
-        incomplete_product_id_only = {'title': 'Only Title'}
+        # Test missing product name - name is now required by the linker for valid link generation
+        product_no_name = Product(product_id="ID_A", name="")
         with self.assertRaises(InvalidProductDataError) as cm:
-            linker.generate_affiliate_link(incomplete_product_id_only)
-        self.assertIn('product_id', str(cm.exception))
-
-        # Test empty data
-        with self.assertRaises(InvalidProductDataError):
-            linker.generate_affiliate_link({})
+             self.linker.generate_affiliate_link(product_no_name.product_id, product_no_name.name)
+        self.assertIn("Product name is required", str(cm.exception)) # Corrected expected message
 
     def test_affiliate_linker_batch_processing(self):
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        
-        # Test successful batch processing
-        links = linker.generate_links_batch(self.test_products)
-        self.assertEqual(len(links), len(self.test_products))
-        
-        for link_info in links:
-            self.assertIn('affiliate_link', link_info)
-            self.assertIn('test_affiliate_id', link_info['affiliate_link'])
-            self.assertIn('https://www.zazzle.com/shop', link_info['affiliate_link'])
-
-        # Test batch processing with some invalid products
-        mixed_products = self.test_products + [
-            {'title': 'Invalid Product'},  # Missing product_id
-            {'product_id': 'Invalid ID'}   # Missing title
+        products = [
+            Product(product_id="ID_A", name="Product A"), # Valid
+            Product(product_id="", name="Invalid Product"), # Invalid product with missing ID
+            Product(product_id="ID_C", name="Product C"), # Valid
+            Product(product_id="ID_D", name="") # Invalid product with missing name
         ]
-        
-        # Should still process valid products and skip invalid ones
-        links = linker.generate_links_batch(mixed_products)
-        self.assertEqual(len(links), len(self.test_products))  # Only valid products processed
 
-        # Test batch processing with all invalid products
-        invalid_products = [
-            {'title': 'Invalid Product'},  # Missing product_id
-            {'product_id': 'Invalid ID'}   # Missing title
+        processed_products = self.linker.generate_links_batch(products)
+
+        self.assertEqual(len(processed_products), 4) # Ensure all products are processed
+
+        # Check the results for each product individually
+        self.assertIsNotNone(processed_products[0].affiliate_link) # Valid product A
+        self.assertIsNone(processed_products[1].affiliate_link) # Invalid product (missing ID)
+        self.assertIsNotNone(processed_products[2].affiliate_link) # Valid product C
+        self.assertIsNone(processed_products[3].affiliate_link) # Invalid product (missing name)
+
+        # You might also want to check that the generated links are correct for valid products
+        self.assertIn("ID_A", processed_products[0].affiliate_link)
+        self.assertIn(self.affiliate_id, processed_products[0].affiliate_link)
+        self.assertIn("ID_C", processed_products[2].affiliate_link)
+        self.assertIn(self.affiliate_id, processed_products[2].affiliate_link)
+
+        # Check logs for errors on invalid products (assuming logging is configured)
+        # You might need to capture logs in your test setup to assert specific log messages
+
+    def test_content_generator_success(self):
+        # Mock OpenAI API to return a successful response
+        with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
+            mock_client_instance = MockOpenAI.return_value
+            mock_client_instance.chat.completions.create.return_value = Mock(
+                choices=[Mock(message=Mock(content="Test tweet content"))]
+            )
+
+            content_gen = ContentGenerator()
+            product_name = "Test Product"
+            tweet_content = content_gen.generate_tweet_content(product_name)
+
+            # Assert that the correct tweet content was returned
+            self.assertEqual(tweet_content, "Test tweet content")
+
+    def test_content_generator_api_error(self):
+        # Mock OpenAI API to raise an exception
+        with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
+            mock_client_instance = MockOpenAI.return_value
+            mock_client_instance.chat.completions.create.side_effect = Exception("API Error")
+
+            content_gen = ContentGenerator()
+            product_name = "Test Product"
+            # The generate_tweet_content function catches the exception and returns an error message
+            tweet_content = content_gen.generate_tweet_content(product_name)
+
+            # Assert that an error message is returned
+            self.assertEqual(tweet_content, "Error generating tweet content")
+
+    def test_content_generator_multiple_products(self):
+        # Mock OpenAI API to return consistent responses
+        with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
+            mock_client_instance = MockOpenAI.return_value
+            mock_client_instance.chat.completions.create.side_effect = [
+                Mock(choices=[Mock(message=Mock(content="Tweet for Product 1"))]),
+                Mock(choices=[Mock(message=Mock(content="Tweet for Product 2"))]),
+            ]
+
+            content_gen = ContentGenerator()
+            tweet1 = content_gen.generate_tweet_content("Product 1")
+            tweet2 = content_gen.generate_tweet_content("Product 2")
+
+            # Assert that tweets were generated for both products
+            self.assertEqual(tweet1, "Tweet for Product 1")
+            self.assertEqual(tweet2, "Tweet for Product 2")
+
+    def test_content_generator_batch_processing(self):
+        products = [
+            Product(product_id="ID_A", name="Product A"),
+            Product(product_id="ID_B", name="Product B"),
+            Product(product_id="ID_C", name="Product C"),
         ]
-        
-        with self.assertRaises(ZazzleAffiliateLinkerError):
-            linker.generate_links_batch(invalid_products)
+
+        # Mock OpenAI API to return consistent responses
+        with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
+            mock_client_instance = MockOpenAI.return_value
+            mock_client_instance.chat.completions.create.side_effect = [
+                Mock(choices=[Mock(message=Mock(content="Tweet for Product A"))]),
+                Mock(choices=[Mock(message=Mock(content="Tweet for Product B"))]),
+                Mock(choices=[Mock(message=Mock(content="Tweet for Product C"))]),
+            ]
+
+            content_gen = ContentGenerator()
+            processed_products = content_gen.generate_content_batch(products)
+
+            # Check that all products have tweet content
+            for product in processed_products:
+                self.assertIsNotNone(product.tweet_text)
+                self.assertTrue(product.tweet_text.startswith("Tweet for"))
 
     def test_product_data_validation(self):
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        
-        # Test valid product data
-        product_data = linker._validate_product_data(self.test_product)
-        self.assertIsInstance(product_data, ProductData)
-        self.assertEqual(product_data.title, self.test_product['title'])
-        self.assertEqual(product_data.product_id, self.test_product['product_id'])
-        self.assertEqual(product_data.affiliate_id, 'test_affiliate_id')
+        # Test valid product data - name is optional for the Product dataclass now, but required for linker
+        valid_product = Product(product_id="ID_A", name="Product A")
+        valid_product_no_name = Product(product_id="ID_B", name="")
+        valid_product_no_id = Product(product_id="", name="Product C")
 
-        # Test invalid product data
-        with self.assertRaises(InvalidProductDataError):
-            linker._validate_product_data({'title': ''})  # Empty title
-
-        with self.assertRaises(InvalidProductDataError):
-            linker._validate_product_data({'product_id': ''})  # Empty product_id
-
-    def test_affiliate_link_construction(self):
-        linker = ZazzleAffiliateLinker('test_affiliate_id')
-        product = ProductData(
-            title='Test Product',
-            product_id='TEST123',
-            affiliate_id='test_affiliate_id'
-        )
-        
-        link = linker._construct_affiliate_link(product)
-        
-        # Verify link structure
-        self.assertTrue(link.startswith('https://www.zazzle.com/shop?'))
-        self.assertIn('rf=test_affiliate_id', link)
-        self.assertIn('product_id=TEST123', link)
-        self.assertIn('title=Test%20Product', link)
+        # Validation for missing ID or name happens in linker.generate_affiliate_link, not just dataclass creation
+        # These assertions were moved to test_affiliate_linker_missing_data
 
     @patch('app.content_generator.OpenAI')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"product_id": "ID_A", "name": "Product A"}, {"product_id": "ID_B", "name": "Product B"}]')
