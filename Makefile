@@ -25,7 +25,7 @@ test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
 run:
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main
 
 clean:
 	rm -rf $(VENV_NAME) outputs/ .coverage

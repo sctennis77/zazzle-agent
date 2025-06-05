@@ -12,7 +12,7 @@ class ZazzleAffiliateLinker:
         self.affiliate_id = affiliate_id
         if not self.affiliate_id:
             logger.warning("Zazzle Affiliate ID not provided. Affiliate links will not be generated correctly.")
-        self.base_url = "https://www.zazzle.com/create_your_own_product"
+        self.base_url = "https://www.zazzle.com/shop"
 
     def generate_affiliate_link(self, product_data: Dict[str, str]) -> str:
         """

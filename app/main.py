@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Log the loaded API key (masked)
+openai_api_key_loaded = os.getenv('OPENAI_API_KEY')
+if openai_api_key_loaded:
+    logger.info(f"OPENAI_API_KEY loaded: {openai_api_key_loaded[:5]}...{openai_api_key_loaded[-5:]}")
+else:
+    logger.warning("OPENAI_API_KEY not loaded.")
+
 def ensure_output_dir():
     """Ensure the outputs directory exists."""
     os.makedirs('outputs', exist_ok=True)
@@ -47,7 +54,7 @@ def main():
 
     # Get environment variables
     zazzle_affiliate_id = os.getenv('ZAZZLE_AFFILIATE_ID')
-    openai_api_key = os.getenv('OPENAI_API_KEY')
+    openai_api_key = os.getenv('OPENAI_API_KEY') # Get the key again here for the rest of the function
 
     if not zazzle_affiliate_id:
         logger.error("ZAZZLE_AFFILIATE_ID environment variable not set.")
@@ -84,7 +91,22 @@ def main():
 
     # Initialize components
     linker = ZazzleAffiliateLinker(affiliate_id=zazzle_affiliate_id)
-    content_gen = ContentGenerator(api_key=openai_api_key)
+    
+    # Temporarily unset proxy environment variables before initializing OpenAI client
+    original_http_proxy = os.environ.pop('HTTP_PROXY', None)
+    original_https_proxy = os.environ.pop('HTTPS_PROXY', None)
+    original_all_proxy = os.environ.pop('ALL_PROXY', None)
+    original_no_proxy = os.environ.pop('NO_PROXY', None)
+
+    try:
+        content_gen = ContentGenerator(api_key=openai_api_key)
+    finally:
+        # Restore original proxy environment variables
+        if original_http_proxy is not None: os.environ['HTTP_PROXY'] = original_http_proxy
+        if original_https_proxy is not None: os.environ['HTTPS_PROXY'] = original_https_proxy
+        if original_all_proxy is not None: os.environ['ALL_PROXY'] = original_all_proxy
+        if original_no_proxy is not None: os.environ['NO_PROXY'] = original_no_proxy
+
 
     # Process products
     processed_products = []

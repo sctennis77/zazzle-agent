@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from typing import List, Dict
+import httpx
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -13,7 +14,8 @@ logger = logging.getLogger(__name__)
 class ContentGenerator:
     def __init__(self, api_key: str):
         logger.info("Initializing ContentGenerator")
-        self.client = OpenAI(api_key=api_key)
+        http_client = httpx.Client(proxies=None)
+        self.client = OpenAI(api_key=api_key, http_client=http_client)
 
     def generate_tweet_content(self, product_details: Dict[str, str]) -> str:
         """
@@ -33,7 +35,7 @@ class ContentGenerator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a marketing assistant generating tweet content."},
                     {"role": "user", "content": prompt}
