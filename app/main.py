@@ -1,13 +1,15 @@
 import os
 import logging
 import json
-from typing import List, Dict
+import glob
+from typing import List, Dict, Optional
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
+from app.models import Product
 
 # Configure logging
 logging.basicConfig(
@@ -30,111 +32,87 @@ def ensure_output_dir():
     """Ensure the outputs directory exists."""
     os.makedirs('outputs', exist_ok=True)
 
-def save_to_csv(products: List[Dict], force: bool = False) -> str:
-    """
-    Save processed products to a CSV file.
+def load_products_from_config(config_file: str = 'app/products_config.json') -> List[Product]:
+    try:
+        with open(config_file, 'r') as f:
+            products_data = json.load(f)
+        logging.info(f"Successfully loaded {len(products_data)} products from {config_file}")
+        return [Product.from_dict(product) for product in products_data]
+    except Exception as e:
+        logging.error(f"Error loading products from config: {e}")
+        raise
+
+def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
+    """Save processed products to a CSV file.
     
     Args:
-        products: List of processed product dictionaries
-        force: Whether to force creation of a new file
+        products: List of processed Product objects
+        output_dir: Directory to save the CSV file
         
     Returns:
         str: Path to the saved CSV file
     """
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'outputs/listings_{timestamp}.csv'
-    
-    if not force:
-        # Try to find the most recent CSV file
-        import glob
-        csv_files = glob.glob('outputs/listings_*.csv')
-        if csv_files:
-            try:
-                filename = max(csv_files, key=os.path.getctime)
-                logger.info(f"Using existing CSV file: {filename}")
-            except Exception as e:
-                logger.warning(f"Error finding most recent CSV file: {e}")
-    
     try:
-        df = pd.DataFrame(products)
-        df.to_csv(filename, index=False)
-        logger.info(f"Saved {len(products)} products to {filename}")
-        return filename
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"listings_{timestamp}.csv"
+        filepath = os.path.join(output_dir, filename)
+        
+        # Convert products to DataFrame
+        data = []
+        for product in products:
+            data.append({
+                'product_id': product.product_id,
+                'name': product.name,
+                'affiliate_link': product.affiliate_link,
+                'tweet_text': product.tweet_text,
+                'identifier': product.identifier,
+                'screenshot_path': product.screenshot_path  # Add screenshot path
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # Save to CSV
+        df.to_csv(filepath, index=False)
+        logger.info(f"Saved {len(products)} products to {filepath}")
+        return filepath
+        
     except Exception as e:
-        logger.error(f"Error saving to CSV: {e}")
+        logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-def process_product(product: Dict, linker: ZazzleAffiliateLinker, content_gen: ContentGenerator, force_new_content: bool = False) -> Dict:
-    """
-    Process a single product, generating affiliate link and content.
+def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen: ContentGenerator) -> Product:
+    """Process a single product to generate affiliate link and tweet content.
     
     Args:
-        product: Product data dictionary
+        product: Product object to process
         linker: ZazzleAffiliateLinker instance
         content_gen: ContentGenerator instance
-        force_new_content: Whether to force generation of new content
         
     Returns:
-        Dict: Processed product data
+        Product: Processed product with affiliate link and tweet content
     """
-    product_id = product.get('product_id', 'N/A')
-    product_name = product.get('name', f'Product {product_id}')
-    
     try:
-        # Prepare product data for affiliate link generation
-        current_product_data = product.copy()
-        current_product_data['title'] = product_name
-        
         # Generate affiliate link
-        try:
-            affiliate_link = linker.generate_affiliate_link(current_product_data)
-            current_product_data['affiliate_link'] = affiliate_link
-        except (InvalidProductDataError, ZazzleAffiliateLinkerError) as e:
-            logger.error(f"Error generating affiliate link for product {product_id}: {e}")
-            current_product_data['affiliate_link'] = "Error generating affiliate link"
+        product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
         
-        # Check for existing content
-        existing_content = None
-        if not force_new_content:
-            try:
-                csv_files = glob.glob('outputs/listings_*.csv')
-                if csv_files:
-                    latest_csv = max(csv_files, key=os.path.getctime)
-                    df = pd.read_csv(latest_csv)
-                    existing_row = df[df['product_id'] == product_id]
-                    if not existing_row.empty:
-                        existing_content = existing_row.iloc[0].to_dict()
-                        logger.info(f"Found existing content for product {product_id}")
-            except Exception as e:
-                logger.warning(f"Error checking for existing content: {e}")
+        # Generate tweet content
+        product.tweet_text = content_gen.generate_tweet_content(product.name)
         
-        # Generate or use existing content
-        if existing_content and not force_new_content:
-            current_product_data['tweet_text'] = existing_content['tweet_text']
-            # Keep the new affiliate link if it was successfully generated
-            if current_product_data['affiliate_link'] != "Error generating affiliate link":
-                current_product_data['affiliate_link'] = existing_content.get('affiliate_link', current_product_data['affiliate_link'])
-        else:
-            try:
-                tweet_text = content_gen.generate_tweet_content(current_product_data)
-                current_product_data['tweet_text'] = tweet_text
-            except Exception as e:
-                logger.error(f"Error generating tweet content for product {product_id}: {e}")
-                current_product_data['tweet_text'] = "Error generating tweet content."
+        # Generate screenshot path if not exists
+        if not product.screenshot_path:
+            screenshot_dir = "outputs/screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            product.screenshot_path = os.path.join(screenshot_dir, f"{product.product_id}.png")
         
-        # Add unique identifier
-        current_product_data['identifier'] = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{product_id}"
-        return current_product_data
+        return product
         
     except Exception as e:
-        logger.error(f"Unexpected error processing product {product_id}: {e}")
-        return {
-            'product_id': product_id,
-            'name': product_name,
-            'affiliate_link': "Error processing product",
-            'tweet_text': "Error processing product",
-            'identifier': f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{product_id}"
-        }
+        logger.error(f"Error processing product {product.product_id}: {str(e)}")
+        raise
 
 def main():
     """Main entry point for the Zazzle Affiliate Marketing Agent."""
@@ -155,24 +133,10 @@ def main():
     # Ensure output directory exists
     ensure_output_dir()
 
-    try:
-        # Read product data from config file
-        config_file = 'app/products_config.json'
-        with open(config_file, 'r') as f:
-            products_data = json.load(f)
-        logger.info(f"Successfully loaded {len(products_data)} products from {config_file}")
+    # Load products from config
+    products = load_products_from_config()
 
-    except FileNotFoundError:
-        logger.error(f"Configuration file not found: {config_file}")
-        return
-    except json.JSONDecodeError:
-        logger.error(f"Error decoding JSON from configuration file: {config_file}")
-        return
-    except Exception as e:
-        logger.error(f"Error reading configuration file: {e}")
-        return
-
-    if not products_data:
+    if not products:
         logger.warning("No products found in the configuration file.")
         save_to_csv([])
         return
@@ -202,26 +166,26 @@ def main():
         if original_all_proxy is not None: os.environ['ALL_PROXY'] = original_all_proxy
         if original_no_proxy is not None: os.environ['NO_PROXY'] = original_no_proxy
 
-    # Process products
+    # Process each product
     processed_products = []
-    for product in products_data:
-        processed_product = process_product(product, linker, content_gen, force_new_content)
-        processed_products.append(processed_product)
+    for product in products:
+        try:
+            processed_product = process_product(product, linker, content_gen)
+            processed_products.append(processed_product)
+        except Exception as e:
+            logger.error(f"Error processing product {product.product_id}: {e}")
 
-    # Save results to CSV
-    try:
+    # Save results
+    if processed_products:
         save_to_csv(processed_products, force=force_new_content)
-    except Exception as e:
-        logger.error(f"Error saving results to CSV: {e}")
-        return
 
-    # Output results
+    # Log summary
     logger.info("\n--- Processed Products Summary ---")
     for product in processed_products:
-        logger.info(f"Product ID: {product.get('product_id','N/A')}")
-        logger.info(f"Name: {product.get('name','N/A')}")
-        logger.info(f"Affiliate Link: {product.get('affiliate_link','N/A')}")
-        logger.info(f"Tweet Content: {product.get('tweet_text','N/A')}")
+        logger.info(f"Product ID: {product.product_id}")
+        logger.info(f"Name: {product.name}")
+        logger.info(f"Affiliate Link: {product.affiliate_link}")
+        logger.info(f"Tweet Content: {product.tweet_text}")
         logger.info("---")
 
     logger.info("Zazzle Affiliate Marketing Agent finished.")
