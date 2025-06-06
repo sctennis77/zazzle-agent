@@ -8,7 +8,7 @@ from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerErr
 from app.content_generator import ContentGenerator
 import logging # Import logging to check log output
 from datetime import datetime
-from app.models import Product
+from app.models import Product, ContentType
 import pytest
 import json
 import glob
@@ -65,7 +65,7 @@ class TestIntegration(unittest.TestCase):
         mock_linker.generate_affiliate_link.return_value = "http://testlink.com/ID_A?rf=test_affiliate_id"
         
         mock_content_gen = MagicMock(spec=ContentGenerator)
-        mock_content_gen.generate_tweet_content.return_value = "Test tweet content"
+        mock_content_gen.generate_tweet_content.return_value = "Test content"
         
         # Test successful product processing
         result = process_product(self.mock_product_object, mock_linker, mock_content_gen)
@@ -73,7 +73,8 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(result.product_id, "ID_A")
         self.assertEqual(result.name, "Product A")
         self.assertEqual(result.affiliate_link, "http://testlink.com/ID_A?rf=test_affiliate_id")
-        self.assertEqual(result.tweet_text, "Test tweet content")
+        self.assertEqual(result.content, "Test content")
+        self.assertEqual(result.content_type, ContentType.TWEET)
         self.assertEqual(result.screenshot_path, "outputs/screenshots/ID_A.png")
         self.assertIsNotNone(result.identifier)
 
@@ -83,7 +84,7 @@ class TestIntegration(unittest.TestCase):
         mock_linker.generate_affiliate_link.side_effect = ZazzleAffiliateLinkerError("Test error")
         
         mock_content_gen = MagicMock(spec=ContentGenerator)
-        mock_content_gen.generate_tweet_content.return_value = "Test tweet content"
+        mock_content_gen.generate_tweet_content.return_value = "Test content"
         
         # Test product processing with affiliate link error
         with self.assertRaises(ZazzleAffiliateLinkerError):
@@ -103,22 +104,19 @@ class TestIntegration(unittest.TestCase):
         mock_linker.return_value = mock_linker_instance
 
         # Test product processing with content generation error
-        # process_product catches the exception and sets tweet_text to an error message
         result = process_product(self.mock_product_object, mock_linker_instance, mock_content_gen_instance)
 
         self.assertIsNotNone(result.affiliate_link)
-        self.assertEqual(result.tweet_text, "Error generating tweet content") # Expect the error message without trailing dot
-
-        # Verify generator was called
-        mock_content_gen_instance.generate_tweet_content.assert_called_once_with("Product A")
+        self.assertEqual(result.content, "Error generating content")
+        self.assertIsNone(result.content_type)
 
     @patch('app.main.os.makedirs')
     @patch('app.main.pd.DataFrame')
     def test_save_to_csv_success(self, mock_dataframe_class, mock_makedirs):
         # Test data - use Product objects including screenshot_path
         test_products = [
-            Product(product_id="ID_A", name="Product A", affiliate_link="http://testlink.com/ID_A", tweet_text="Test tweet A", screenshot_path="outputs/screenshots/ID_A.png"),
-            Product(product_id="ID_B", name="Product B", affiliate_link="http://testlink.com/ID_B", tweet_text="Test tweet B", screenshot_path="outputs/screenshots/ID_B.png")
+            Product(product_id="ID_A", name="Product A", affiliate_link="http://testlink.com/ID_A", content="Test content A", content_type=ContentType.TWEET, screenshot_path="outputs/screenshots/ID_A.png"),
+            Product(product_id="ID_B", name="Product B", affiliate_link="http://testlink.com/ID_B", content="Test content B", content_type=ContentType.TWEET, screenshot_path="outputs/screenshots/ID_B.png")
         ]
 
         # Mock pandas DataFrame
@@ -126,27 +124,26 @@ class TestIntegration(unittest.TestCase):
         mock_df.to_csv = MagicMock()
 
         with patch('pandas.DataFrame', return_value=mock_df) as mock_df_constructor:
-            # Test saving to new file (force is removed)
+            # Test saving to new file
             save_to_csv(test_products)
 
-            # Verify DataFrame was created with correct data (check column names and number of rows)
-            # The actual data check might be more involved, this is a basic check
+            # Verify DataFrame was created with correct data
             mock_df_constructor.assert_called_once()
-            # Check the data passed to DataFrame constructor
             called_data = mock_df_constructor.call_args[0][0]
             self.assertEqual(len(called_data), 2)
             self.assertIn('product_id', called_data[0])
             self.assertIn('name', called_data[0])
             self.assertIn('affiliate_link', called_data[0])
-            self.assertIn('tweet_text', called_data[0])
-            self.assertIn('identifier', called_data[0]) # Identifier is still expected in CSV output
-            self.assertIn('screenshot_path', called_data[0]) # Check for screenshot_path column
+            self.assertIn('content', called_data[0])
+            self.assertIn('content_type', called_data[0])
+            self.assertIn('identifier', called_data[0])
+            self.assertIn('screenshot_path', called_data[0])
 
             # Verify to_csv was called once with correct arguments
             mock_df.to_csv.assert_called_once()
             call_args, call_kwargs = mock_df.to_csv.call_args
-            self.assertTrue(call_args[0].endswith('.csv')) # Check filename pattern
-            self.assertFalse(call_kwargs.get('index', False)) # Check index=False
+            self.assertTrue(call_args[0].endswith('.csv'))
+            self.assertFalse(call_kwargs.get('index', False))
 
         # Verify outputs directory was created
         mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
@@ -154,7 +151,7 @@ class TestIntegration(unittest.TestCase):
     def test_save_to_csv_error(self):
         # Test data
         test_products = [
-            Product(product_id="ID_A", name="Product A", affiliate_link="http://testlink.com/ID_A", tweet_text="Test tweet A", screenshot_path="outputs/screenshots/ID_A.png")
+            Product(product_id="ID_A", name="Product A", affiliate_link="http://testlink.com/ID_A", content="Test content A", content_type=ContentType.TWEET, screenshot_path="outputs/screenshots/ID_A.png")
         ]
         
         # Mock pandas DataFrame to raise an error
@@ -182,7 +179,7 @@ class TestIntegration(unittest.TestCase):
         
         mock_content_gen_instance = MagicMock()
         mock_content_gen.return_value = mock_content_gen_instance
-        mock_content_gen_instance.generate_tweet_content.side_effect = lambda product_name, force_new_content: f"Tweet for {product_name}."
+        mock_content_gen_instance.generate_tweet_content.side_effect = lambda product_name, force_new_content: f"Content for {product_name}."
         
         mock_df_instance = MagicMock()
         mock_dataframe_class.return_value = mock_df_instance
@@ -289,7 +286,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(products_no_screenshot), 1)
         self.assertEqual(products_no_screenshot[0].product_id, "ID_C")
         self.assertEqual(products_no_screenshot[0].name, "Product C")
-        self.assertIsNone(products_no_screenshot[0].screenshot_path) # Should be None
+        self.assertIsNone(products_no_screenshot[0].screenshot_path)
 
 if __name__ == '__main__':
     unittest.main() 

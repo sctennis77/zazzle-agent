@@ -10,7 +10,7 @@ from app.affiliate_linker import (
     InvalidProductDataError
 )
 from app.content_generator import ContentGenerator, generate_content_from_config
-from app.models import Product
+from app.models import Product, ContentType
 
 
 class TestComponents(unittest.TestCase):
@@ -108,15 +108,15 @@ class TestComponents(unittest.TestCase):
         with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
             mock_client_instance = MockOpenAI.return_value
             mock_client_instance.chat.completions.create.return_value = Mock(
-                choices=[Mock(message=Mock(content="Test tweet content"))]
+                choices=[Mock(message=Mock(content="Test content"))]
             )
 
             content_gen = ContentGenerator()
             product_name = "Test Product"
-            tweet_content = content_gen.generate_tweet_content(product_name)
+            content = content_gen.generate_tweet_content(product_name)
 
-            # Assert that the correct tweet content was returned
-            self.assertEqual(tweet_content, "Test tweet content")
+            # Assert that the correct content was returned
+            self.assertEqual(content, "Test content")
 
     def test_content_generator_api_error(self):
         # Mock OpenAI API to raise an exception
@@ -127,27 +127,27 @@ class TestComponents(unittest.TestCase):
             content_gen = ContentGenerator()
             product_name = "Test Product"
             # The generate_tweet_content function catches the exception and returns an error message
-            tweet_content = content_gen.generate_tweet_content(product_name)
+            content = content_gen.generate_tweet_content(product_name)
 
             # Assert that an error message is returned
-            self.assertEqual(tweet_content, "Error generating tweet content")
+            self.assertEqual(content, "Error generating tweet content")
 
     def test_content_generator_multiple_products(self):
         # Mock OpenAI API to return consistent responses
         with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
             mock_client_instance = MockOpenAI.return_value
             mock_client_instance.chat.completions.create.side_effect = [
-                Mock(choices=[Mock(message=Mock(content="Tweet for Product 1"))]),
-                Mock(choices=[Mock(message=Mock(content="Tweet for Product 2"))]),
+                Mock(choices=[Mock(message=Mock(content="Content for Product 1"))]),
+                Mock(choices=[Mock(message=Mock(content="Content for Product 2"))]),
             ]
 
             content_gen = ContentGenerator()
-            tweet1 = content_gen.generate_tweet_content("Product 1")
-            tweet2 = content_gen.generate_tweet_content("Product 2")
+            content1 = content_gen.generate_tweet_content("Product 1")
+            content2 = content_gen.generate_tweet_content("Product 2")
 
-            # Assert that tweets were generated for both products
-            self.assertEqual(tweet1, "Tweet for Product 1")
-            self.assertEqual(tweet2, "Tweet for Product 2")
+            # Assert that content was generated for both products
+            self.assertEqual(content1, "Content for Product 1")
+            self.assertEqual(content2, "Content for Product 2")
 
     def test_content_generator_batch_processing(self):
         products = [
@@ -160,26 +160,27 @@ class TestComponents(unittest.TestCase):
         with patch('app.content_generator.openai.OpenAI') as MockOpenAI:
             mock_client_instance = MockOpenAI.return_value
             mock_client_instance.chat.completions.create.side_effect = [
-                Mock(choices=[Mock(message=Mock(content="Tweet for Product A"))]),
-                Mock(choices=[Mock(message=Mock(content="Tweet for Product B"))]),
-                Mock(choices=[Mock(message=Mock(content="Tweet for Product C"))]),
+                Mock(choices=[Mock(message=Mock(content="Content for Product A"))]),
+                Mock(choices=[Mock(message=Mock(content="Content for Product B"))]),
+                Mock(choices=[Mock(message=Mock(content="Content for Product C"))]),
             ]
 
             content_gen = ContentGenerator()
             processed_products = content_gen.generate_content_batch(products)
 
-            # Check that all products have tweet content
+            # Check that all products have content and content_type
             for product in processed_products:
-                self.assertIsNotNone(product.tweet_text)
-                self.assertTrue(product.tweet_text.startswith("Tweet for"))
+                self.assertIsNotNone(product.content)
+                self.assertEqual(product.content_type, ContentType.TWEET)
+                self.assertTrue(product.content.startswith("Content for"))
 
     def test_product_data_validation(self):
-        # Test valid product data - name is optional for the Product dataclass now, but required for linker
+        # Test valid product data
         valid_product = Product(product_id="ID_A", name="Product A")
         valid_product_no_name = Product(product_id="ID_B", name="")
         valid_product_no_id = Product(product_id="", name="Product C")
 
-        # Validation for missing ID or name happens in linker.generate_affiliate_link, not just dataclass creation
+        # Validation for missing ID or name happens in linker.generate_affiliate_link
         # These assertions were moved to test_affiliate_linker_missing_data
 
     @patch('app.content_generator.OpenAI')
@@ -190,7 +191,7 @@ class TestComponents(unittest.TestCase):
         mock_client_instance = MagicMock()
         mock_openai.return_value = mock_client_instance
         mock_client_instance.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Generated tweet for Product."))]
+            choices=[MagicMock(message=MagicMock(content="Generated content for Product."))]
         )
 
         # Call the main function that reads from the config
@@ -204,8 +205,8 @@ class TestComponents(unittest.TestCase):
         self.assertEqual(len(generated_content), 2)
         self.assertIn('ID_A', generated_content)
         self.assertIn('ID_B', generated_content)
-        self.assertEqual(generated_content['ID_A'], "Generated tweet for Product.")
-        self.assertEqual(generated_content['ID_B'], "Generated tweet for Product.")
+        self.assertEqual(generated_content['ID_A'], "Generated content for Product.")
+        self.assertEqual(generated_content['ID_B'], "Generated content for Product.")
 
     @patch('app.content_generator.OpenAI')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"product_id": "ID_A", "name": "Product A"}]')
@@ -236,9 +237,9 @@ class TestComponents(unittest.TestCase):
         mock_client_instance = MagicMock()
         mock_openai.return_value = mock_client_instance
         mock_client_instance.chat.completions.create.side_effect = [
-            MagicMock(choices=[MagicMock(message=MagicMock(content="Tweet for Product A."))]),
-            MagicMock(choices=[MagicMock(message=MagicMock(content="Tweet for Product B."))]),
-            MagicMock(choices=[MagicMock(message=MagicMock(content="Tweet for Product C."))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Content for Product A."))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Content for Product B."))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Content for Product C."))]),
         ]
 
         # Call the main function that reads from the config
@@ -253,9 +254,9 @@ class TestComponents(unittest.TestCase):
         self.assertIn('ID_A', generated_content)
         self.assertIn('ID_B', generated_content)
         self.assertIn('ID_C', generated_content)
-        self.assertEqual(generated_content['ID_A'], "Tweet for Product A.")
-        self.assertEqual(generated_content['ID_B'], "Tweet for Product B.")
-        self.assertEqual(generated_content['ID_C'], "Tweet for Product C.")
+        self.assertEqual(generated_content['ID_A'], "Content for Product A.")
+        self.assertEqual(generated_content['ID_B'], "Content for Product B.")
+        self.assertEqual(generated_content['ID_C'], "Content for Product C.")
 
     # The original test_content_generator_batch_processing is now covered by test_content_generator_multiple_products
     # and test_content_generator_success which test the content_generator_from_config function handling multiple products.
@@ -270,7 +271,7 @@ class TestComponents(unittest.TestCase):
         mock_client_instance = MagicMock()
         mock_openai.return_value = mock_client_instance
         mock_client_instance.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Generated tweet."))]
+            choices=[MagicMock(message=MagicMock(content="Generated content."))]
         )
 
         # Call the main function that reads from the config
@@ -284,8 +285,8 @@ class TestComponents(unittest.TestCase):
         self.assertEqual(len(generated_content), 2)
         self.assertIn('ID_A', generated_content)
         self.assertIn('ID_B', generated_content)
-        self.assertEqual(generated_content['ID_A'], "Generated tweet.")
-        self.assertEqual(generated_content['ID_B'], "Generated tweet.")
+        self.assertEqual(generated_content['ID_A'], "Generated content.")
+        self.assertEqual(generated_content['ID_B'], "Generated content.")
 
 if __name__ == '__main__':
     unittest.main() 

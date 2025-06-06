@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import httpx
 from openai import OpenAI
 from dotenv import load_dotenv
-from app.models import Product
+from app.models import Product, ContentType
 
 load_dotenv()
 
@@ -38,8 +38,9 @@ class ContentGenerator:
         processed_products = []
         for product in products:
             try:
-                tweet_text = self.generate_tweet_content(product.name, force_new_content)
-                product.tweet_text = tweet_text
+                content = self.generate_tweet_content(product.name, force_new_content)
+                product.content = content
+                product.content_type = ContentType.TWEET
                 processed_products.append(product)
             except Exception as e:
                 logger.error(f"Error processing product {product.product_id}: {e}")

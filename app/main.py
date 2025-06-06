@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
-from app.models import Product
+from app.models import Product, ContentType
 
 # Configure logging
 logging.basicConfig(
@@ -78,14 +78,15 @@ def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
         raise
 
 def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen: ContentGenerator) -> Product:
-    """Process a single product to generate affiliate link and tweet content."""
+    """Process a single product to generate affiliate link and content."""
     try:
         product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
         try:
-            product.tweet_text = content_gen.generate_tweet_content(product.name)
+            product.content = content_gen.generate_tweet_content(product.name)
+            product.content_type = ContentType.TWEET
         except Exception as e:
-            logger.error(f"Error generating tweet content for product {product.product_id}: {str(e)}")
-            product.tweet_text = "Error generating tweet content"
+            logger.error(f"Error generating content for product {product.product_id}: {str(e)}")
+            product.content = "Error generating content"
         product.identifier = Product.generate_identifier(product.product_id)
         return product
     except Exception as e:
@@ -166,7 +167,8 @@ def main():
         logger.info(f"Product ID: {product.product_id}")
         logger.info(f"Name: {product.name}")
         logger.info(f"Affiliate Link: {product.affiliate_link}")
-        logger.info(f"Tweet Content: {product.tweet_text}")
+        logger.info(f"Content Type: {product.content_type.value if product.content_type else 'None'}")
+        logger.info(f"Content: {product.content}")
         logger.info("---")
 
     logger.info("Zazzle Affiliate Marketing Agent finished.")
