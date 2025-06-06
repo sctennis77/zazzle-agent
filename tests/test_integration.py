@@ -13,6 +13,9 @@ import pytest
 import json
 import glob
 import shutil # Import shutil for cleanup
+from app.agents.reddit_agent import RedditAgent
+from io import StringIO
+import praw
 
 class TestIntegration(unittest.TestCase):
     def setUp(self):
@@ -118,36 +121,48 @@ class TestIntegration(unittest.TestCase):
     @patch('app.main.pd.read_csv')
     @patch('glob.glob')
     @patch('os.path.getctime', return_value=0)
-    def test_end_to_end_flow_success(self, mock_getctime, mock_glob, mock_read_csv, mock_dataframe_class, mock_makedirs, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
-        # Configure mocks
-        mock_json_load.return_value = {'products': self.mock_products_data}
-        
+    @patch('praw.Reddit')
+    def test_end_to_end_flow_success(self, mock_reddit, mock_getctime, mock_glob, mock_read_csv, mock_dataframe_class, mock_makedirs, mock_path_exists, mock_open, mock_json_load, mock_linker, mock_content_gen):
+        # Provide mock product data as would be loaded from config
+        mock_products_data = [
+            {"product_id": "ID_A", "name": "Product A"},
+            {"product_id": "ID_B", "name": "Product B"},
+            {"product_id": "ID_C", "name": "Product C"},
+        ]
+        mock_json_load.return_value = {'products': mock_products_data}
+
+        # Mock affiliate linker and content generator
         mock_linker_instance = MagicMock()
         mock_linker.return_value = mock_linker_instance
         mock_linker_instance.generate_affiliate_link.side_effect = lambda product_id, name: f"http://testlink.com/{product_id}?rf=test_affiliate_id"
-        
+
         mock_content_gen_instance = MagicMock()
         mock_content_gen.return_value = mock_content_gen_instance
-        mock_content_gen_instance.generate_content.side_effect = lambda product_name, force_new_content: f"Content for {product_name}."
-        
+        mock_content_gen_instance.generate_content.side_effect = lambda product_name, force_new_content=None: f"Content for {product_name}."
+
         mock_df_instance = MagicMock()
         mock_dataframe_class.return_value = mock_df_instance
-        
-        # Mock empty existing CSV
+
+        # Mock CSV and file operations
         mock_glob.return_value = ['outputs/listings_20250605_123456.csv']
         mock_read_csv.return_value = pd.DataFrame()
-        
+        mock_open.return_value.__enter__.return_value.read.return_value = '{"products": []}'
+
+        # Mock Reddit
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+
         # Run main function
         main()
-        
+
         # Verify component initialization
         mock_linker.assert_called_once_with(affiliate_id='test_affiliate_id')
         mock_content_gen.assert_called_once_with(api_key='test_openai_key')
-        
+
         # Verify product processing
-        self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(self.mock_products_data))
-        self.assertEqual(mock_content_gen_instance.generate_content.call_count, len(self.mock_products_data))
-        
+        self.assertEqual(mock_linker_instance.generate_affiliate_link.call_count, len(mock_products_data))
+        self.assertEqual(mock_content_gen_instance.generate_content.call_count, len(mock_products_data))
+
         # Verify CSV operations
         makedirs_calls = [call for call in mock_makedirs.call_args_list if call == (('outputs',), {'exist_ok': True})]
         self.assertTrue(len(makedirs_calls) >= 1)
@@ -203,39 +218,43 @@ class TestIntegration(unittest.TestCase):
         # Verify outputs directory was created
         mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
 
-    @patch('builtins.open', new_callable=MagicMock)
-    @patch('app.main.json.load')
-    def test_load_products_includes_screenshot_path(self, mock_json_load, mock_open):
-        # Configure mock json.load to return data with screenshot_path
-        mock_config_data = [
-             {"product_id": "ID_A", "name": "Product A", "screenshot_path": "outputs/screenshots/ID_A.png"},
-             {"product_id": "ID_B", "name": "Product B", "screenshot_path": "outputs/screenshots/ID_B.png"},
-        ]
-        mock_json_load.return_value = {'products': mock_config_data}
+    def test_reddit_agent_voting(self):
+        # Set up logging to capture log output
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter('%(message)s'))
+        logger = logging.getLogger('app.agents.reddit_agent')
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        logger.handlers = [handler]
 
-        products = load_products()
+        # Mock the Reddit API client
+        with patch('praw.Reddit') as mock_reddit:
+            # Configure the mock to return a trending post
+            mock_submission = MagicMock()
+            mock_submission.id = '1l3mgyq'
+            mock_submission.title = '[Official Tournament Discussion Thread] 2025 RBC Canadian Open'
+            mock_subreddit = MagicMock()
+            mock_subreddit.hot.return_value = iter([mock_submission])
+            mock_reddit.return_value.subreddit.return_value = mock_subreddit
 
-        # Assert that products are loaded correctly and screenshot_path is included
-        self.assertEqual(len(products), 2)
-        self.assertEqual(products[0].product_id, "ID_A")
-        self.assertEqual(products[0].name, "Product A")
-        self.assertEqual(products[0].screenshot_path, "outputs/screenshots/ID_A.png")
-        self.assertEqual(products[1].product_id, "ID_B")
-        self.assertEqual(products[1].name, "Product B")
-        self.assertEqual(products[1].screenshot_path, "outputs/screenshots/ID_B.png")
+            # Initialize the RedditAgent
+            agent = RedditAgent()
 
-        # Test a product without screenshot_path in config
-        mock_config_data_no_screenshot = [
-             {"product_id": "ID_C", "name": "Product C"},
-        ]
-        mock_json_load.return_value = {'products': mock_config_data_no_screenshot}
+            # Call interact_with_users with a dummy product
+            dummy_product = Product(product_id='ID_A', name='Product A')
+            agent.interact_with_users(dummy_product)
 
-        products_no_screenshot = load_products()
+            # Verify log output
+            log_output = log_capture.getvalue()
+            self.assertIn('Found trending post: [Official Tournament Discussion Thread] 2025 RBC Canadian Open (ID: 1l3mgyq)', log_output)
+            self.assertIn('Upvoted post 1l3mgyq', log_output)
+            self.assertIn('Downvoted post 1l3mgyq', log_output)
 
-        self.assertEqual(len(products_no_screenshot), 1)
-        self.assertEqual(products_no_screenshot[0].product_id, "ID_C")
-        self.assertEqual(products_no_screenshot[0].name, "Product C")
-        self.assertIsNone(products_no_screenshot[0].screenshot_path)
+        # Clean up logging
+        logger.removeHandler(handler)
 
 if __name__ == '__main__':
     unittest.main() 

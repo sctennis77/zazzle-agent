@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from app.models import Product, ContentType, DistributionStatus, DistributionMetadata
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
+import praw
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,18 @@ class RedditAgent(ChannelAgent):
     """Reddit agent that behaves like a user to distribute content effectively."""
 
     def __init__(self, personality: Optional[Dict[str, Any]] = None):
-        """Initialize the Reddit agent with personality traits."""
+        """Initialize the Reddit agent with personality traits and Reddit API client."""
         super().__init__()
         self.distribution_channel = RedditDistributionChannel()
+        
+        # Initialize PRAW Reddit client
+        self.reddit = praw.Reddit(
+            client_id=os.getenv('REDDIT_CLIENT_ID'),
+            client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
+            username=os.getenv('REDDIT_USERNAME'),
+            password=os.getenv('REDDIT_PASSWORD'),
+            user_agent=os.getenv('REDDIT_USER_AGENT', 'zazzle-agent by u/yourusername')
+        )
         
         # Default personality traits
         self.personality = personality or {
@@ -207,7 +217,30 @@ class RedditAgent(ChannelAgent):
         logger.info(f"[RedditAgent] Posting to Reddit as user: {content}\nAffiliate Link: {product.affiliate_link}")
         return True
 
-    def interact_with_users(self, product, context=None):
-        # Simulate user-like interaction (e.g., replying, upvoting)
-        logger.info(f"[RedditAgent] Interacting with users for product {product.product_id}")
-        return True 
+    def interact_with_votes(self, post_id: str) -> None:
+        """Interact with a post by upvoting and downvoting."""
+        try:
+            # Upvote the post
+            self.reddit.submission(id=post_id).upvote()
+            logger.info(f"Upvoted post {post_id}")
+            # Downvote the post
+            self.reddit.submission(id=post_id).downvote()
+            logger.info(f"Downvoted post {post_id}")
+        except Exception as e:
+            logger.error(f"Error interacting with votes for post {post_id}: {str(e)}")
+
+    def interact_with_users(self, product_id: str) -> None:
+        """Interact with users on Reddit for a given product."""
+        try:
+            # Fetch a trending post from r/golf
+            subreddit = self.reddit.subreddit("golf")
+            trending_post = next(subreddit.hot(limit=1), None)
+            if trending_post:
+                post_id = trending_post.id
+                post_title = trending_post.title
+                logger.info(f"Found trending post: {post_title} (ID: {post_id})")
+                self.interact_with_votes(post_id)
+            else:
+                logger.warning("No trending post found in r/golf.")
+        except Exception as e:
+            logger.error(f"Error interacting with users for product {product_id}: {str(e)}") 

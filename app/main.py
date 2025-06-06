@@ -80,14 +80,23 @@ def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
         raise
 
 def main():
-    """Main entry point for the Zazzle Affiliate Marketing Agent."""
-    logger.info("Starting Zazzle Affiliate Marketing Agent")
+    """Main entry point for the application."""
+    # Load environment variables
+    load_dotenv()
 
-    # Get environment variables
+    # Initialize logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    # Load products from configuration
+    products = load_products()
+
+    # Get required environment variables
     zazzle_affiliate_id = os.getenv('ZAZZLE_AFFILIATE_ID')
     openai_api_key = os.getenv('OPENAI_API_KEY')
-    force_new_content = os.getenv('FORCE_NEW_CONTENT', 'false').lower() == 'true'
-
     if not zazzle_affiliate_id:
         logger.error("ZAZZLE_AFFILIATE_ID environment variable not set.")
         return
@@ -95,80 +104,33 @@ def main():
         logger.error("OPENAI_API_KEY environment variable not set.")
         return
 
-    # Ensure output directory exists
-    ensure_output_dir()
-
-    # Load products from config
-    products = load_products()
-
-    if not products:
-        logger.warning("No products found in the configuration file.")
-        save_to_csv([])
-        return
-
     # Initialize components
-    try:
-        linker = ZazzleAffiliateLinker(affiliate_id=zazzle_affiliate_id)
-    except ValueError as e:
-        logger.error(f"Error initializing ZazzleAffiliateLinker: {e}")
-        return
+    linker = ZazzleAffiliateLinker(affiliate_id=zazzle_affiliate_id)
+    content_gen = ContentGenerator(api_key=openai_api_key)
 
-    # Temporarily unset proxy environment variables before initializing OpenAI client
-    original_http_proxy = os.environ.pop('HTTP_PROXY', None)
-    original_https_proxy = os.environ.pop('HTTPS_PROXY', None)
-    original_all_proxy = os.environ.pop('ALL_PROXY', None)
-    original_no_proxy = os.environ.pop('NO_PROXY', None)
-
-    try:
-        content_gen = ContentGenerator(api_key=openai_api_key)
-    except Exception as e:
-        logger.error(f"Error initializing ContentGenerator: {e}")
-        return
-    finally:
-        # Restore original proxy environment variables
-        if original_http_proxy is not None: os.environ['HTTP_PROXY'] = original_http_proxy
-        if original_https_proxy is not None: os.environ['HTTPS_PROXY'] = original_https_proxy
-        if original_all_proxy is not None: os.environ['ALL_PROXY'] = original_all_proxy
-        if original_no_proxy is not None: os.environ['NO_PROXY'] = original_no_proxy
-
-    # Initialize RedditAgent (can extend to other channels later)
-    reddit_agent = RedditAgent()
-
-    # Process each product
     processed_products = []
     for product in products:
+        logger.info(f"Processing product: {product.name}")
         try:
             # Generate affiliate link
             product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
-            # Generate content for Reddit (simulate persona)
+            # Generate content
             product.content = content_gen.generate_content(product.name)
             product.content_type = ContentType.REDDIT
             product.identifier = Product.generate_identifier(product.product_id)
-            # Post as a user and interact
-            reddit_agent.post_content(product, product.content)
-            reddit_agent.interact_with_users(product)
             processed_products.append(product)
         except Exception as e:
             logger.error(f"Error processing product {product.product_id}: {e}")
+            continue
 
     # Save results to CSV
-    try:
+    if processed_products:
         save_to_csv(processed_products)
         logger.info("Results saved to CSV.")
-    except Exception as e:
-        logger.error(f"Failed to save results to CSV: {str(e)}")
+    else:
+        logger.warning("No products were processed successfully.")
 
-    # Log summary
-    logger.info("\n--- Processed Products Summary ---")
-    for product in processed_products:
-        logger.info(f"Product ID: {product.product_id}")
-        logger.info(f"Name: {product.name}")
-        logger.info(f"Affiliate Link: {product.affiliate_link}")
-        logger.info(f"Content Type: {product.content_type.value if product.content_type else 'None'}")
-        logger.info(f"Content: {product.content}")
-        logger.info("---")
-
-    logger.info("Zazzle Affiliate Marketing Agent finished.")
+    logger.info("Product processing completed")
 
 if __name__ == '__main__':
     main() 
