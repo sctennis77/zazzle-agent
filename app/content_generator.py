@@ -19,28 +19,28 @@ class ContentGenerator:
         self.client = OpenAI(api_key=api_key)
         logger.info("Initializing ContentGenerator")
 
-    def generate_tweet_content(self, product_name: str, force_new_content: bool = False) -> str:
-        """Generate tweet content for a product name."""
+    def generate_content(self, product_name: str, force_new_content: bool = False) -> str:
+        """Generate content for a product name."""
         try:
-            prompt = f"Create a tweet for the product: {product_name}"
+            prompt = f"Create a content for the product: {product_name}"
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
-            tweet_text = response.choices[0].message.content.strip()
-            logger.info(f"Successfully generated tweet for {product_name}")
-            return tweet_text
+            content = response.choices[0].message.content.strip()
+            logger.info(f"Successfully generated content for {product_name}")
+            return content
         except Exception as e:
-            logger.error(f"Error generating tweet content for {product_name}: {e}")
-            return "Error generating tweet content"
+            logger.error(f"Error generating content for {product_name}: {e}")
+            return "Error generating content"
 
     def generate_content_batch(self, products: List[Product], force_new_content: bool = False) -> List[Product]:
         processed_products = []
         for product in products:
             try:
-                content = self.generate_tweet_content(product.name, force_new_content)
+                content = self.generate_content(product.name, force_new_content)
                 product.content = content
-                product.content_type = ContentType.TWEET
+                product.content_type = ContentType.REDDIT
                 processed_products.append(product)
             except Exception as e:
                 logger.error(f"Error processing product {product.product_id}: {e}")
@@ -84,9 +84,9 @@ def generate_content_from_config(config_file: str = 'app/products_config.json'):
             'title': product.get('name', f"Product ID: {product.get('product_id', 'N/A')}"),
             'product_id': product.get('product_id', 'N/A')
         }
-        tweet = generator.generate_tweet_content(product_details['title'])
-        generated_content[product.get('product_id', 'N/A')] = tweet
-        print(f"Product ID: {product.get('product_id', 'N/A')}\nTweet: {tweet}\n---")
+        content = generator.generate_content(product_details['title'])
+        generated_content[product.get('product_id', 'N/A')] = content
+        print(f"Product ID: {product.get('product_id', 'N/A')}\nContent: {content}\n---")
 
     return generated_content
 

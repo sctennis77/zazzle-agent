@@ -1,17 +1,18 @@
-[
-    {
-        "product_id": "ID_A",
-        "name": "Product A",
-        "screenshot_path": "outputs/screenshots/ID_A.png"
-    },
-    {
-        "product_id": "ID_B",
-        "name": "Product B",
-        "screenshot_path": "outputs/screenshots/ID_B.png"
-    },
-    {
-        "product_id": "ID_C",
-        "name": "Product C",
-        "screenshot_path": "outputs/screenshots/ID_C.png"
-    }
-] 
+{
+    "products": [
+        {
+            "product_id": "256788545443693913",
+            "name": "Acrylic Invitations",
+            "screenshot_path": "outputs/screenshots/256788545443693913.png"
+        },
+        {
+            "product_id": "256821402533528672",
+            "name": "Golf Head Cover",
+            "screenshot_path": "outputs/screenshots/256821402533528672.png"
+        },
+        {
+            "product_id": "256145303709595928",
+            "name": "Wood Serving Tray"
+        }
+    ]
+}

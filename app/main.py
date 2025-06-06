@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
 from app.models import Product, ContentType
+from app.agents.reddit_agent import RedditAgent
 
 # Configure logging
 logging.basicConfig(
@@ -43,7 +44,8 @@ def load_products(config_path: str = "app/products_config.json") -> List[Product
     """
     try:
         with open(config_path, 'r') as f:
-            products_data = json.load(f)
+            config_data = json.load(f)
+            products_data = config_data.get('products', [])
             
         products = []
         for product_data in products_data:
@@ -75,22 +77,6 @@ def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
         return filepath
     except Exception as e:
         logger.error(f"Error saving to CSV: {str(e)}")
-        raise
-
-def process_product(product: Product, linker: ZazzleAffiliateLinker, content_gen: ContentGenerator) -> Product:
-    """Process a single product to generate affiliate link and content."""
-    try:
-        product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
-        try:
-            product.content = content_gen.generate_tweet_content(product.name)
-            product.content_type = ContentType.TWEET
-        except Exception as e:
-            logger.error(f"Error generating content for product {product.product_id}: {str(e)}")
-            product.content = "Error generating content"
-        product.identifier = Product.generate_identifier(product.product_id)
-        return product
-    except Exception as e:
-        logger.error(f"Error processing product {product.product_id}: {str(e)}")
         raise
 
 def main():
@@ -126,7 +112,7 @@ def main():
     except ValueError as e:
         logger.error(f"Error initializing ZazzleAffiliateLinker: {e}")
         return
-    
+
     # Temporarily unset proxy environment variables before initializing OpenAI client
     original_http_proxy = os.environ.pop('HTTP_PROXY', None)
     original_https_proxy = os.environ.pop('HTTPS_PROXY', None)
@@ -145,12 +131,23 @@ def main():
         if original_all_proxy is not None: os.environ['ALL_PROXY'] = original_all_proxy
         if original_no_proxy is not None: os.environ['NO_PROXY'] = original_no_proxy
 
+    # Initialize RedditAgent (can extend to other channels later)
+    reddit_agent = RedditAgent()
+
     # Process each product
     processed_products = []
     for product in products:
         try:
-            processed_product = process_product(product, linker, content_gen)
-            processed_products.append(processed_product)
+            # Generate affiliate link
+            product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
+            # Generate content for Reddit (simulate persona)
+            product.content = content_gen.generate_content(product.name)
+            product.content_type = ContentType.REDDIT
+            product.identifier = Product.generate_identifier(product.product_id)
+            # Post as a user and interact
+            reddit_agent.post_content(product, product.content)
+            reddit_agent.interact_with_users(product)
+            processed_products.append(product)
         except Exception as e:
             logger.error(f"Error processing product {product.product_id}: {e}")
 

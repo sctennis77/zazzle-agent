@@ -113,7 +113,7 @@ class TestComponents(unittest.TestCase):
 
             content_gen = ContentGenerator()
             product_name = "Test Product"
-            content = content_gen.generate_tweet_content(product_name)
+            content = content_gen.generate_content(product_name)
 
             # Assert that the correct content was returned
             self.assertEqual(content, "Test content")
@@ -126,11 +126,11 @@ class TestComponents(unittest.TestCase):
 
             content_gen = ContentGenerator()
             product_name = "Test Product"
-            # The generate_tweet_content function catches the exception and returns an error message
-            content = content_gen.generate_tweet_content(product_name)
+            # The generate_content function catches the exception and returns an error message
+            content = content_gen.generate_content(product_name)
 
             # Assert that an error message is returned
-            self.assertEqual(content, "Error generating tweet content")
+            self.assertEqual(content, "Error generating content")
 
     def test_content_generator_multiple_products(self):
         # Mock OpenAI API to return consistent responses
@@ -142,8 +142,8 @@ class TestComponents(unittest.TestCase):
             ]
 
             content_gen = ContentGenerator()
-            content1 = content_gen.generate_tweet_content("Product 1")
-            content2 = content_gen.generate_tweet_content("Product 2")
+            content1 = content_gen.generate_content("Product 1")
+            content2 = content_gen.generate_content("Product 2")
 
             # Assert that content was generated for both products
             self.assertEqual(content1, "Content for Product 1")
@@ -171,7 +171,7 @@ class TestComponents(unittest.TestCase):
             # Check that all products have content and content_type
             for product in processed_products:
                 self.assertIsNotNone(product.content)
-                self.assertEqual(product.content_type, ContentType.TWEET)
+                self.assertEqual(product.content_type, ContentType.REDDIT)
                 self.assertTrue(product.content.startswith("Content for"))
 
     def test_product_data_validation(self):
@@ -227,7 +227,7 @@ class TestComponents(unittest.TestCase):
         # Assert that an error message is returned for the product
         self.assertEqual(len(generated_content), 1)
         self.assertIn('ID_A', generated_content)
-        self.assertEqual(generated_content['ID_A'], "Error generating tweet content")
+        self.assertEqual(generated_content['ID_A'], "Error generating content")
 
     @patch('app.content_generator.OpenAI')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"product_id": "ID_A", "name": "Product A"}, {"product_id": "ID_B", "name": "Product B"}, {"product_id": "ID_C", "name": "Product C"}]')
