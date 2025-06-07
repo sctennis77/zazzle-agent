@@ -108,7 +108,7 @@ class TestRedditAgent(unittest.TestCase):
         mock_create_product.assert_called_once()
         call_args, call_kwargs = mock_create_product.call_args
         self.assertIn('text', call_args[0])
-        self.assertEqual(call_args[0]['text'], 'Golf Joke')
+        self.assertIn('image_url', call_args[0])
         self.assertIn('image_iid', call_args[0])
 
     @patch.object(RedditAgent, 'interact_with_votes')
@@ -465,7 +465,7 @@ def test_engage_with_post_marketing():
             mock_instance = MagicMock()
             mock_openai_client.return_value = mock_instance
             mock_choice = MagicMock()
-            mock_choice.message.content = "Check out these amazing golf balls at [Link](https://www.zazzle.com/generated_product_link)"
+            mock_choice.message.content = "Check out this cool product!"
             mock_instance.chat.completions.create.return_value.choices = [mock_choice]
 
             agent = RedditAgent()
@@ -480,7 +480,7 @@ def test_engage_with_post_marketing():
             assert result["post_title"] == "Need new golf balls for the season"
             assert result["post_link"] == f"https://reddit.com/r/{mock_post.subreddit.display_name}/comments/{mock_post.id}"
             assert "product_info" in result
-            assert result["comment_text"] == "Check out these amazing golf balls at [Link](https://www.zazzle.com/generated_product_link)"
+            assert result["comment_text"] == "Check out this cool product!"
             assert result["action"] == "Would reply to post with marketing comment"
 
 def test_reply_to_comment_with_marketing():

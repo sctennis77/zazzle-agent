@@ -462,16 +462,11 @@ Marketing Comment:"""
                 logger.warning(f"No suitable product idea found for post {post_id}.")
                 return None
             
-            # Create a dummy Product object for testing
-            product = Product(
-                product_id="test_product_id",
-                name=product_info.get('text', "Test Product"),
-                affiliate_link="https://www.zazzle.com/test_product_link",
-                content="This is a test product content."
-            )
-            
-            # Generate marketing comment
-            marketing_comment_text = self._generate_marketing_comment(product, post_context)
+            # Ensure required fields for product designer
+            product_info.setdefault('image_url', 'https://via.placeholder.com/150')
+            product_info.setdefault('image_iid', 'test_image_iid')
+            # Create product using product designer
+            product_info = self.product_designer.create_product(product_info)
             
             # In test mode, return the action details without posting
             return {
@@ -481,7 +476,7 @@ Marketing Comment:"""
                 'post_link': f"https://reddit.com/r/{submission.subreddit.display_name}/comments/{post_id}",
                 'post_context': post_context,
                 'product_info': product_info,
-                'comment_text': marketing_comment_text,
+                'comment_text': product_info.get('description', "Check out this cool product!"),
                 'action': 'Would reply to post with marketing comment'
             }
             
@@ -596,82 +591,51 @@ Marketing Comment:"""
             logger.error(f"Error determining product idea: {str(e)}")
             return None
 
-    def find_and_create_product(self) -> Optional[Dict]:
-        """Find a post on r/golf and create a custom golf ball product."""
+    def find_and_create_product(self, config_path: str = "app/products_config.json") -> Optional[Dict]:
+        """Find a suitable post and create a product based on it."""
         try:
-            # Get the r/golf subreddit
-            subreddit = self.reddit.subreddit('golf')
+            # Get a trending post from r/golf
+            subreddit = self.reddit.subreddit("golf")
+            trending_post = next(subreddit.hot(limit=1), None)
             
-            # Get the top post and its comments
-            for post in subreddit.hot(limit=1):
-                # Get top comments
-                post.comments.replace_more(limit=0)  # Don't load more comments
-                top_comments = [
-                    {
-                        'id': comment.id,
-                        'body': comment.body,
-                        'score': comment.score
-                    }
-                    for comment in post.comments.list()[:5]  # Get top 5 comments
-                ]
-                
-                # Determine product idea based on post content and comments
-                product_info = self._determine_product_idea(
-                    post_title=post.title,
-                    post_content=post.selftext,
-                    comments=top_comments
-                )
-                
-                if not product_info:
-                    continue
-                
-                # Add Reddit context
-                product_info.update({
-                    'reddit_context': {
-                        'type': 'post',
-                        'id': post.id,
-                        'title': post.title,
-                        'url': f'https://reddit.com{post.permalink}',
-                        'created_utc': post.created_utc,
-                        'theme': product_info.get('theme')
-                    },
-                    'image_url': 'https://via.placeholder.com/150',  # This URL is for internal tracking, not direct Zazzle pre-population
-                    'image_iid': '4b2bbb87-ee28-47a3-9de9-5ddb045ec8bc' # Placeholder IID from your screenshot. This will be replaced by actual generated Zazzle Image IDs later.
-                })
-                
-                # Create the product using Zazzle's CAP system
-                product_designer = ZazzleProductDesigner()
-                created_product = product_designer.create_product(product_info)
-                
-                if created_product:
-                    # Add the product URL to the info
-                    product_info['product_url'] = created_product.get('product_url', '')
-                    return product_info
-                
+            if not trending_post:
+                logger.warning("No trending post found in r/golf")
                 return None
-                
+            
+            # Analyze post context
+            post_context = self._analyze_post_context(trending_post)
+            
+            # Determine product idea from post
+            product_idea = self._determine_product_idea(
+                post_title=post_context['title'],
+                post_content=post_context.get('text'),
+                comments=post_context.get('top_comments', [])
+            )
+            
+            if not product_idea:
+                logger.warning("Could not determine product idea from post")
+                return None
+            
+            # Ensure required fields for product designer
+            product_idea.setdefault('image_url', 'https://via.placeholder.com/150')
+            product_idea.setdefault('image_iid', 'test_image_iid')
+            # Create product using product designer
+            product_info = self.product_designer.create_product(product_idea)
+            
+            if not product_info:
+                logger.warning("Failed to create product")
+                return None
+            
+            # Add Reddit context to product info
+            product_info['reddit_context'] = {
+                'id': trending_post.id,
+                'title': trending_post.title,
+                'url': f"https://reddit.com{trending_post.permalink}",
+                'theme': product_idea.get('theme', 'default')  # Include theme from product_idea
+            }
+            
+            return product_info
+            
         except Exception as e:
             logger.error(f"Error in find_and_create_product: {str(e)}")
-            # If there's an error with Reddit, try to create a product without Reddit context
-            try:
-                # Create a basic product without Reddit context
-                product_info = {
-                    'text': 'Custom Golf Ball',
-                    'color': 'Blue',
-                    'quantity': 12,
-                    'theme': 'golf',
-                    'image_url': 'https://via.placeholder.com/150',
-                    'image_iid': '4b2bbb87-ee28-47a3-9de9-5ddb045ec8bc'
-                }
-                
-                # Create the product using Zazzle's CAP system
-                product_designer = ZazzleProductDesigner()
-                created_product = product_designer.create_product(product_info)
-                
-                if created_product:
-                    # Add the product URL to the info
-                    product_info['product_url'] = created_product.get('product_url', '')
-                    return product_info
-            except Exception as inner_e:
-                logger.error(f"Error creating product without Reddit context: {str(inner_e)}")
             return None 

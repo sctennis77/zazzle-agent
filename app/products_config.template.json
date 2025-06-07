@@ -1,0 +1,21 @@
+[
+    {
+        "product_type": "Sticker",
+        "zazzle_template_id": "YOUR_TEMPLATE_ID",
+        "original_url": "YOUR_ORIGINAL_URL",
+        "zazzle_tracking_code": "YOUR_TRACKING_CODE",
+        "customizable_fields": {
+            "text": {
+                "type": "text",
+                "description": "Custom text to be displayed on the sticker",
+                "max_length": 100
+            },
+            "image": {
+                "type": "image",
+                "description": "Custom image to be displayed on the sticker",
+                "formats": ["png", "jpg", "jpeg"],
+                "max_size_mb": 5
+            }
+        }
+    }
+] 
