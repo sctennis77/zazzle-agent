@@ -55,6 +55,9 @@ python main.py --mode test-voting
 # Test Reddit agent's voting behavior on comments (prints comment, link, and action for manual verification)
 python main.py --mode test-voting-comment
 
+# Test Reddit agent's ability to comment on posts (prints proposed comment and action for manual verification)
+python main.py --mode test-post-comment
+
 # Run with custom configuration
 python main.py --mode pipeline --config path/to/config.json
 ```
@@ -128,9 +131,14 @@ The Product Designer Agent works in conjunction with the Reddit agent to:
 
 In the future, the Product Designer Agent can be expanded to include other product types and design options, allowing for a broader range of custom products to be generated based on Reddit interactions.
 
-## Reddit Agent Voting
+## Reddit Agent Voting and Commenting
 
-The Reddit agent can upvote and downvote both posts and comments. The `test-voting` and `test-voting-comment` modes allow you to verify this behavior:
+The Reddit agent can interact with posts and comments in several ways:
 
-- `test-voting`: Upvotes and downvotes a trending post in r/golf.
-- `test-voting-comment`: Upvotes and downvotes a comment in a trending post, printing the comment text, author, link, and action taken for manual verification. 
+- **Voting**: Upvote and downvote both posts and comments
+  - `test-voting`: Upvotes and downvotes a trending post in r/golf
+  - `test-voting-comment`: Upvotes and downvotes a comment in a trending post, printing the comment text, author, link, and action taken for manual verification
+
+- **Commenting**: Comment on posts (test mode only)
+  - `test-post-comment`: Simulates commenting on a trending post, printing the proposed comment text, post details, and action for manual verification
+  - In test mode, comments are not actually posted to Reddit, but the system shows what would be posted 

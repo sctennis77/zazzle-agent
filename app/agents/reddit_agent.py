@@ -255,6 +255,29 @@ class RedditAgent(ChannelAgent):
             logger.error(f"Error interacting with votes for {'comment' if comment_id else 'post'} {comment_id or post_id}: {str(e)}")
             return None
 
+    def comment_on_post(self, post_id: str, comment_text: str = None) -> Dict[str, Any]:
+        """Comment on a post with the given text."""
+        try:
+            submission = self.reddit.submission(id=post_id)
+            
+            # Generate a comment if none provided
+            if not comment_text:
+                comment_text = "Thanks for sharing this interesting post! I appreciate the insights."
+            
+            # In test mode, just return the action details without posting
+            return {
+                'type': 'post_comment',
+                'post_id': post_id,
+                'post_title': submission.title,
+                'post_link': f"https://reddit.com/r/{submission.subreddit.display_name}/comments/{post_id}",
+                'comment_text': comment_text,
+                'action': 'Would reply to post with comment'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error commenting on post {post_id}: {str(e)}")
+            return None
+
     def interact_with_users(self, product_id: str) -> None:
         """Interact with users on Reddit for a given product."""
         try:

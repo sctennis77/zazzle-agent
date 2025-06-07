@@ -171,11 +171,39 @@ def test_reddit_comment_voting():
     else:
         print("No trending post found in r/golf.")
 
+def test_reddit_post_comment():
+    """Test the Reddit agent's ability to comment on posts without actually posting."""
+    reddit_agent = RedditAgent()
+    
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Generate a test comment
+        test_comment = "This is a test comment that would be posted in reply to the post."
+        
+        # Attempt to comment on the post
+        action = reddit_agent.comment_on_post(trending_post.id, test_comment)
+        if action:
+            print("\nProposed action:")
+            print(f"Type: {action['type']}")
+            print(f"Post: {action['post_title']}")
+            print(f"Post URL: {action['post_link']}")
+            print(f"Comment text: {action['comment_text']}")
+            print(f"Action: {action['action']}")
+    else:
+        print("No trending post found in r/golf.")
+
 def main():
     """Main entry point with command line argument support."""
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
-    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment'],
-                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test')
+    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment'],
+                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting')
     
     args = parser.parse_args()
     
@@ -185,6 +213,8 @@ def main():
         test_reddit_voting()
     elif args.mode == 'test-voting-comment':
         test_reddit_comment_voting()
+    elif args.mode == 'test-post-comment':
+        test_reddit_post_comment()
 
 if __name__ == "__main__":
     main() 

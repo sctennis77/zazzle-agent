@@ -185,5 +185,42 @@ def test_interact_with_users_comments(mock_comment, mock_submission):
         mock_submission.comments.replace_more.assert_called_once_with(limit=0)
         mock_submission.comments.list.assert_called_once()
 
+def test_comment_on_post(mock_submission):
+    """Test the Reddit agent's ability to comment on posts."""
+    with patch('praw.Reddit') as mock_reddit:
+        mock_reddit_instance = Mock()
+        mock_reddit.return_value = mock_reddit_instance
+        mock_reddit_instance.submission.return_value = mock_submission
+        
+        reddit_agent = RedditAgent()
+        test_comment = "Test comment text"
+        result = reddit_agent.comment_on_post(mock_submission.id, test_comment)
+        
+        assert result is not None
+        assert result['type'] == 'post_comment'
+        assert result['post_id'] == mock_submission.id
+        assert result['post_title'] == mock_submission.title
+        assert 'post_link' in result
+        assert result['comment_text'] == test_comment
+        assert result['action'] == 'Would reply to post with comment'
+
+def test_comment_on_post_default_text(mock_submission):
+    """Test the Reddit agent's ability to comment on posts with default text."""
+    with patch('praw.Reddit') as mock_reddit:
+        mock_reddit_instance = Mock()
+        mock_reddit.return_value = mock_reddit_instance
+        mock_reddit_instance.submission.return_value = mock_submission
+        
+        reddit_agent = RedditAgent()
+        result = reddit_agent.comment_on_post(mock_submission.id)
+        
+        assert result is not None
+        assert result['type'] == 'post_comment'
+        assert result['post_id'] == mock_submission.id
+        assert result['post_title'] == mock_submission.title
+        assert 'post_link' in result
+        assert result['comment_text'] == "Thanks for sharing this interesting post! I appreciate the insights."
+        assert result['action'] == 'Would reply to post with comment'
+
 if __name__ == '__main__':
     unittest.main() 
