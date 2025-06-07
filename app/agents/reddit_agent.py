@@ -221,17 +221,39 @@ class RedditAgent(ChannelAgent):
         logger.info(f"[RedditAgent] Posting to Reddit as user: {content}\nAffiliate Link: {product.affiliate_link}")
         return True
 
-    def interact_with_votes(self, post_id: str) -> None:
-        """Interact with a post by upvoting and downvoting."""
+    def interact_with_votes(self, post_id: str, comment_id: str = None) -> None:
+        """Interact with a post or comment by upvoting and downvoting."""
         try:
-            # Upvote the post
-            self.reddit.submission(id=post_id).upvote()
-            logger.info(f"Upvoted post {post_id}")
-            # Downvote the post
-            self.reddit.submission(id=post_id).downvote()
-            logger.info(f"Downvoted post {post_id}")
+            if comment_id:
+                # Handle comment voting
+                comment = self.reddit.comment(id=comment_id)
+                comment.upvote()
+                logger.info(f"Upvoted comment {comment_id} in post {post_id}")
+                comment.downvote()
+                logger.info(f"Downvoted comment {comment_id} in post {post_id}")
+                return {
+                    'type': 'comment',
+                    'post_id': post_id,
+                    'comment_id': comment_id,
+                    'comment_text': comment.body,
+                    'comment_link': f"https://reddit.com/r/{comment.subreddit.display_name}/comments/{post_id}/_/{comment_id}"
+                }
+            else:
+                # Handle post voting
+                submission = self.reddit.submission(id=post_id)
+                submission.upvote()
+                logger.info(f"Upvoted post {post_id}")
+                submission.downvote()
+                logger.info(f"Downvoted post {post_id}")
+                return {
+                    'type': 'post',
+                    'post_id': post_id,
+                    'post_title': submission.title,
+                    'post_link': f"https://reddit.com/r/{submission.subreddit.display_name}/comments/{post_id}"
+                }
         except Exception as e:
-            logger.error(f"Error interacting with votes for post {post_id}: {str(e)}")
+            logger.error(f"Error interacting with votes for {'comment' if comment_id else 'post'} {comment_id or post_id}: {str(e)}")
+            return None
 
     def interact_with_users(self, product_id: str) -> None:
         """Interact with users on Reddit for a given product."""
@@ -243,7 +265,15 @@ class RedditAgent(ChannelAgent):
                 post_id = trending_post.id
                 post_title = trending_post.title
                 logger.info(f"Found trending post: {post_title} (ID: {post_id})")
-                self.interact_with_votes(post_id)
+                
+                # Get top-level comments
+                trending_post.comments.replace_more(limit=0)  # Load top-level comments only
+                for comment in trending_post.comments.list():
+                    if not comment.stickied:  # Skip stickied comments
+                        result = self.interact_with_votes(post_id, comment.id)
+                        if result:
+                            logger.info(f"Interaction result: {result}")
+                        break  # Process only one comment for testing
             else:
                 logger.warning("No trending post found in r/golf.")
         except Exception as e:

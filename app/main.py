@@ -143,11 +143,39 @@ def test_reddit_voting():
     else:
         print("No trending post found in r/golf.")
 
+def test_reddit_comment_voting():
+    """Test the Reddit agent's comment upvoting/downvoting behavior without posting affiliate material."""
+    reddit_agent = RedditAgent()
+    
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Get top-level comments
+        trending_post.comments.replace_more(limit=0)  # Load top-level comments only
+        for comment in trending_post.comments.list():
+            if not comment.stickied:  # Skip stickied comments
+                print(f"\nFound comment:")
+                print(f"Text: {comment.body}")
+                print(f"Author: u/{comment.author}")
+                
+                # Interact with the comment
+                action = reddit_agent.interact_with_votes(trending_post.id, comment.id)
+                print(f"\nAction taken: {action}")
+                break  # Process only one comment for testing
+    else:
+        print("No trending post found in r/golf.")
+
 def main():
     """Main entry point with command line argument support."""
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
-    parser.add_argument('mode', choices=['full', 'test-voting'],
-                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test')
+    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment'],
+                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test')
     
     args = parser.parse_args()
     
@@ -155,6 +183,8 @@ def main():
         run_full_pipeline()
     elif args.mode == 'test-voting':
         test_reddit_voting()
+    elif args.mode == 'test-voting-comment':
+        test_reddit_comment_voting()
 
 if __name__ == "__main__":
     main() 

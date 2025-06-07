@@ -49,8 +49,11 @@ The application supports different modes of operation through command-line argum
 # Run the full end-to-end pipeline
 python main.py --mode pipeline
 
-# Test Reddit agent's voting behavior without posting affiliate material
+# Test Reddit agent's voting behavior on posts (without posting affiliate material)
 python main.py --mode test-voting
+
+# Test Reddit agent's voting behavior on comments (prints comment, link, and action for manual verification)
+python main.py --mode test-voting-comment
 
 # Run with custom configuration
 python main.py --mode pipeline --config path/to/config.json
@@ -123,4 +126,11 @@ The Product Designer Agent works in conjunction with the Reddit agent to:
 
 ### Future Enhancements
 
-In the future, the Product Designer Agent can be expanded to include other product types and design options, allowing for a broader range of custom products to be generated based on Reddit interactions. 
+In the future, the Product Designer Agent can be expanded to include other product types and design options, allowing for a broader range of custom products to be generated based on Reddit interactions.
+
+## Reddit Agent Voting
+
+The Reddit agent can upvote and downvote both posts and comments. The `test-voting` and `test-voting-comment` modes allow you to verify this behavior:
+
+- `test-voting`: Upvotes and downvotes a trending post in r/golf.
+- `test-voting-comment`: Upvotes and downvotes a comment in a trending post, printing the comment text, author, link, and action taken for manual verification. 

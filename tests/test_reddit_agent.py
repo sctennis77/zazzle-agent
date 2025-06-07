@@ -7,6 +7,8 @@ import logging
 from io import StringIO
 import praw
 from app.models import Product, ContentType
+import pytest
+from unittest.mock import Mock
 
 class TestRedditAgent(unittest.TestCase):
     """Test cases for the Reddit Agent."""
@@ -123,6 +125,65 @@ class TestRedditAgent(unittest.TestCase):
             self.reddit_agent.interact_with_subreddit(product_info)
         except Exception as e:
             self.fail(f"interact_with_subreddit raised an exception: {e}")
+
+@pytest.fixture
+def reddit_agent():
+    return RedditAgent()
+
+@pytest.fixture
+def mock_comment():
+    comment = Mock()
+    comment.id = "test_comment_id"
+    comment.body = "Test comment body"
+    comment.author = "test_user"
+    comment.subreddit.display_name = "test_subreddit"
+    comment.upvote = Mock()
+    comment.downvote = Mock()
+    comment.stickied = False
+    return comment
+
+@pytest.fixture
+def mock_submission(mock_comment):
+    submission = Mock()
+    submission.id = "test_post_id"
+    submission.title = "Test Post Title"
+    submission.subreddit.display_name = "test_subreddit"
+    comments_mock = Mock()
+    comments_mock.replace_more = Mock()
+    comments_mock.list = Mock(return_value=iter([mock_comment]))
+    submission.comments = comments_mock
+    return submission
+
+def test_interact_with_comment_votes(mock_comment, mock_submission):
+    """Test the Reddit agent's ability to upvote and downvote comments."""
+    with patch('praw.Reddit') as mock_reddit:
+        mock_reddit_instance = Mock()
+        mock_reddit.return_value = mock_reddit_instance
+        mock_reddit_instance.comment.return_value = mock_comment
+        reddit_agent = RedditAgent()
+        result = reddit_agent.interact_with_votes(mock_submission.id, mock_comment.id)
+        assert result is not None
+        assert result['type'] == 'comment'
+        assert result['post_id'] == mock_submission.id
+        assert result['comment_id'] == mock_comment.id
+        assert result['comment_text'] == mock_comment.body
+        assert 'comment_link' in result
+        mock_comment.upvote.assert_called_once()
+        mock_comment.downvote.assert_called_once()
+
+def test_interact_with_users_comments(mock_comment, mock_submission):
+    """Test the Reddit agent's ability to interact with comments in a post."""
+    with patch('praw.Reddit') as mock_reddit:
+        mock_reddit_instance = Mock()
+        mock_reddit.return_value = mock_reddit_instance
+        mock_subreddit = Mock()
+        mock_subreddit.hot.return_value = iter([mock_submission])
+        mock_reddit_instance.subreddit.return_value = mock_subreddit
+        mock_reddit_instance.comment.return_value = mock_comment
+        reddit_agent = RedditAgent()
+        reddit_agent.interact_with_users("test_product_id")
+        mock_submission.comments.replace_more.assert_called_once_with(limit=0)
+        mock_submission.comments.list.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main() 
