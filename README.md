@@ -47,19 +47,28 @@ The application supports different modes of operation through command-line argum
 
 ```bash
 # Run the full end-to-end pipeline
-python main.py --mode pipeline
+python main.py full
 
 # Test Reddit agent's voting behavior on posts (without posting affiliate material)
-python main.py --mode test-voting
+python main.py test-voting
 
 # Test Reddit agent's voting behavior on comments (prints comment, link, and action for manual verification)
-python main.py --mode test-voting-comment
+python main.py test-voting-comment
 
 # Test Reddit agent's ability to comment on posts (prints proposed comment and action for manual verification)
-python main.py --mode test-post-comment
+python main.py test-post-comment
 
-# Run with custom configuration
-python main.py --mode pipeline --config path/to/config.json
+# Test Reddit agent's ability to generate engaging comments based on post context
+python main.py test-engaging-comment
+
+# Test Reddit agent's ability to generate marketing comments based on post context and product info
+python main.py test-marketing-comment
+
+# Test Reddit agent's ability to reply to comments with marketing content
+python main.py test-marketing-comment-reply
+
+# Run with custom configuration (Note: `--config` flag is not currently implemented in main.py for modes other than 'pipeline')
+python main.py pipeline --config path/to/config.json
 ```
 
 Example usage:
