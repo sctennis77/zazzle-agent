@@ -77,23 +77,36 @@ def save_to_csv(products: List, filename: str):
                 'reddit_post_id',
                 'reddit_post_title',
                 'reddit_post_url',
-                'created_at'
+                'created_at',
+                'has_reddit_context'
             ])
             writer.writeheader()
             
             for product in products:
                 # Support both dict and Product object
                 if hasattr(product, 'to_dict'):
-                    product = product.to_dict()
-                reddit_context = product.get('reddit_context', {})
+                    product_dict = product.to_dict()
+                    product_url = product_dict.get('affiliate_link', '')
+                    text_content = product_dict.get('content', '')
+                    image_url = product_dict.get('screenshot_path', '') # Assuming screenshot_path can be image_url
+                else:
+                    product_dict = product
+                    product_url = product_dict.get('product_url', '')
+                    text_content = product_dict.get('text', '')
+                    image_url = product_dict.get('image_url', '')
+
+                reddit_context = product_dict.get('reddit_context', {})
+                has_reddit_context = bool(reddit_context and reddit_context.get('id'))
+                
                 writer.writerow({
-                    'product_url': product.get('product_url', ''),
-                    'text_content': product.get('text', ''),
-                    'image_url': product.get('image_url', ''),
+                    'product_url': product_url,
+                    'text_content': text_content,
+                    'image_url': image_url,
                     'reddit_post_id': reddit_context.get('id', ''),
                     'reddit_post_title': reddit_context.get('title', ''),
                     'reddit_post_url': reddit_context.get('url', ''),
-                    'created_at': datetime.now(timezone.utc).isoformat()
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'has_reddit_context': has_reddit_context
                 })
         
         logger.info(f"Saved {len(products)} products to {filename}")
@@ -101,11 +114,11 @@ def save_to_csv(products: List, filename: str):
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-def run_full_pipeline():
+def run_full_pipeline(config_path: str = "app/products_config.json"):
     """Run the complete Reddit-to-Zazzle dynamic product flow."""
     products = []
     reddit_agent = RedditAgent()
-    product_info = reddit_agent.find_and_create_product()
+    product_info = reddit_agent.find_and_create_product(config_path=config_path)
     if product_info:
         products.append(product_info)
         save_to_csv(products, "processed_products.csv")
@@ -114,10 +127,15 @@ def run_full_pipeline():
         print(f"Text: {product_info.get('text', '')}")
         print(f"Color: {product_info.get('color', 'Blue')}")
         print(f"Quantity: {product_info.get('quantity', 12)}")
-        print("\nReddit Context:")
+        
         reddit_context = product_info.get('reddit_context', {})
-        print(f"Post Title: {reddit_context.get('title', '')}")
-        print(f"Post URL: {reddit_context.get('url', '')}")
+        if reddit_context and reddit_context.get('id'):
+            print("\nReddit Context:")
+            print(f"Post Title: {reddit_context.get('title', '')}")
+            print(f"Post URL: {reddit_context.get('url', '')}")
+        else:
+            print("\nNote: This product was created without a Reddit post context.")
+        
         print("\nProduct URL:")
         print(f"To view and customize the product, open this URL in your browser:")
         print(product_info.get('product_url', ''))
@@ -315,11 +333,12 @@ def main():
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
     parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment', 'test-marketing-comment', 'test-marketing-comment-reply'],
                       help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation, "test-marketing-comment" for testing marketing comment generation, "test-marketing-comment-reply" for testing marketing comment replies to comments')
+    parser.add_argument('--config', type=str, default='app/products_config.json', help='Path to a custom product configuration file (for full pipeline mode)')
     
     args = parser.parse_args()
     
     if args.mode == 'full':
-        run_full_pipeline()
+        run_full_pipeline(config_path=args.config)
     elif args.mode == 'test-voting':
         test_reddit_voting()
     elif args.mode == 'test-voting-comment':

@@ -652,4 +652,26 @@ Marketing Comment:"""
                 
         except Exception as e:
             logger.error(f"Error in find_and_create_product: {str(e)}")
+            # If there's an error with Reddit, try to create a product without Reddit context
+            try:
+                # Create a basic product without Reddit context
+                product_info = {
+                    'text': 'Custom Golf Ball',
+                    'color': 'Blue',
+                    'quantity': 12,
+                    'theme': 'golf',
+                    'image_url': 'https://via.placeholder.com/150',
+                    'image_iid': '4b2bbb87-ee28-47a3-9de9-5ddb045ec8bc'
+                }
+                
+                # Create the product using Zazzle's CAP system
+                product_designer = ZazzleProductDesigner()
+                created_product = product_designer.create_product(product_info)
+                
+                if created_product:
+                    # Add the product URL to the info
+                    product_info['product_url'] = created_product.get('product_url', '')
+                    return product_info
+            except Exception as inner_e:
+                logger.error(f"Error creating product without Reddit context: {str(inner_e)}")
             return None 
