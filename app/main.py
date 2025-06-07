@@ -13,6 +13,7 @@ from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerErr
 from app.content_generator import ContentGenerator
 from app.models import Product, ContentType
 from app.agents.reddit_agent import RedditAgent
+from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
 
 # Configure logging
 logging.basicConfig(
@@ -34,36 +35,6 @@ else:
 def ensure_output_dir():
     """Ensure the outputs directory exists."""
     os.makedirs('outputs', exist_ok=True)
-
-def load_products(config_path: str = "app/products_config.json") -> List[Product]:
-    """Load products from configuration file.
-    
-    Args:
-        config_path: Path to the products configuration file
-        
-    Returns:
-        List[Product]: List of Product objects
-    """
-    try:
-        with open(config_path, 'r') as f:
-            config_data = json.load(f)
-            products_data = config_data.get('products', [])
-            
-        products = []
-        for product_data in products_data:
-            product = Product(
-                product_id=product_data['product_id'],
-                name=product_data['name'],
-                screenshot_path=product_data.get('screenshot_path')  # Get screenshot path from config
-            )
-            products.append(product)
-            
-        logger.info(f"Loaded {len(products)} products from {config_path}")
-        return products
-        
-    except Exception as e:
-        logger.error(f"Error loading products from {config_path}: {str(e)}")
-        raise
 
 def save_to_csv(products: List, filename: str):
     """Save products to a CSV file with detailed information."""
@@ -114,11 +85,11 @@ def save_to_csv(products: List, filename: str):
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-def run_full_pipeline(config_path: str = "app/products_config.json"):
+def run_full_pipeline():
     """Run the complete Reddit-to-Zazzle dynamic product flow."""
     products = []
     reddit_agent = RedditAgent()
-    product_info = reddit_agent.find_and_create_product(config_path=config_path)
+    product_info = reddit_agent.find_and_create_product()
     if product_info:
         products.append(product_info)
         save_to_csv(products, "processed_products.csv")
@@ -333,12 +304,11 @@ def main():
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
     parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment', 'test-marketing-comment', 'test-marketing-comment-reply'],
                       help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation, "test-marketing-comment" for testing marketing comment generation, "test-marketing-comment-reply" for testing marketing comment replies to comments')
-    parser.add_argument('--config', type=str, default='app/products_config.json', help='Path to a custom product configuration file (for full pipeline mode)')
     
     args = parser.parse_args()
     
     if args.mode == 'full':
-        run_full_pipeline(config_path=args.config)
+        run_full_pipeline()
     elif args.mode == 'test-voting':
         test_reddit_voting()
     elif args.mode == 'test-voting-comment':

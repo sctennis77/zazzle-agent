@@ -3,7 +3,7 @@ import pytest
 import json
 import csv
 from unittest.mock import patch, mock_open, MagicMock
-from app.main import ensure_output_dir, load_products, save_to_csv, run_full_pipeline, main
+from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main
 from app.models import Product, ContentType
 
 # Mock os.makedirs for ensure_output_dir
@@ -11,52 +11,6 @@ from app.models import Product, ContentType
 def test_ensure_output_dir_creates_directory(mock_makedirs):
     ensure_output_dir()
     mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
-
-# Tests for load_products
-def test_load_products_success(tmp_path):
-    config_data = {
-        'products': [
-            {'product_id': '1', 'name': 'Product A', 'screenshot_path': 'path/to/a.png'},
-            {'product_id': '2', 'name': 'Product B'}
-        ]
-    }
-    config_file = tmp_path / "config.json"
-    config_file.write_text(json.dumps(config_data))
-
-    products = load_products(str(config_file))
-    assert len(products) == 2
-    assert products[0].product_id == '1'
-    assert products[0].name == 'Product A'
-    assert products[0].screenshot_path == 'path/to/a.png'
-    assert products[1].product_id == '2'
-    assert products[1].name == 'Product B'
-    assert products[1].screenshot_path is None
-
-def test_load_products_file_not_found():
-    with pytest.raises(FileNotFoundError):
-        load_products('non_existent_config.json')
-
-def test_load_products_invalid_json(tmp_path):
-    config_file = tmp_path / "config.json"
-    config_file.write_text('{invalid json')
-    with pytest.raises(json.JSONDecodeError):
-        load_products(str(config_file))
-
-def test_load_products_empty_products_key(tmp_path):
-    config_data = {'products': []}
-    config_file = tmp_path / "config.json"
-    config_file.write_text(json.dumps(config_data))
-
-    products = load_products(str(config_file))
-    assert len(products) == 0
-
-def test_load_products_missing_products_key(tmp_path):
-    config_data = {'other_key': []}
-    config_file = tmp_path / "config.json"
-    config_file.write_text(json.dumps(config_data))
-
-    products = load_products(str(config_file))
-    assert len(products) == 0
 
 # Tests for save_to_csv
 @patch('os.makedirs')
@@ -224,17 +178,6 @@ def test_main_test_marketing_comment_mode(mock_parse_args, mock_reply, mock_mark
 def test_main_test_marketing_comment_reply_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
     main()
     mock_reply.assert_called_once()
-
-# Test the case where config_path is provided for pipeline mode
-@patch('app.main.run_full_pipeline')
-@patch('argparse.ArgumentParser.parse_args')
-def test_main_pipeline_with_custom_config(mock_parse_args, mock_run_full_pipeline):
-    # Simulate args for pipeline mode with a custom config file
-    mock_args = MagicMock(mode='full', config='custom_config.json')
-    mock_parse_args.return_value = mock_args
-    
-    main()
-    mock_run_full_pipeline.assert_called_once_with(config_path='custom_config.json')
 
 # New tests for test_reddit_voting function
 @patch('app.main.RedditAgent')

@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import pandas as pd
 import math
-from app.main import main, save_to_csv, load_products, run_full_pipeline
+from app.main import main, save_to_csv, run_full_pipeline
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
 import logging # Import logging to check log output
@@ -60,35 +60,6 @@ class TestIntegration(unittest.TestCase):
             f.write("dummy content")
         self.addCleanup(lambda: shutil.rmtree('outputs')) # Clean up outputs directory
 
-    def test_load_products_includes_screenshot_path(self):
-        # Now that product scraper is removed, this test is simplified to just check loading from config.
-        products = load_products(self.dummy_config_path)
-        self.assertEqual(len(products), 3)
-        self.assertTrue(hasattr(products[0], 'screenshot_path'))
-        self.assertEqual(products[0].screenshot_path, "outputs/screenshots/ID_A.png")
-
-    def test_load_products_file_not_found(self):
-        with self.assertRaises(FileNotFoundError):
-            load_products("non_existent_file.json")
-
-    def test_load_products_invalid_json(self):
-        with open(self.dummy_config_path, 'w') as f:
-            f.write("invalid json")
-        with self.assertRaises(json.JSONDecodeError):
-            load_products(self.dummy_config_path)
-
-    def test_load_products_empty_products_key(self):
-        with open(self.dummy_config_path, 'w') as f:
-            json.dump({'products': []}, f)
-        products = load_products(self.dummy_config_path)
-        self.assertEqual(len(products), 0)
-
-    def test_load_products_missing_products_key(self):
-        with open(self.dummy_config_path, 'w') as f:
-            json.dump({'other_key': []}, f)
-        products = load_products(self.dummy_config_path)
-        self.assertEqual(products, [])
-
     @patch('app.main.csv.DictWriter') # Patch csv.DictWriter
     @patch('app.main.os.makedirs')
     @patch('app.main.open', new_callable=mock_open)
@@ -130,8 +101,8 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("Open error", str(cm.exception))
         mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
 
-    @patch('app.main.save_to_csv') # Patch save_to_csv in app.main
-    @patch('app.main.RedditAgent') # Patch RedditAgent directly in app.main
+    @patch('app.main.save_to_csv')
+    @patch('app.main.RedditAgent')
     def test_end_to_end_flow_success_simplified(self, mock_reddit_agent, mock_save_to_csv):
         # Configure mock_reddit_agent to return a successful product info
         mock_reddit_agent_instance = MagicMock()
@@ -187,16 +158,6 @@ class TestIntegration(unittest.TestCase):
         mock_reddit_agent.assert_called_once()
         mock_reddit_agent_instance.reddit.subreddit.assert_called_once_with("golf")
         mock_reddit_agent_instance.interact_with_votes.assert_called_once_with("test123")
-
-    @pytest.mark.xfail(reason="Testing error handling for missing config file")
-    @patch('app.main.os.path.exists', return_value=False)
-    @patch('app.main.json.load')
-    def test_end_to_end_flow_missing_config_file(self, mock_json_load, mock_path_exists):
-        # This test relies on the old flow of loading products from config
-        # which is now bypassed by RedditAgent. So this test might need removal or adjustment.
-        # For now, keeping it xfail until we re-evaluate main's direct product loading.
-        main()
-        mock_json_load.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main() 

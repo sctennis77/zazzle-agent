@@ -591,7 +591,7 @@ Marketing Comment:"""
             logger.error(f"Error determining product idea: {str(e)}")
             return None
 
-    def find_and_create_product(self, config_path: str = "app/products_config.json") -> Optional[Dict]:
+    def find_and_create_product(self) -> Optional[Dict]:
         """Find a suitable post and create a product based on it."""
         try:
             # Get a trending post from r/golf
