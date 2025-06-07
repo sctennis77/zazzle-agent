@@ -1,20 +1,54 @@
 # Zazzle Dynamic Product Generator
 
-This project automates the process of dynamically generating products on Zazzle based on Reddit interactions. Instead of generating marketing content and affiliate links for existing products, the system uses the Zazzle Create a Product API to create new products in real-time.
+This project automates the process of dynamically generating products on Zazzle based on Reddit interactions. The system uses the Zazzle Create a Product API to create new products in real-time, focusing on custom golf balls as the initial product type.
+
+## System Components
+
+### 1. Reddit Agent
+- Monitors and interacts with r/golf subreddit
+- Analyzes posts and comments for product opportunities
+- Generates engaging and marketing-focused comments
+- Makes voting decisions based on content relevance
+- Operates in test mode for safe development
+
+### 2. Product Designer
+- Receives design instructions from Reddit Agent
+- Generates custom golf ball designs
+- Integrates with Zazzle Create-a-Product API
+- Manages product creation and listing
+
+### 3. Integration Layer
+- Coordinates between Reddit Agent and Product Designer
+- Manages API authentication and rate limiting
+- Handles error recovery and retry logic
+- Maintains system state and logging
+
+## Workflow Diagram
+
+```mermaid
+graph TD
+    A[Reddit Agent] -->|Monitors| B[r/golf Subreddit]
+    B -->|Identifies Opportunity| A
+    A -->|Design Request| C[Product Designer]
+    C -->|API Call| D[Zazzle API]
+    D -->|Product Created| E[Zazzle Store]
+    A -->|Marketing Comment| B
+```
 
 ## Features
 
-- **Dynamic Product Generation**: The Reddit agent interacts with subreddits (posts and comments) and other users to identify opportunities for product creation.
-- **Zazzle API Integration**: Utilizes the Zazzle Create a Product API to generate products on-the-fly.
-- **Intelligent Decision Making**: The agent analyzes conversations and trends to determine when to create a product, ensuring relevance and potential success.
-- **Automated Workflow**: Streamlined process from Reddit interaction to product creation and listing on Zazzle.
+- **Reddit Integration**: Automated monitoring and interaction with r/golf
+- **Product Generation**: Dynamic golf ball design creation
+- **Marketing Automation**: Context-aware comment generation
+- **Test Mode**: Safe development environment with dry-run capabilities
+- **Comprehensive Testing**: Unit, integration, and end-to-end test coverage
 
 ## Prerequisites
 
 - Python 3.8+
 - Zazzle API credentials
 - Reddit API credentials
-- OpenAI API key (for content generation and decision-making)
+- OpenAI API key
 
 ## Environment Variables
 
@@ -31,64 +65,33 @@ OPENAI_API_KEY=your_openai_api_key
 
 ## Development
 
-This project uses a Makefile to simplify common development tasks. Here are the available commands:
+This project uses a Makefile to simplify common development tasks:
 
-- `make venv` — Create a Python virtual environment (if not already created)
-- `make install` — Install dependencies into the virtual environment
-- `make test` — Run the test suite with coverage
-- `make run` — Run the app locally
-- `make clean` — Remove the virtual environment, outputs, and coverage files
-- `make docker-build` — Build the Docker image (only if tests pass)
-- `make docker-run` — Run the Docker container, mounting the outputs directory
+```bash
+make venv      # Create Python virtual environment
+make install   # Install dependencies
+make test      # Run test suite
+make run       # Run the app locally
+make clean     # Clean up development artifacts
+```
 
 ### Command Line Options
 
-The application supports different modes of operation through command-line arguments:
+The application supports different modes of operation:
 
 ```bash
 # Run the full end-to-end pipeline
 python main.py full
 
-# Test Reddit agent's voting behavior on posts (without posting affiliate material)
+# Test Reddit agent's voting behavior
 python main.py test-voting
-
-# Test Reddit agent's voting behavior on comments (prints comment, link, and action for manual verification)
 python main.py test-voting-comment
 
-# Test Reddit agent's ability to comment on posts (prints proposed comment and action for manual verification)
+# Test comment generation
 python main.py test-post-comment
-
-# Test Reddit agent's ability to generate engaging comments based on post context
 python main.py test-engaging-comment
-
-# Test Reddit agent's ability to generate marketing comments based on post context and product info
 python main.py test-marketing-comment
-
-# Test Reddit agent's ability to reply to comments with marketing content
 python main.py test-marketing-comment-reply
-
-# Run with custom configuration (Note: `--config` flag is not currently implemented in main.py for modes other than 'pipeline')
-python main.py pipeline --config path/to/config.json
-```
-
-Example usage:
-```sh
-make venv
-make install
-make test
-make run
-# or for Docker
-make docker-build
-make docker-run
-```
-
-## Docker
-
-Build and run the application using Docker:
-
-```bash
-docker build -t zazzle-dynamic-product-generator .
-docker run -v $(pwd)/outputs:/app/outputs zazzle-dynamic-product-generator
 ```
 
 ## Testing
@@ -107,10 +110,10 @@ python -m pytest tests/test_integration.py
 
 ### Test Categories
 
-- **Unit Tests**: Test individual components in isolation
-- **Integration Tests**: Test component interactions
-- **End-to-End Tests**: Test the complete pipeline
-- **Reddit Agent Tests**: Test voting behavior and interaction patterns
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Component interaction testing
+- **End-to-End Tests**: Complete pipeline testing
+- **Reddit Agent Tests**: Voting and interaction pattern testing
 
 ## License
 
