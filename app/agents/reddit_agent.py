@@ -345,6 +345,46 @@ Generate a natural, engaging response:"""
             logger.error(f"Error generating engaging comment: {str(e)}")
             return "Thanks for sharing this interesting post! I appreciate the insights."
 
+    def _generate_marketing_comment(self, product: Product, post_context: Dict[str, Any]) -> str:
+        """Generate a marketing comment based on product info and post context."""
+        try:
+            product_description = product.content if product.content else f"{product.name} available on Zazzle."
+            affiliate_link = product.affiliate_link if product.affiliate_link else "#"
+
+            prompt = f"""Based on the following Reddit post and its comments, craft a concise marketing comment (2-4 sentences) for a Zazzle product:
+
+Post Title: {post_context['title']}
+Post Content: {post_context['text']}
+Top Comments:
+{chr(10).join([f"- {c['text']} (by u/{c['author']})" for c in post_context['top_comments']])}
+
+Product Name: {product.name}
+Product Description: {product_description}
+Affiliate Link: {affiliate_link}
+
+Key considerations for the comment:
+- Naturally integrate the product.
+- Maintain a friendly, non-spammy tone.
+- Encourage engagement.
+- Include the affiliate link at the end (e.g., 'Check it out here: [Link]').
+
+Marketing Comment:"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful Reddit user who occasionally shares relevant product recommendations naturally."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Error generating marketing comment: {str(e)}")
+            return f"Check out this cool product: {product.name} - {affiliate_link}"
+
     def engage_with_post(self, post_id: str) -> Dict[str, Any]:
         """Engage with a post by analyzing context and generating an engaging comment."""
         try:
@@ -371,6 +411,82 @@ Generate a natural, engaging response:"""
             
         except Exception as e:
             logger.error(f"Error engaging with post {post_id}: {str(e)}")
+            return None
+
+    def reply_to_comment_with_marketing(self, comment_id: str, product: Product, post_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Reply to a comment with a marketing comment that includes product information."""
+        try:
+            comment = self.reddit.comment(id=comment_id)
+            
+            # Generate marketing comment
+            marketing_comment_text = self._generate_marketing_comment(product, post_context)
+            
+            # In test mode, just return the action details without posting
+            return {
+                'type': 'comment_marketing_reply',
+                'comment_id': comment_id,
+                'comment_text': comment.body,
+                'post_id': comment.submission.id,
+                'post_title': comment.submission.title,
+                'post_link': f"https://reddit.com/r/{comment.subreddit.display_name}/comments/{comment.submission.id}/_/{comment.id}",
+                'product_info': {
+                    'name': product.name,
+                    'affiliate_link': product.affiliate_link
+                },
+                'reply_text': marketing_comment_text,
+                'action': 'Would reply to comment with marketing content'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error replying to comment {comment_id} with marketing content: {str(e)}")
+            return None
+
+    def engage_with_post_marketing(self, post_id: str) -> Dict[str, Any]:
+        """Engage with a post by analyzing context and generating a marketing comment."""
+        try:
+            submission = self.reddit.submission(id=post_id)
+            
+            # Analyze post context
+            post_context = self._analyze_post_context(submission)
+            if not post_context:
+                return None
+            
+            # Determine product idea based on post content and comments
+            product_info = self._determine_product_idea(
+                post_title=submission.title,
+                post_content=submission.selftext,
+                comments=post_context['top_comments']
+            )
+            
+            if not product_info:
+                logger.warning(f"No suitable product idea found for post {post_id}.")
+                return None
+            
+            # Create a dummy Product object for testing
+            product = Product(
+                product_id="test_product_id",
+                name=product_info.get('text', "Test Product"),
+                affiliate_link="https://www.zazzle.com/test_product_link",
+                content="This is a test product content."
+            )
+            
+            # Generate marketing comment
+            marketing_comment_text = self._generate_marketing_comment(product, post_context)
+            
+            # In test mode, return the action details without posting
+            return {
+                'type': 'post_marketing_comment',
+                'post_id': post_id,
+                'post_title': submission.title,
+                'post_link': f"https://reddit.com/r/{submission.subreddit.display_name}/comments/{post_id}",
+                'post_context': post_context,
+                'product_info': product_info,
+                'comment_text': marketing_comment_text,
+                'action': 'Would reply to post with marketing comment'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error engaging with post {post_id} for marketing: {str(e)}")
             return None
 
     def interact_with_users(self, product_id: str) -> None:

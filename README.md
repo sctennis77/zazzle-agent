@@ -142,3 +142,6 @@ The Reddit agent can interact with posts and comments in several ways:
 - **Commenting**: Comment on posts (test mode only)
   - `test-post-comment`: Simulates commenting on a trending post, printing the proposed comment text, post details, and action for manual verification
   - In test mode, comments are not actually posted to Reddit, but the system shows what would be posted 
+
+- **Marketing Commenting**: Reply to comments with marketing content (test mode only)
+  - `test-marketing-comment-reply`: Simulates replying to a top-level comment in a trending post with a marketing message, printing the proposed reply text, product information, and action for manual verification. 

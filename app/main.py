@@ -228,11 +228,93 @@ def test_reddit_engaging_comment():
     else:
         print("No trending post found in r/golf.")
 
+def test_reddit_marketing_comment():
+    """Test the Reddit agent's ability to generate marketing comments based on post context and product info."""
+    reddit_agent = RedditAgent()
+    
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Engage with post using marketing comment
+        action = reddit_agent.engage_with_post_marketing(trending_post.id)
+        if action:
+            print("\nProposed Marketing Action:")
+            print(f"Type: {action['type']}")
+            print(f"Post: {action['post_title']}")
+            print(f"Post URL: {action['post_link']}")
+            print("\nProduct Info:")
+            print(f"Name: {action['product_info']['text']}")
+            print(f"Theme: {action['product_info']['theme']}")
+            print("\nGenerated Marketing Comment:")
+            print(f"Text: {action['comment_text']}")
+            print(f"Action: {action['action']}")
+    else:
+        print("No trending post found in r/golf.")
+
+def test_reddit_comment_marketing_reply():
+    """Test the Reddit agent's ability to reply to a comment with a marketing message."""
+    reddit_agent = RedditAgent()
+
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+
+        # Get a top-level comment from the trending post
+        trending_post.comments.replace_more(limit=0)
+        top_comments = trending_post.comments.list()
+        
+        if top_comments:
+            target_comment = top_comments[0]
+            print(f"\nFound target comment: {target_comment.body[:50]}... (ID: {target_comment.id})")
+            
+            # Create a dummy Product object for testing
+            product = Product(
+                product_id="test_product_123",
+                name="Custom Golf Driver",
+                content="Improve your swing with our new custom golf driver!",
+                affiliate_link="https://www.zazzle.com/custom_golf_driver_link"
+            )
+
+            # Analyze post context
+            post_context = reddit_agent._analyze_post_context(trending_post)
+            
+            # Reply to the comment with marketing content
+            action = reddit_agent.reply_to_comment_with_marketing(target_comment.id, product, post_context)
+
+            if action:
+                print("\nProposed Comment Marketing Reply Action:")
+                print(f"Type: {action['type']}")
+                print(f"Comment ID: {action['comment_id']}")
+                print(f"Original Comment Text: {action['comment_text'][:50]}...")
+                print(f"Post Title: {action['post_title']}")
+                print(f"Post URL: {action['post_link']}")
+                print("\nProduct Info:")
+                print(f"Name: {action['product_info']['name']}")
+                print(f"Affiliate Link: {action['product_info']['affiliate_link']}")
+                print("\nGenerated Reply Text:")
+                print(f"Text: {action['reply_text']}")
+                print(f"Action: {action['action']}")
+        else:
+            print("No top-level comments found for the trending post.")
+    else:
+        print("No trending post found in r/golf.")
+
 def main():
     """Main entry point with command line argument support."""
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
-    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment'],
-                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation')
+    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment', 'test-marketing-comment', 'test-marketing-comment-reply'],
+                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation, "test-marketing-comment" for testing marketing comment generation, "test-marketing-comment-reply" for testing marketing comment replies to comments')
     
     args = parser.parse_args()
     
@@ -246,6 +328,10 @@ def main():
         test_reddit_post_comment()
     elif args.mode == 'test-engaging-comment':
         test_reddit_engaging_comment()
+    elif args.mode == 'test-marketing-comment':
+        test_reddit_marketing_comment()
+    elif args.mode == 'test-marketing-comment-reply':
+        test_reddit_comment_marketing_reply()
 
 if __name__ == "__main__":
     main() 

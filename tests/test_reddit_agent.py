@@ -349,7 +349,7 @@ def test_generate_engaging_comment():
             {"text": "Second comment", "author": "user2"}
         ]
     }
-    
+
     # Mock the OpenAI API call
     with patch('openai.OpenAI') as mock_openai_client:
         mock_instance = MagicMock()
@@ -361,15 +361,185 @@ def test_generate_engaging_comment():
 
         # Create the agent within the patch context
         agent = RedditAgent()
-        
+
         # Test generating a comment
         comment = agent._generate_engaging_comment(context)
-        
+
         # Verify the comment
         assert isinstance(comment, str)
         assert len(comment) > 0
         assert len(comment) <= 280  # Reddit comment length limit
         assert comment == "Generated engaging comment"
+
+def test_generate_marketing_comment():
+    """Test the Reddit agent's ability to generate marketing comments."""
+    # Create a dummy product
+    product = Product(
+        product_id="test_product_id",
+        name="Custom Golf Ball",
+        content="A high-quality custom golf ball for enthusiasts. Get your personalized golf balls today!",
+        affiliate_link="https://www.zazzle.com/custom_golf_ball_link"
+    )
+    
+    # Create test post context
+    post_context = {
+        "title": "Discussion on best golf equipment",
+        "text": "Looking for recommendations on durable golf balls.",
+        "score": 50,
+        "num_comments": 10,
+        "top_comments": [
+            {"text": "I prefer Titleist Pro V1.", "author": "golfer1"},
+            {"text": "Check out Bridgestone B XS.", "author": "golfer2"}
+        ]
+    }
+    
+    # Mock the OpenAI API call
+    with patch('openai.OpenAI') as mock_openai_client:
+        mock_instance = MagicMock()
+        mock_openai_client.return_value = mock_instance
+        
+        mock_choice = MagicMock()
+        mock_choice.message.content = "This golf ball is perfect for you: https://www.zazzle.com/custom_golf_ball_link"
+        mock_instance.chat.completions.create.return_value.choices = [mock_choice]
+
+        # Create the agent within the patch context
+        agent = RedditAgent()
+        
+        # Test generating a marketing comment
+        comment = agent._generate_marketing_comment(product, post_context)
+        
+        # Verify the comment
+        assert isinstance(comment, str)
+        assert len(comment) > 0
+        assert "https://www.zazzle.com/custom_golf_ball_link" in comment
+        assert comment == "This golf ball is perfect for you: https://www.zazzle.com/custom_golf_ball_link"
+
+def test_engage_with_post_marketing():
+    """Test the Reddit agent's ability to engage with posts with marketing comments."""
+    # Create a mock post
+    mock_post = MagicMock()
+    mock_post.id = "test456"
+    mock_post.title = "Need new golf balls for the season"
+    mock_post.selftext = "Any recommendations for durable and long-lasting golf balls?"
+    mock_post.score = 70
+    mock_post.num_comments = 15
+    mock_post.permalink = f"/r/golf/comments/{mock_post.id}/"
+    mock_post.subreddit.display_name = "golf"
+
+    # Create mock comments
+    mock_comment1 = MagicMock()
+    mock_comment1.body = "Try Titleist Pro V1, they are great!"
+    mock_comment1.author = "userA"
+    mock_comment1.score = 25
+    mock_comment1.stickied = False
+
+    mock_comment2 = MagicMock()
+    mock_comment2.body = "Bridgestone B XS are also good for distance."
+    mock_comment2.author = "userB"
+    mock_comment2.score = 15
+    mock_comment2.stickied = False
+
+    # Create a mock comment list with replace_more method
+    mock_comments = MagicMock()
+    mock_comments.replace_more.return_value = []
+    mock_comments.list.return_value = [mock_comment1, mock_comment2]
+    mock_post.comments = mock_comments
+
+    # Mock Reddit and ProductDesigner
+    mock_reddit = MagicMock()
+    mock_reddit.submission.return_value = mock_post
+    
+    mock_product_designer = MagicMock()
+    mock_product_designer.create_product.return_value = {
+        'product_url': "https://www.zazzle.com/generated_product_link"
+    }
+
+    # Mock the _determine_product_idea to return a valid product idea
+    with patch.object(RedditAgent, '_determine_product_idea', return_value={
+        'text': 'Golf Balls',
+        'color': 'White',
+        'quantity': 12,
+        'theme': 'equipment'
+    }):
+        with patch('openai.OpenAI') as mock_openai_client:
+            mock_instance = MagicMock()
+            mock_openai_client.return_value = mock_instance
+            mock_choice = MagicMock()
+            mock_choice.message.content = "Check out these amazing golf balls at [Link](https://www.zazzle.com/generated_product_link)"
+            mock_instance.chat.completions.create.return_value.choices = [mock_choice]
+
+            agent = RedditAgent()
+            agent.reddit = mock_reddit
+            agent.product_designer = mock_product_designer
+
+            result = agent.engage_with_post_marketing("test456")
+
+            assert result is not None
+            assert result["type"] == "post_marketing_comment"
+            assert result["post_id"] == "test456"
+            assert result["post_title"] == "Need new golf balls for the season"
+            assert result["post_link"] == f"https://reddit.com/r/{mock_post.subreddit.display_name}/comments/{mock_post.id}"
+            assert "product_info" in result
+            assert result["comment_text"] == "Check out these amazing golf balls at [Link](https://www.zazzle.com/generated_product_link)"
+            assert result["action"] == "Would reply to post with marketing comment"
+
+def test_reply_to_comment_with_marketing():
+    """Test the Reddit agent's ability to reply to a comment with a marketing message."""
+    # Create a mock comment
+    mock_comment = MagicMock()
+    mock_comment.id = "test_comment_id"
+    mock_comment.body = "This is a great discussion about golf equipment!"
+    mock_comment.submission.id = "test_post_id"
+    mock_comment.submission.title = "Best Golf Equipment"
+    mock_comment.submission.selftext = "Looking for recommendations on golf equipment."
+    mock_comment.subreddit.display_name = "golf"
+
+    # Create a dummy product
+    product = Product(
+        product_id="test_product_123",
+        name="Custom Golf Driver",
+        content="Improve your swing with our new custom golf driver!",
+        affiliate_link="https://www.zazzle.com/custom_golf_driver_link"
+    )
+
+    # Create test post context
+    post_context = {
+        "title": "Best Golf Equipment",
+        "text": "Looking for recommendations on golf equipment.",
+        "score": 100,
+        "num_comments": 5,
+        "top_comments": [
+            {"text": "What about a new driver?", "author": "golferX"}
+        ]
+    }
+
+    # Mock the Reddit API and OpenAI API
+    mock_reddit = MagicMock()
+    mock_reddit.comment.return_value = mock_comment
+
+    with patch('openai.OpenAI') as mock_openai_client:
+        mock_instance = MagicMock()
+        mock_openai_client.return_value = mock_instance
+        mock_choice = MagicMock()
+        mock_choice.message.content = "That's a great point! If you're looking for a new driver, check out our custom options: https://www.zazzle.com/custom_golf_driver_link"
+        mock_instance.chat.completions.create.return_value.choices = [mock_choice]
+
+        agent = RedditAgent()
+        agent.reddit = mock_reddit
+
+        result = agent.reply_to_comment_with_marketing(mock_comment.id, product, post_context)
+
+        assert result is not None
+        assert result["type"] == "comment_marketing_reply"
+        assert result["comment_id"] == "test_comment_id"
+        assert result["comment_text"] == "This is a great discussion about golf equipment!"
+        assert result["post_id"] == "test_post_id"
+        assert result["post_title"] == "Best Golf Equipment"
+        assert result["post_link"] == f"https://reddit.com/r/{mock_comment.subreddit.display_name}/comments/{mock_comment.submission.id}/_/{mock_comment.id}"
+        assert result["product_info"]["name"] == "Custom Golf Driver"
+        assert result["product_info"]["affiliate_link"] == "https://www.zazzle.com/custom_golf_driver_link"
+        assert result["reply_text"] == "That's a great point! If you're looking for a new driver, check out our custom options: https://www.zazzle.com/custom_golf_driver_link"
+        assert result["action"] == "Would reply to comment with marketing content"
 
 if __name__ == '__main__':
     unittest.main() 
