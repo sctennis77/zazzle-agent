@@ -1,6 +1,6 @@
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -120,4 +120,4 @@ class Product:
 
     @staticmethod
     def generate_identifier(product_id: str) -> str:
-        return f"{product_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}" 
+        return f"{product_id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}" 

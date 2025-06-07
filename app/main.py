@@ -2,10 +2,12 @@ import os
 import logging
 import json
 import glob
+import argparse
 from typing import List, Dict, Optional
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
+import csv
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
@@ -63,74 +65,96 @@ def load_products(config_path: str = "app/products_config.json") -> List[Product
         logger.error(f"Error loading products from {config_path}: {str(e)}")
         raise
 
-def save_to_csv(products: List[Product], output_dir: str = "outputs") -> str:
-    """Save processed products to a CSV file."""
+def save_to_csv(products: List, filename: str):
+    """Save products to a CSV file with detailed information."""
     try:
-        os.makedirs(output_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"listings_{timestamp}.csv"
-        filepath = os.path.join(output_dir, filename)
-        data = [product.to_dict() for product in products]
-        df = pd.DataFrame(data)
-        df.to_csv(filepath, index=False)
-        logger.info(f"Saved {len(products)} products to {filepath}")
-        return filepath
+        os.makedirs('outputs', exist_ok=True)
+        with open(f'outputs/{filename}', 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                'product_url',
+                'text_content',
+                'image_url',
+                'reddit_post_id',
+                'reddit_post_title',
+                'reddit_post_url',
+                'created_at'
+            ])
+            writer.writeheader()
+            
+            for product in products:
+                # Support both dict and Product object
+                if hasattr(product, 'to_dict'):
+                    product = product.to_dict()
+                reddit_context = product.get('reddit_context', {})
+                writer.writerow({
+                    'product_url': product.get('product_url', ''),
+                    'text_content': product.get('text', ''),
+                    'image_url': product.get('image_url', ''),
+                    'reddit_post_id': reddit_context.get('id', ''),
+                    'reddit_post_title': reddit_context.get('title', ''),
+                    'reddit_post_url': reddit_context.get('url', ''),
+                    'created_at': datetime.now(timezone.utc).isoformat()
+                })
+        
+        logger.info(f"Saved {len(products)} products to {filename}")
     except Exception as e:
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-def main():
-    """Main entry point for the application."""
-    # Load environment variables
-    load_dotenv()
-
-    # Initialize logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger(__name__)
-
-    # Load products from configuration
-    products = load_products()
-
-    # Get required environment variables
-    zazzle_affiliate_id = os.getenv('ZAZZLE_AFFILIATE_ID')
-    openai_api_key = os.getenv('OPENAI_API_KEY')
-    if not zazzle_affiliate_id:
-        logger.error("ZAZZLE_AFFILIATE_ID environment variable not set.")
-        return
-    if not openai_api_key:
-        logger.error("OPENAI_API_KEY environment variable not set.")
-        return
-
-    # Initialize components
-    linker = ZazzleAffiliateLinker(affiliate_id=zazzle_affiliate_id)
-    content_gen = ContentGenerator(api_key=openai_api_key)
-
-    processed_products = []
-    for product in products:
-        logger.info(f"Processing product: {product.name}")
-        try:
-            # Generate affiliate link
-            product.affiliate_link = linker.generate_affiliate_link(product.product_id, product.name)
-            # Generate content
-            product.content = content_gen.generate_content(product.name)
-            product.content_type = ContentType.REDDIT
-            product.identifier = Product.generate_identifier(product.product_id)
-            processed_products.append(product)
-        except Exception as e:
-            logger.error(f"Error processing product {product.product_id}: {e}")
-            continue
-
-    # Save results to CSV
-    if processed_products:
-        save_to_csv(processed_products)
-        logger.info("Results saved to CSV.")
+def run_full_pipeline():
+    """Run the complete Reddit-to-Zazzle dynamic product flow."""
+    products = []
+    reddit_agent = RedditAgent()
+    product_info = reddit_agent.find_and_create_product()
+    if product_info:
+        products.append(product_info)
+        save_to_csv(products, "processed_products.csv")
+        print("\nGenerated Product Info:")
+        print(f"Theme: {product_info.get('theme', 'default')}")
+        print(f"Text: {product_info.get('text', '')}")
+        print(f"Color: {product_info.get('color', 'Blue')}")
+        print(f"Quantity: {product_info.get('quantity', 12)}")
+        print("\nReddit Context:")
+        reddit_context = product_info.get('reddit_context', {})
+        print(f"Post Title: {reddit_context.get('title', '')}")
+        print(f"Post URL: {reddit_context.get('url', '')}")
+        print("\nProduct URL:")
+        print(f"To view and customize the product, open this URL in your browser:")
+        print(product_info.get('product_url', ''))
     else:
-        logger.warning("No products were processed successfully.")
+        print("No product was generated.")
 
-    logger.info("Product processing completed")
+def test_reddit_voting():
+    """Test the Reddit agent's upvoting/downvoting behavior without posting affiliate material."""
+    reddit_agent = RedditAgent()
+    
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Interact with the post
+        action = reddit_agent.interact_with_votes(trending_post.id)
+        print(f"\nAction taken: {action}")
+    else:
+        print("No trending post found in r/golf.")
 
-if __name__ == '__main__':
+def main():
+    """Main entry point with command line argument support."""
+    parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
+    parser.add_argument('mode', choices=['full', 'test-voting'],
+                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test')
+    
+    args = parser.parse_args()
+    
+    if args.mode == 'full':
+        run_full_pipeline()
+    elif args.mode == 'test-voting':
+        test_reddit_voting()
+
+if __name__ == "__main__":
     main() 

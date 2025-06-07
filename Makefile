@@ -2,14 +2,15 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run clean docker-build docker-run scrape
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape
 
 help:
 	@echo "Available targets:"
 	@echo "  make venv         - Create a Python virtual environment"
 	@echo "  make install      - Install dependencies into venv"
 	@echo "  make test         - Run the test suite with coverage"
-	@echo "  make run          - Run the app locally in venv"
+	@echo "  make run-full     - Run the complete product generation pipeline"
+	@echo "  make run-test-voting - Test Reddit agent voting behavior"
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
 	@echo "  make docker-run   - Run Docker container"
@@ -24,8 +25,14 @@ install: venv
 test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
-run:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main
+run-full:
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main full
+
+run-test-voting:
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main test-voting
+
+# Default run target (alias for run-full)
+run: run-full
 
 clean:
 	rm -rf $(VENV_NAME) outputs/ .coverage
