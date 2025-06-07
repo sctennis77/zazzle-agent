@@ -199,11 +199,40 @@ def test_reddit_post_comment():
     else:
         print("No trending post found in r/golf.")
 
+def test_reddit_engaging_comment():
+    """Test the Reddit agent's ability to generate engaging comments based on post context."""
+    reddit_agent = RedditAgent()
+    
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Analyze post and generate engaging comment
+        action = reddit_agent.engage_with_post(trending_post.id)
+        if action:
+            print("\nPost Context:")
+            print(f"Title: {action['post_context']['title']}")
+            print(f"Content: {action['post_context']['text']}")
+            print("\nTop Comments:")
+            for comment in action['post_context']['top_comments']:
+                print(f"- {comment['text']} (by u/{comment['author']})")
+            
+            print("\nGenerated Comment:")
+            print(f"Text: {action['comment_text']}")
+            print(f"\nAction: {action['action']}")
+    else:
+        print("No trending post found in r/golf.")
+
 def main():
     """Main entry point with command line argument support."""
     parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
-    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment'],
-                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting')
+    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment'],
+                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation')
     
     args = parser.parse_args()
     
@@ -215,6 +244,8 @@ def main():
         test_reddit_comment_voting()
     elif args.mode == 'test-post-comment':
         test_reddit_post_comment()
+    elif args.mode == 'test-engaging-comment':
+        test_reddit_engaging_comment()
 
 if __name__ == "__main__":
     main() 

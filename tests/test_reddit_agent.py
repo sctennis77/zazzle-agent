@@ -222,5 +222,154 @@ def test_comment_on_post_default_text(mock_submission):
         assert result['comment_text'] == "Thanks for sharing this interesting post! I appreciate the insights."
         assert result['action'] == 'Would reply to post with comment'
 
+def test_engage_with_post():
+    """Test the Reddit agent's ability to engage with posts by generating context-aware comments."""
+    # Create a mock post
+    mock_post = MagicMock()
+    mock_post.id = "test123"
+    mock_post.title = "Test Post Title"
+    mock_post.selftext = "Test post content"
+    mock_post.score = 100
+    mock_post.num_comments = 5
+    
+    # Create mock comments
+    mock_comment1 = MagicMock()
+    mock_comment1.body = "First comment"
+    mock_comment1.author = "user1"
+    mock_comment1.score = 50
+    
+    mock_comment2 = MagicMock()
+    mock_comment2.body = "Second comment"
+    mock_comment2.author = "user2"
+    mock_comment2.score = 30
+    
+    # Create a mock comment list with replace_more method
+    mock_comments = MagicMock()
+    mock_comments.replace_more.return_value = [mock_comment1, mock_comment2]
+    mock_comments.list.return_value = [mock_comment1, mock_comment2] # Ensure .list() returns comments
+    mock_post.comments = mock_comments
+    mock_post.permalink = f"/r/golf/comments/{mock_post.id}/"
+    mock_post.subreddit.display_name = "golf"
+
+    # Set stickied to False for mocked comments
+    mock_comment1.stickied = False
+    mock_comment2.stickied = False
+
+    # Create a mock Reddit instance
+    mock_reddit = MagicMock()
+    mock_reddit.submission.return_value = mock_post
+
+    # Create the agent with the mock
+    agent = RedditAgent()
+    agent.reddit = mock_reddit
+    
+    # Test engaging with the post
+    result = agent.engage_with_post("test123")
+    
+    # Verify the result
+    assert result is not None
+    assert result["type"] == "post_engagement"
+    assert result["post_id"] == "test123"
+    assert result["post_title"] == "Test Post Title"
+    assert result["post_link"] == f"https://reddit.com/r/{mock_post.subreddit.display_name}/comments/{mock_post.id}"
+    assert "comment_text" in result
+    assert result["action"] == "Would engage with post using generated comment"
+    
+    # Verify post context
+    assert "post_context" in result
+    context = result["post_context"]
+    assert context["title"] == "Test Post Title"
+    assert context["text"] == "Test post content"
+    assert context["score"] == 100
+    assert context["num_comments"] == 5
+    assert len(context["top_comments"]) == 2
+    assert context["top_comments"][0]["text"] == "First comment"
+    assert context["top_comments"][0]["author"] == "user1"
+    assert context["top_comments"][1]["text"] == "Second comment"
+    assert context["top_comments"][1]["author"] == "user2"
+
+def test_analyze_post_context():
+    """Test the Reddit agent's ability to analyze post context."""
+    # Create a mock post
+    mock_post = MagicMock()
+    mock_post.title = "Test Post Title"
+    mock_post.selftext = "Test post content"
+    mock_post.score = 100
+    mock_post.num_comments = 5
+    
+    # Create mock comments
+    mock_comment1 = MagicMock()
+    mock_comment1.body = "First comment"
+    mock_comment1.author = "user1"
+    mock_comment1.score = 50
+    
+    mock_comment2 = MagicMock()
+    mock_comment2.body = "Second comment"
+    mock_comment2.author = "user2"
+    mock_comment2.score = 30
+    
+    # Set stickied to False for mocked comments
+    mock_comment1.stickied = False
+    mock_comment2.stickied = False
+
+    # Create a mock comment list with replace_more method
+    mock_comments = MagicMock()
+    mock_comments.replace_more.return_value = [] # This line is important, as replace_more modifies in place
+    mock_comments.list.return_value = [mock_comment1, mock_comment2] # Ensure .list() returns comments
+    mock_post.comments = mock_comments
+    mock_post.subreddit.display_name = "golf"
+    
+    # Create the agent
+    agent = RedditAgent()
+    
+    # Test analyzing post context
+    context = agent._analyze_post_context(mock_post)
+    
+    # Verify the context
+    assert context["title"] == "Test Post Title"
+    assert context["text"] == "Test post content"
+    assert context["score"] == 100
+    assert context["num_comments"] == 5
+    assert len(context["top_comments"]) == 2
+    assert context["top_comments"][0]["text"] == "First comment"
+    assert context["top_comments"][0]["author"] == "user1"
+    assert context["top_comments"][1]["text"] == "Second comment"
+    assert context["top_comments"][1]["author"] == "user2"
+
+def test_generate_engaging_comment():
+    """Test the Reddit agent's ability to generate engaging comments."""
+    # Create test context
+    context = {
+        "title": "Test Post Title",
+        "text": "Test post content",
+        "score": 100,
+        "num_comments": 5,
+        "top_comments": [
+            {"text": "First comment", "author": "user1"},
+            {"text": "Second comment", "author": "user2"}
+        ]
+    }
+    
+    # Mock the OpenAI API call
+    with patch('openai.OpenAI') as mock_openai_client:
+        mock_instance = MagicMock()
+        mock_openai_client.return_value = mock_instance
+        
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Generated engaging comment"
+        mock_instance.chat.completions.create.return_value.choices = [mock_choice]
+
+        # Create the agent within the patch context
+        agent = RedditAgent()
+        
+        # Test generating a comment
+        comment = agent._generate_engaging_comment(context)
+        
+        # Verify the comment
+        assert isinstance(comment, str)
+        assert len(comment) > 0
+        assert len(comment) <= 280  # Reddit comment length limit
+        assert comment == "Generated engaging comment"
+
 if __name__ == '__main__':
     unittest.main() 

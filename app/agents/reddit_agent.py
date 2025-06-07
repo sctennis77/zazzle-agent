@@ -8,6 +8,7 @@ from app.models import Product, ContentType, DistributionStatus, DistributionMet
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
 import praw
 from app.product_designer import ZazzleProductDesigner
+import openai
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,9 @@ class RedditAgent(ChannelAgent):
             password=os.getenv('REDDIT_PASSWORD'),
             user_agent=os.getenv('REDDIT_USER_AGENT', 'zazzle-agent by u/yourusername')
         )
+        
+        # Initialize OpenAI client
+        self.openai_client = openai.OpenAI()
         
         # Default personality traits
         self.personality = personality or {
@@ -276,6 +280,97 @@ class RedditAgent(ChannelAgent):
             
         except Exception as e:
             logger.error(f"Error commenting on post {post_id}: {str(e)}")
+            return None
+
+    def _analyze_post_context(self, submission) -> Dict[str, Any]:
+        """Analyze a post and its comments to understand the context."""
+        try:
+            # Get post details
+            post_context = {
+                'title': submission.title,
+                'text': submission.selftext,
+                'score': submission.score,
+                'num_comments': submission.num_comments,
+                'created_utc': submission.created_utc,
+                'top_comments': []
+            }
+            
+            # Get top-level comments
+            submission.comments.replace_more(limit=0)
+            for comment in submission.comments.list()[:5]:  # Get top 5 comments
+                if not comment.stickied:
+                    post_context['top_comments'].append({
+                        'text': comment.body,
+                        'score': comment.score,
+                        'author': str(comment.author),
+                        'created_utc': comment.created_utc
+                    })
+            
+            return post_context
+        except Exception as e:
+            logger.error(f"Error analyzing post context: {str(e)}")
+            return None
+
+    def _generate_engaging_comment(self, post_context: Dict[str, Any]) -> str:
+        """Generate an engaging comment based on post context."""
+        try:
+            # Prepare the prompt for OpenAI
+            prompt = f"""Based on this Reddit post and its comments, generate a short, engaging response that:
+1. Shows understanding of the topic
+2. Adds value to the discussion
+3. Maintains a friendly, conversational tone
+4. Is concise (2-3 sentences max)
+
+Post Title: {post_context['title']}
+Post Content: {post_context['text']}
+
+Top Comments:
+{chr(10).join([f"- {c['text']} (by u/{c['author']})" for c in post_context['top_comments']])}
+
+Generate a natural, engaging response:"""
+
+            # Use OpenAI to generate the comment
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful Reddit user who engages in meaningful discussions."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=100,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Error generating engaging comment: {str(e)}")
+            return "Thanks for sharing this interesting post! I appreciate the insights."
+
+    def engage_with_post(self, post_id: str) -> Dict[str, Any]:
+        """Engage with a post by analyzing context and generating an engaging comment."""
+        try:
+            submission = self.reddit.submission(id=post_id)
+            
+            # Analyze post context
+            post_context = self._analyze_post_context(submission)
+            if not post_context:
+                return None
+            
+            # Generate engaging comment
+            comment_text = self._generate_engaging_comment(post_context)
+            
+            # In test mode, return the action details without posting
+            return {
+                'type': 'post_engagement',
+                'post_id': post_id,
+                'post_title': submission.title,
+                'post_link': f"https://reddit.com/r/{submission.subreddit.display_name}/comments/{post_id}",
+                'post_context': post_context,
+                'comment_text': comment_text,
+                'action': 'Would engage with post using generated comment'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error engaging with post {post_id}: {str(e)}")
             return None
 
     def interact_with_users(self, product_id: str) -> None:
