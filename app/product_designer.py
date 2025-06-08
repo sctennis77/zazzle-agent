@@ -81,14 +81,18 @@ class ZazzleProductDesigner:
             for field_name, field_config in self.template.customizable_fields.items():
                 if field_config.type == "text" and product_info.get(field_name) is not None:
                     # Zazzle uses t_<field_name>1_txt for text fields
-                    params[f't_{field_name}1_txt'] = product_info[field_name]
+                    # Use quote() to properly encode the text value
+                    text_value = quote(product_info[field_name])
+                    params[f't_{field_name}1_txt'] = text_value
                 elif field_config.type == "image" and product_info.get(f"{field_name}_iid") is not None:
                     # Zazzle uses t_<field_name>1_iid for image fields
                     params[f't_{field_name}1_iid'] = product_info[f"{field_name}_iid"]
 
             # Add other common parameters if present in product_info
             if product_info.get('color'):
-                params['color'] = product_info['color']
+                # Use quote() to properly encode the color value
+                color_value = quote(product_info['color'])
+                params['color'] = color_value
             if product_info.get('quantity'):
                 params['quantity'] = product_info['quantity']
             
@@ -96,8 +100,8 @@ class ZazzleProductDesigner:
             if self.template.zazzle_tracking_code:
                 params['tc'] = self.template.zazzle_tracking_code
             
-            # Construct the final URL
-            query_string = '&'.join(f"{k}={quote(str(v))}" for k, v in params.items())
+            # Construct the final URL - no need to quote values again since they're already encoded
+            query_string = '&'.join(f"{k}={v}" for k, v in params.items())
             product_url = f"{base_url}?{query_string}"
 
             # Validate the URL (basic check)

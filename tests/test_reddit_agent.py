@@ -95,7 +95,7 @@ class TestRedditAgent(unittest.TestCase):
             'product_url': 'http://zazzle.com/custom_sticker_url',
             'text': 'Golf Joke',
             'image_url': 'http://example.com/image.png',
-            'theme': 'jokes'
+            'theme': 'golf humor'
         }
         self.reddit_agent.reddit = mock_reddit  # Set the reddit attribute directly
         result = self.reddit_agent.find_and_create_product()
@@ -103,12 +103,13 @@ class TestRedditAgent(unittest.TestCase):
         self.assertEqual(result['text'], 'Golf Joke')
         self.assertEqual(result['reddit_context']['title'], mock_post.title)
         self.assertEqual(result['reddit_context']['url'], f'https://reddit.com{mock_post.permalink}')
-        self.assertEqual(result['reddit_context']['theme'], 'jokes')
+        self.assertIn('theme', result['reddit_context'])
+        self.assertIsInstance(result['reddit_context']['theme'], str)
         self.assertIn('product_url', result)
         mock_create_product.assert_called_once()
         call_args, call_kwargs = mock_create_product.call_args
         self.assertIn('text', call_args[0])
-        self.assertIn('image_url', call_args[0])
+        self.assertIn('image', call_args[0])
         self.assertIn('image_iid', call_args[0])
 
     @patch.object(RedditAgent, 'interact_with_votes')

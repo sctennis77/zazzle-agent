@@ -9,6 +9,7 @@ from app.distribution.reddit import RedditDistributionChannel, RedditDistributio
 import praw
 from app.product_designer import ZazzleProductDesigner
 import openai
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -524,7 +525,7 @@ Marketing Comment:"""
 
     def _determine_product_idea(self, post_title: str, post_content: str = None, comments: List[Dict] = None) -> Optional[Dict]:
         """
-        Analyze Reddit content to determine product ideas.
+        Analyze Reddit content using an LLM to determine product ideas and design instructions.
         
         Args:
             post_title: The title of the Reddit post
@@ -532,63 +533,59 @@ Marketing Comment:"""
             comments: List of top comments with their content
             
         Returns:
-            Dict containing product idea details or None if no suitable idea is found
+            Dict containing product idea details (text, image_description, theme, color, quantity)
+            or None if no suitable idea is found.
         """
         try:
-            # Combine all content for analysis
-            content_to_analyze = [post_title]
-            if post_content:
-                content_to_analyze.append(post_content)
+            combined_content = f"Title: {post_title}\n"
+            if post_content: 
+                combined_content += f"Content: {post_content}\n"
             if comments:
-                content_to_analyze.extend([comment.get('body', '') for comment in comments[:5]])  # Use top 5 comments
-            
-            # Analyze the content to identify themes, jokes, or interesting phrases
-            # For now, we'll use a simple approach - later we can integrate with GPT for better analysis
-            combined_content = ' '.join(content_to_analyze).lower()
-            
-            # Look for golf-related themes
-            golf_themes = {
-                'tournament': ['tournament', 'championship', 'open', 'masters', 'pga'],
-                'jokes': ['joke', 'funny', 'meme', 'humor'],
-                'tips': ['tip', 'advice', 'help', 'how to'],
-                'equipment': ['club', 'driver', 'putter', 'ball', 'equipment'],
-                'achievement': ['hole in one', 'eagle', 'birdie', 'par']
-            }
-            
-            # Determine the main theme
-            main_theme = None
-            for theme, keywords in golf_themes.items():
-                if any(keyword in combined_content for keyword in keywords):
-                    main_theme = theme
-                    break
-            
-            if not main_theme:
+                combined_content += "Comments:\n"
+                for i, comment in enumerate(comments[:5]): # Use top 5 comments
+                    combined_content += f"- {comment.get('body', '')}\n"
+
+            system_prompt = """You are a creative assistant that specializes in generating unique product ideas for Zazzle, specifically customizable stickers. 
+            Based on Reddit post and comment content, identify a fun, witty, or relevant concept for a sticker. 
+            Provide design instructions including text for the sticker, a description for an image to go on the sticker, a theme, and suggested color and quantity.
+            If you cannot find a suitable idea, respond with an empty JSON object. Make sure the 'text' is short and punchy.
+            The image_description should be detailed enough for an image generation model.
+            Output your response as a JSON object with the following keys: 'text', 'image_description', 'theme', 'color', 'quantity'.
+            Example: {'text': 'Fore Moon', 'image_description': 'A golfball soaring to space on a starry evening in impressionist style', 'theme': 'golf joke', 'color': 'Blue', 'quantity': 1}
+            """
+
+            user_prompt = f"Analyze the following Reddit content for product ideas:\n\n{combined_content}"
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini", # Using a cost-effective model for this task
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.7,
+                max_tokens=200
+            )
+
+            product_idea_json = json.loads(response.choices[0].message.content)
+
+            # Validate and return the extracted product idea
+            if not all(k in product_idea_json for k in ['text', 'image_description', 'theme']):
+                logger.warning("LLM did not return all required product idea fields.")
                 return None
             
-            # Generate appropriate text based on the theme
-            if main_theme == 'tournament':
-                text = f"🏆 {post_title} 🏆"
-            elif main_theme == 'jokes':
-                # Extract the joke or funny content
-                text = post_title if 'joke' in post_title.lower() else "Golf Joke"
-            elif main_theme == 'tips':
-                text = "Golf Pro Tip"
-            elif main_theme == 'equipment':
-                text = "Golf Equipment"
-            elif main_theme == 'achievement':
-                text = "Golf Achievement"
-            else:
-                text = "Golf Ball"
-            
-            return {
-                'text': text,
-                'color': 'Blue',  # Default color
-                'quantity': 12,   # Default quantity
-                'theme': main_theme
-            }
-            
+            # Add default color and quantity if not provided by LLM
+            product_idea_json.setdefault('color', 'Blue')
+            product_idea_json.setdefault('quantity', 1)
+
+            return product_idea_json
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from LLM response: {e}")
+            logger.error(f"LLM raw response: {response.choices[0].message.content}")
+            return None
         except Exception as e:
-            logger.error(f"Error determining product idea: {str(e)}")
+            logger.error(f"Error determining product idea with LLM: {str(e)}")
             return None
 
     def find_and_create_product(self) -> Optional[Dict]:
@@ -605,7 +602,7 @@ Marketing Comment:"""
             # Analyze post context
             post_context = self._analyze_post_context(trending_post)
             
-            # Determine product idea from post
+            # Determine product idea from post using LLM
             product_idea = self._determine_product_idea(
                 post_title=post_context['title'],
                 post_content=post_context.get('text'),
@@ -616,9 +613,11 @@ Marketing Comment:"""
                 logger.warning("Could not determine product idea from post")
                 return None
             
-            # Ensure required fields for product designer
-            product_idea.setdefault('image_url', 'https://via.placeholder.com/150')
+            # Add placeholders for image_url and image_iid. In a real scenario, image_description
+            # would be used by an image generation tool to get a real image_url and image_iid.
+            product_idea.setdefault('image', 'https://via.placeholder.com/150') # image is now the URL
             product_idea.setdefault('image_iid', 'test_image_iid')
+
             # Create product using product designer
             product_info = self.product_designer.create_product(product_idea)
             

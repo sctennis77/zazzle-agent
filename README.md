@@ -1,21 +1,22 @@
 # Zazzle Dynamic Product Generator
 
-This project automates the process of dynamically generating products on Zazzle based on Reddit interactions. The system uses the Zazzle Create a Product API to create new products in real-time, focusing on custom golf balls as the initial product type.
+This project automates the process of dynamically generating products on Zazzle based on Reddit interactions. The system uses the Zazzle Create a Product API to create new products in real-time, focusing on custom stickers as the initial product type.
 
 ## System Components
 
 ### 1. Reddit Agent
 - Monitors and interacts with r/golf subreddit
-- Analyzes posts and comments for product opportunities
+- Uses LLM to analyze posts and comments for product opportunities
 - Generates engaging and marketing-focused comments
 - Makes voting decisions based on content relevance
 - Operates in test mode for safe development
 
 ### 2. Product Designer
 - Receives design instructions from Reddit Agent
-- Generates custom golf ball designs
+- Uses DTOs (Data Transfer Objects) for product configuration
 - Integrates with Zazzle Create-a-Product API
 - Manages product creation and listing
+- Handles URL encoding for product parameters
 
 ### 3. Integration Layer
 - Coordinates between Reddit Agent and Product Designer
@@ -29,6 +30,8 @@ This project automates the process of dynamically generating products on Zazzle 
 graph TD
     A[Reddit Agent] -->|Monitors| B[r/golf Subreddit]
     B -->|Identifies Opportunity| A
+    A -->|LLM Analysis| F[OpenAI GPT]
+    F -->|Product Idea| A
     A -->|Design Request| C[Product Designer]
     C -->|API Call| D[Zazzle API]
     D -->|Product Created| E[Zazzle Store]
@@ -38,10 +41,12 @@ graph TD
 ## Features
 
 - **Reddit Integration**: Automated monitoring and interaction with r/golf
-- **Product Generation**: Dynamic golf ball design creation
+- **LLM-Powered Analysis**: Dynamic product idea generation using OpenAI GPT
+- **Product Generation**: Dynamic sticker design creation
 - **Marketing Automation**: Context-aware comment generation
 - **Test Mode**: Safe development environment with dry-run capabilities
 - **Comprehensive Testing**: Unit, integration, and end-to-end test coverage
+- **DTO-Based Configuration**: Type-safe product configuration using Python DTOs
 
 ## Prerequisites
 
@@ -55,7 +60,7 @@ graph TD
 Create a `.env` file in the project root with the following variables:
 
 ```
-ZAZZLE_API_KEY=your_zazzle_api_key
+ZAZZLE_AFFILIATE_ID=your_zazzle_affiliate_id
 REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
 REDDIT_USERNAME=your_reddit_username
@@ -72,6 +77,7 @@ make venv      # Create Python virtual environment
 make install   # Install dependencies
 make test      # Run test suite
 make run       # Run the app locally
+make run-full  # Run the complete end-to-end pipeline
 make clean     # Clean up development artifacts
 ```
 
@@ -100,7 +106,7 @@ The project includes comprehensive test coverage:
 
 ```bash
 # Run all tests
-python -m pytest tests/ --cov=app
+make test
 
 # Run specific test files
 python -m pytest tests/test_reddit_agent.py
@@ -114,6 +120,7 @@ python -m pytest tests/test_integration.py
 - **Integration Tests**: Component interaction testing
 - **End-to-End Tests**: Complete pipeline testing
 - **Reddit Agent Tests**: Voting and interaction pattern testing
+- **Product Designer Tests**: URL encoding and parameter handling
 
 ## License
 
@@ -123,21 +130,22 @@ MIT
 
 The Zazzle Product Designer Agent is responsible for generating custom products on Zazzle based on instructions received from the Reddit agent. This agent utilizes the Zazzle Create-a-Product API to design and create products dynamically.
 
-### Initial Focus: Custom Golf Balls
+### Initial Focus: Custom Stickers
 
-The initial focus of the Product Designer Agent is on creating custom golf balls. The agent will:
+The initial focus of the Product Designer Agent is on creating custom stickers. The agent will:
 
-- Receive design instructions from the Reddit agent.
-- Use the Zazzle Create-a-Product API to generate custom golf ball designs.
-- Ensure that the designs are relevant and appealing to potential customers.
+- Receive design instructions from the Reddit agent
+- Use the Zazzle Create-a-Product API to generate custom sticker designs
+- Ensure proper URL encoding of product parameters
+- Handle dynamic text and color customization
 
 ### Integration with Reddit Agent
 
 The Product Designer Agent works in conjunction with the Reddit agent to:
 
-- Analyze Reddit interactions to identify opportunities for product creation.
-- Generate product designs based on the context and relevance of the conversation.
-- Create and list the products on Zazzle for potential sales.
+- Process LLM-generated product ideas
+- Generate product designs based on the context and relevance of the conversation
+- Create and list the products on Zazzle for potential sales
 
 ### Future Enhancements
 
