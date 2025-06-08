@@ -81,7 +81,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
         # Assertions (adjusted to match new return value from create_product)
         self.assertIsNotNone(result)
         # Correct the expected tracking code to match the DTO value
-        expected_url = f"https://www.zazzle.com/api/create/at-{self.mock_affiliate_id}?ax=linkover&pd={self.mock_template_id_from_dto}&fwd=productpage&ed=true&t_text1_txt=Golf%20Ball%20Design&t_image1_iid=1234567890&color=white&quantity=12&tc={ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code}"
+        expected_url = f"https://www.zazzle.com/api/create/at-{self.mock_affiliate_id}?ax=linkover&pd={self.mock_template_id_from_dto}&fwd=productpage&ed=true&t_text1_txt=Golf%20Ball%20Design&t_image1_url=http%3A%2F%2Fexample.com%2Fgolf_ball_image.png&color=white&quantity=12&tc={ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code}"
         self.assertEqual(result['product_url'], expected_url)
         mock_post.assert_not_called() # No external API call is made in current create_product
 
@@ -154,9 +154,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
         result = designer.create_product(product_info)
         self.assertIsNone(result)
         # Expecting error for missing text and image URL/IID due to validation in create_product
-        mock_logger.error.assert_called_once_with("Missing required text field: text")
-        # Only assert the first error encountered, as the function returns early
-        # mock_logger.error.assert_any_call("Missing required image URL or IID for field: image")
+        mock_logger.error.assert_called_once_with("Missing required image URL for field: image")
 
     @patch('app.product_designer.logger')
     def test_create_product_exception_handling(self, mock_logger):

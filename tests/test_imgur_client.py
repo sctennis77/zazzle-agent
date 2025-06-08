@@ -101,4 +101,4 @@ class TestImgurClient(unittest.TestCase):
                 mock_file().write.assert_called_once_with(test_data)
                 
                 # Verify path
-                self.assertEqual(local_path, str(Path('outputs/images') / test_filename)) 
+                self.assertEqual(local_path, str(Path('outputs') / test_filename)) 

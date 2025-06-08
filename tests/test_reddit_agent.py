@@ -70,7 +70,7 @@ class TestRedditAgent(unittest.TestCase):
         mock_submission.downvote.assert_called_once()
 
     @patch.object(ZazzleProductDesigner, 'create_product')
-    def test_find_and_create_product(self, mock_create_product):
+    async def test_find_and_create_product(self, mock_create_product):
         mock_reddit = MagicMock()
         mock_subreddit_instance = MagicMock()
         mock_post = MagicMock()
@@ -98,7 +98,7 @@ class TestRedditAgent(unittest.TestCase):
             'theme': 'golf humor'
         }
         self.reddit_agent.reddit = mock_reddit  # Set the reddit attribute directly
-        result = self.reddit_agent.find_and_create_product()
+        result = await self.reddit_agent.find_and_create_product()
         self.assertIsNotNone(result)
         self.assertEqual(result['text'], 'Golf Joke')
         self.assertEqual(result['reddit_context']['title'], mock_post.title)

@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock, mock_open, AsyncMock
 import pandas as pd
 import math
 from app.main import main, save_to_csv, run_full_pipeline
@@ -101,22 +101,46 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("Open error", str(cm.exception))
         mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
 
+@pytest.mark.asyncio
+class TestIntegrationAsync:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        # Mock necessary environment variables for tests
+        self.patcher_env = patch.dict(os.environ, {
+            'ZAZZLE_AFFILIATE_ID': 'test_affiliate_id',
+            'OPENAI_API_KEY': 'test_openai_key',
+            'SCRAPE_DELAY': '0',
+            'MAX_PRODUCTS': '3',
+            'REDDIT_CLIENT_ID': 'test_client_id',
+            'REDDIT_CLIENT_SECRET': 'test_client_secret',
+            'REDDIT_USERNAME': 'test_username',
+            'REDDIT_PASSWORD': 'test_password',
+            'REDDIT_USER_AGENT': 'test_user_agent',
+            'ZAZZLE_TEMPLATE_ID': 'test_template_id',
+            'ZAZZLE_TRACKING_CODE': 'test_tracking_code'
+        })
+        self.patcher_env.start()
+        
+        yield
+        
+        self.patcher_env.stop()
+
     @patch('app.main.save_to_csv')
     @patch('app.main.RedditAgent')
-    def test_end_to_end_flow_success_simplified(self, mock_reddit_agent, mock_save_to_csv):
+    async def test_end_to_end_flow_success_simplified(self, mock_reddit_agent, mock_save_to_csv):
         # Configure mock_reddit_agent to return a successful product info
         mock_reddit_agent_instance = MagicMock()
         mock_reddit_agent.return_value = mock_reddit_agent_instance
-        mock_reddit_agent_instance.find_and_create_product.return_value = {
+        mock_reddit_agent_instance.find_and_create_product = AsyncMock(return_value={
             'product_url': 'http://test.zazzle.com/generated_product',
             'text': 'Generated Text',
             'image_url': 'http://test.image.com/generated_image.png',
             'theme': 'test_theme',
             'reddit_context': {'id': 'post_id', 'title': 'Post Title', 'url': 'http://reddit.com/post', 'created_utc': 1234567890}
-        }
+        })
 
         # Run the full pipeline function directly instead of main()
-        run_full_pipeline()
+        await run_full_pipeline()
 
         # Verify RedditAgent was initialized and its methods were called
         mock_reddit_agent.assert_called_once()
@@ -125,16 +149,16 @@ class TestIntegration(unittest.TestCase):
         # Verify save_to_csv was called with the correct data
         mock_save_to_csv.assert_called_once()
         called_products, called_filename = mock_save_to_csv.call_args[0]
-        self.assertEqual(called_filename, "processed_products.csv")
-        self.assertEqual(len(called_products), 1)
-        self.assertEqual(called_products[0]['product_url'], 'http://test.zazzle.com/generated_product')
+        assert called_filename == "processed_products.csv"
+        assert len(called_products) == 1
+        assert called_products[0]['product_url'] == 'http://test.zazzle.com/generated_product'
         reddit_context = called_products[0]['reddit_context']
-        self.assertEqual(reddit_context['id'], 'post_id')
-        self.assertEqual(reddit_context['title'], 'Post Title')
+        assert reddit_context['id'] == 'post_id'
+        assert reddit_context['title'] == 'Post Title'
 
     @patch('app.main.save_to_csv')
     @patch('app.main.RedditAgent')
-    def test_test_voting_mode(self, mock_reddit_agent, mock_save_to_csv):
+    async def test_test_voting_mode(self, mock_reddit_agent, mock_save_to_csv):
         # Configure mock_reddit_agent
         mock_reddit_agent_instance = MagicMock()
         mock_reddit_agent.return_value = mock_reddit_agent_instance
@@ -148,11 +172,11 @@ class TestIntegration(unittest.TestCase):
         mock_reddit_agent_instance.reddit.subreddit.return_value.hot.return_value = iter([mock_post])
         
         # Mock the voting behavior
-        mock_reddit_agent_instance.interact_with_votes.return_value = "upvote"
+        mock_reddit_agent_instance.interact_with_votes = AsyncMock(return_value="upvote")
         
         # Run the test voting function
         from app.main import test_reddit_voting
-        test_reddit_voting()
+        await test_reddit_voting()
         
         # Verify the Reddit agent was used correctly
         mock_reddit_agent.assert_called_once()

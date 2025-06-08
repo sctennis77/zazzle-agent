@@ -55,12 +55,12 @@ class ZazzleProductDesigner:
 
             # Validate required customizable fields from the template
             for field_name, field_config in self.template.customizable_fields.items():
-                if field_config.type == "text" and not product_info.get(field_name):
+                if field_config.type == "text" and product_info.get(field_name) is None:
                     logger.error(f"Missing required text field: {field_name}")
                     return None
                 if field_config.type == "image":
-                    if not product_info.get(field_name) or not product_info.get(f"{field_name}_iid"):
-                         logger.error(f"Missing required image URL or IID for field: {field_name}")
+                    if not product_info.get(field_name):
+                         logger.error(f"Missing required image URL for field: {field_name}")
                          return None
                     # Basic validation for image_url if provided
                     image_url = product_info.get(field_name, '')
@@ -84,9 +84,11 @@ class ZazzleProductDesigner:
                     # Use quote() to properly encode the text value
                     text_value = quote(product_info[field_name])
                     params[f't_{field_name}1_txt'] = text_value
-                elif field_config.type == "image" and product_info.get(f"{field_name}_iid") is not None:
-                    # Zazzle uses t_<field_name>1_iid for image fields
-                    params[f't_{field_name}1_iid'] = product_info[f"{field_name}_iid"]
+                elif field_config.type == "image" and product_info.get(field_name) is not None:
+                    # Zazzle uses t_<field_name>1_url for image fields with external URLs
+                    # The image URL itself needs to be encoded for the URL parameter
+                    image_url_encoded = quote(product_info[field_name], safe='')
+                    params[f't_{field_name}1_url'] = image_url_encoded
 
             # Add other common parameters if present in product_info
             if product_info.get('color'):

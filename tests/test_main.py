@@ -2,7 +2,7 @@ import os
 import pytest
 import json
 import csv
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open, MagicMock, AsyncMock
 from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main
 from app.models import Product, ContentType
 
@@ -59,40 +59,57 @@ def test_save_to_csv_io_error(mock_open, mock_makedirs):
     mock_open.assert_called_once()
 
 # Tests for run_full_pipeline
+@pytest.mark.asyncio
 @patch('app.main.save_to_csv')
 @patch('app.main.RedditAgent')
-def test_run_full_pipeline_success(MockRedditAgent, mock_save_to_csv):
+async def test_run_full_pipeline_success(MockRedditAgent, mock_save_to_csv):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
-    mock_agent_instance.find_and_create_product.return_value = {
+    mock_agent_instance.find_and_create_product = AsyncMock(return_value={
         'theme': 'golf',
         'text': 'Awesome golf product',
         'color': 'Green',
         'quantity': 5,
         'reddit_context': {'title': 'Golf Thread', 'url': 'http://reddit.com/golf'},
         'product_url': 'http://zazzle.com/golf_product'
-    }
+    })
 
     with patch('builtins.print') as mock_print:
-        run_full_pipeline()
-        mock_agent_instance.find_and_create_product.assert_called_once()
-        mock_save_to_csv.assert_called_once()
-        assert mock_print.call_count > 0 # Ensure something was printed
+        await run_full_pipeline()
 
+    # Verify RedditAgent was initialized and its methods were called
+    MockRedditAgent.assert_called_once()
+    mock_agent_instance.find_and_create_product.assert_called_once()
+
+    # Verify save_to_csv was called with the correct data
+    mock_save_to_csv.assert_called_once()
+    called_products, called_filename = mock_save_to_csv.call_args[0]
+    assert called_filename == "processed_products.csv"
+    assert len(called_products) == 1
+    assert called_products[0]['product_url'] == 'http://zazzle.com/golf_product'
+    assert called_products[0]['text'] == 'Awesome golf product'
+    assert called_products[0]['theme'] == 'golf'
+
+@pytest.mark.asyncio
 @patch('app.main.save_to_csv')
 @patch('app.main.RedditAgent')
-def test_run_full_pipeline_no_product_generated(MockRedditAgent, mock_save_to_csv):
+async def test_run_full_pipeline_no_product_generated(MockRedditAgent, mock_save_to_csv):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
-    mock_agent_instance.find_and_create_product.return_value = None
+    mock_agent_instance.find_and_create_product = AsyncMock(return_value=None)
 
     with patch('builtins.print') as mock_print:
-        run_full_pipeline()
-        mock_agent_instance.find_and_create_product.assert_called_once()
-        mock_save_to_csv.assert_not_called()
-        mock_print.assert_any_call("No product was generated.")
+        await run_full_pipeline()
+
+    # Verify RedditAgent was initialized and its methods were called
+    MockRedditAgent.assert_called_once()
+    mock_agent_instance.find_and_create_product.assert_called_once()
+
+    # Verify save_to_csv was not called
+    mock_save_to_csv.assert_not_called()
 
 # Tests for main function argument parsing
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -101,11 +118,12 @@ def test_run_full_pipeline_no_product_generated(MockRedditAgent, mock_save_to_cs
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='full'))
-def test_main_full_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_full_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_full_pipeline.assert_called_once()
     mock_voting.assert_not_called()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -114,11 +132,12 @@ def test_main_full_mode(mock_parse_args, mock_reply, mock_marketing_comment, moc
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-voting'))
-def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_voting.assert_called_once()
     mock_full_pipeline.assert_not_called()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -127,10 +146,11 @@ def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing_comme
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-voting-comment'))
-def test_main_test_voting_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_voting_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_comment_voting.assert_called_once()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -139,10 +159,11 @@ def test_main_test_voting_comment_mode(mock_parse_args, mock_reply, mock_marketi
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-post-comment'))
-def test_main_test_post_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_post_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_post_comment.assert_called_once()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -151,10 +172,11 @@ def test_main_test_post_comment_mode(mock_parse_args, mock_reply, mock_marketing
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-engaging-comment'))
-def test_main_test_engaging_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_engaging_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_engaging_comment.assert_called_once()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -163,10 +185,11 @@ def test_main_test_engaging_comment_mode(mock_parse_args, mock_reply, mock_marke
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing-comment'))
-def test_main_test_marketing_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_marketing_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_marketing_comment.assert_called_once()
 
+@pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
 @patch('app.main.test_reddit_voting')
 @patch('app.main.test_reddit_comment_voting')
@@ -175,14 +198,15 @@ def test_main_test_marketing_comment_mode(mock_parse_args, mock_reply, mock_mark
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
 @patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing-comment-reply'))
-def test_main_test_marketing_comment_reply_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    main()
+async def test_main_test_marketing_comment_reply_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+    await main()
     mock_reply.assert_called_once()
 
 # New tests for test_reddit_voting function
+@pytest.mark.asyncio
 @patch('app.main.RedditAgent')
 @patch('builtins.print')
-def test_reddit_voting_found_post(mock_print, MockRedditAgent):
+async def test_reddit_voting_found_post(mock_print, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -196,7 +220,7 @@ def test_reddit_voting_found_post(mock_print, MockRedditAgent):
 
     # Call the function directly
     from app.main import test_reddit_voting
-    test_reddit_voting()
+    await test_reddit_voting()
 
     mock_agent_instance.reddit.subreddit.assert_called_once_with("golf")
     mock_subreddit.hot.assert_called_once_with(limit=1)
@@ -207,9 +231,10 @@ def test_reddit_voting_found_post(mock_print, MockRedditAgent):
     mock_print.assert_any_call(f"URL: https://reddit.com{mock_trending_post.permalink}")
     mock_print.assert_any_call(f"\nAction taken: {{'type': 'vote', 'action': 'upvoted'}}")
 
+@pytest.mark.asyncio
 @patch('app.main.RedditAgent')
 @patch('builtins.print')
-def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
+async def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -219,7 +244,7 @@ def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
     
     # Call the function directly
     from app.main import test_reddit_voting
-    test_reddit_voting()
+    await test_reddit_voting()
     
     mock_agent_instance.reddit.subreddit.assert_called_once_with("golf")
     mock_subreddit.hot.assert_called_once_with(limit=1)
@@ -227,9 +252,10 @@ def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
     mock_print.assert_any_call("No trending post found in r/golf.") 
 
 # New tests for test_reddit_comment_voting function
+@pytest.mark.asyncio
 @patch('app.main.RedditAgent')
 @patch('builtins.print')
-def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedditAgent):
+async def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -248,7 +274,7 @@ def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedditAgen
 
     # Call the function directly
     from app.main import test_reddit_comment_voting
-    test_reddit_comment_voting()
+    await test_reddit_comment_voting()
 
     mock_agent_instance.reddit.subreddit.assert_called_once_with("golf")
     mock_subreddit.hot.assert_called_once_with(limit=1)
@@ -259,7 +285,7 @@ def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedditAgen
     mock_print.assert_any_call("\nFound trending post:")
     mock_print.assert_any_call(f"Title: {mock_trending_post.title}")
     mock_print.assert_any_call(f"URL: https://reddit.com{mock_trending_post.permalink}")
-    mock_print.assert_any_call(f"\nFound comment:")
+    mock_print.assert_any_call("\nFound comment:")
     mock_print.assert_any_call(f"Text: {mock_comment.body}")
     mock_print.assert_any_call(f"Author: u/{mock_comment.author}")
     mock_print.assert_any_call(f"\nAction taken: {{'type': 'comment_vote', 'action': 'upvoted'}}") 

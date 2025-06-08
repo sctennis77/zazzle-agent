@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+import base64
 
 load_dotenv()
 
@@ -68,23 +69,32 @@ class ImgurClient:
             logger.error(f"Failed to upload image to Imgur: {str(e)}")
             raise
             
-    def save_image_locally(self, image_data: bytes, filename: str) -> str:
+    def save_image_locally(self, image_data: bytes, filename: str, subdirectory: str = "") -> str:
         """
-        Save an image to the local output directory.
+        Save image data locally.
         
         Args:
-            image_data: Raw image data
-            filename: Name for the saved file
+            image_data: The image content as bytes.
+            filename: The name of the file to save.
+            subdirectory: Optional subdirectory within 'outputs' to save the image.
             
         Returns:
-            Path to the saved image file
+            The full path to the saved image file.
         """
-        output_dir = Path('outputs/images')
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_path = output_dir / filename
-        with open(file_path, 'wb') as f:
-            f.write(image_data)
+        base_dir = Path('outputs')
+        if subdirectory:
+            save_dir = base_dir / subdirectory
+        else:
+            save_dir = base_dir
             
-        logger.info(f"Saved image locally: {file_path}")
-        return str(file_path) 
+        save_dir.mkdir(parents=True, exist_ok=True)
+        file_path = save_dir / filename
+        
+        try:
+            with open(file_path, 'wb') as f:
+                f.write(image_data)
+            logger.info(f"Image saved locally: {file_path}")
+            return str(file_path)
+        except IOError as e:
+            logger.error(f"Error saving image locally to {file_path}: {e}")
+            raise 

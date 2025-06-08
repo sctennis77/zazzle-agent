@@ -10,6 +10,7 @@ import praw
 from app.product_designer import ZazzleProductDesigner
 import openai
 import json
+from app.image_generator import ImageGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,9 @@ class RedditAgent(ChannelAgent):
         
         # Initialize OpenAI client
         self.openai_client = openai.OpenAI()
+        
+        # Initialize ImageGenerator
+        self.image_generator = ImageGenerator()
         
         # Default personality traits
         self.personality = personality or {
@@ -588,7 +592,7 @@ Marketing Comment:"""
             logger.error(f"Error determining product idea with LLM: {str(e)}")
             return None
 
-    def find_and_create_product(self) -> Optional[Dict]:
+    async def find_and_create_product(self) -> Optional[Dict]:
         """Find a suitable post and create a product based on it."""
         try:
             # Get a trending post from r/golf
@@ -613,10 +617,24 @@ Marketing Comment:"""
                 logger.warning("Could not determine product idea from post")
                 return None
             
-            # Add placeholders for image_url and image_iid. In a real scenario, image_description
-            # would be used by an image generation tool to get a real image_url and image_iid.
-            product_idea.setdefault('image', 'https://via.placeholder.com/150') # image is now the URL
-            product_idea.setdefault('image_iid', 'test_image_iid')
+            # Generate image using the image_description from the product idea
+            image_description = product_idea.get('image_description')
+            if image_description:
+                try:
+                    # Pass the product's template ID for naming the generated image
+                    template_id = self.product_designer.template.zazzle_template_id if self.product_designer.template else None
+                    imgur_url, local_path = await self.image_generator.generate_image(image_description, template_id=template_id)
+                    product_idea['image'] = imgur_url  # Update image URL with generated Imgur URL
+                    product_idea['image_local_path'] = local_path # Store local path
+                except Exception as e:
+                    logger.error(f"Failed to generate image for product idea: {str(e)}")
+                    # Fallback to placeholder if image generation fails
+                    product_idea.setdefault('image', 'https://via.placeholder.com/150')
+                    product_idea.setdefault('image_local_path', None)
+            else:
+                # Add placeholders for image_url and image_iid if no image_description
+                product_idea.setdefault('image', 'https://via.placeholder.com/150')
+                product_idea.setdefault('image_local_path', None)
 
             # Create product using product designer
             product_info = self.product_designer.create_product(product_idea)

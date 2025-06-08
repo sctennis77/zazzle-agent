@@ -8,12 +8,14 @@ import pandas as pd
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import csv
+import asyncio
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
 from app.models import Product, ContentType
 from app.agents.reddit_agent import RedditAgent
 from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
+from app.image_generator import ImageGenerator
 
 # Configure logging
 logging.basicConfig(
@@ -85,11 +87,11 @@ def save_to_csv(products: List, filename: str):
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-def run_full_pipeline():
+async def run_full_pipeline():
     """Run the complete Reddit-to-Zazzle dynamic product flow."""
     products = []
     reddit_agent = RedditAgent()
-    product_info = reddit_agent.find_and_create_product()
+    product_info = await reddit_agent.find_and_create_product()
     if product_info:
         products.append(product_info)
         save_to_csv(products, "processed_products.csv")
@@ -110,10 +112,30 @@ def run_full_pipeline():
         print("\nProduct URL:")
         print(f"To view and customize the product, open this URL in your browser:")
         print(product_info.get('product_url', ''))
+
+        # Print image URL if available
+        if product_info.get('image'):
+            print("\nGenerated Image URL:")
+            print(product_info.get('image'))
+        if product_info.get('image_local_path'):
+            print("Generated Image Local Path:")
+            print(product_info.get('image_local_path'))
+
     else:
         print("No product was generated.")
 
-def test_reddit_voting():
+async def run_generate_image_pipeline(image_prompt: str):
+    """Run the image generation pipeline with a given prompt."""
+    image_generator = ImageGenerator()
+    try:
+        imgur_url, local_path = await image_generator.generate_image(image_prompt)
+        print(f"\nGenerated Image URL: {imgur_url}")
+        print(f"Generated Image Local Path: {local_path}")
+    except Exception as e:
+        logger.error(f"Error generating image: {e}")
+        print(f"Error generating image: {e}")
+
+async def test_reddit_voting():
     """Test the Reddit agent's upvoting/downvoting behavior without posting affiliate material."""
     reddit_agent = RedditAgent()
     
@@ -132,7 +154,7 @@ def test_reddit_voting():
     else:
         print("No trending post found in r/golf.")
 
-def test_reddit_comment_voting():
+async def test_reddit_comment_voting():
     """Test the Reddit agent's comment upvoting/downvoting behavior without posting affiliate material."""
     reddit_agent = RedditAgent()
     
@@ -160,7 +182,7 @@ def test_reddit_comment_voting():
     else:
         print("No trending post found in r/golf.")
 
-def test_reddit_post_comment():
+async def test_reddit_post_comment():
     """Test the Reddit agent's ability to comment on posts without actually posting."""
     reddit_agent = RedditAgent()
     
@@ -188,7 +210,7 @@ def test_reddit_post_comment():
     else:
         print("No trending post found in r/golf.")
 
-def test_reddit_engaging_comment():
+async def test_reddit_engaging_comment():
     """Test the Reddit agent's ability to generate engaging comments based on post context."""
     reddit_agent = RedditAgent()
     
@@ -201,126 +223,125 @@ def test_reddit_engaging_comment():
         print(f"Title: {trending_post.title}")
         print(f"URL: https://reddit.com{trending_post.permalink}")
         
-        # Analyze post and generate engaging comment
-        action = reddit_agent.engage_with_post(trending_post.id)
-        if action:
-            print("\nPost Context:")
-            print(f"Title: {action['post_context']['title']}")
-            print(f"Content: {action['post_context']['text']}")
-            print("\nTop Comments:")
-            for comment in action['post_context']['top_comments']:
-                print(f"- {comment['text']} (by u/{comment['author']})")
-            
-            print("\nGenerated Comment:")
-            print(f"Text: {action['comment_text']}")
-            print(f"\nAction: {action['action']}")
-    else:
-        print("No trending post found in r/golf.")
-
-def test_reddit_marketing_comment():
-    """Test the Reddit agent's ability to generate marketing comments based on post context and product info."""
-    reddit_agent = RedditAgent()
-    
-    # Get a trending post from r/golf
-    subreddit = reddit_agent.reddit.subreddit("golf")
-    trending_post = next(subreddit.hot(limit=1), None)
-    
-    if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        # Analyze post context
+        post_context = reddit_agent._analyze_post_context(trending_post)
         
-        # Engage with post using marketing comment
-        action = reddit_agent.engage_with_post_marketing(trending_post.id)
-        if action:
-            print("\nProposed Marketing Action:")
-            print(f"Type: {action['type']}")
-            print(f"Post: {action['post_title']}")
-            print(f"Post URL: {action['post_link']}")
-            print("\nProduct Info:")
-            print(f"Name: {action['product_info']['text']}")
-            print(f"Theme: {action['product_info']['theme']}")
-            print("\nGenerated Marketing Comment:")
-            print(f"Text: {action['comment_text']}")
-            print(f"Action: {action['action']}")
-    else:
-        print("No trending post found in r/golf.")
-
-def test_reddit_comment_marketing_reply():
-    """Test the Reddit agent's ability to reply to a comment with a marketing message."""
-    reddit_agent = RedditAgent()
-
-    # Get a trending post from r/golf
-    subreddit = reddit_agent.reddit.subreddit("golf")
-    trending_post = next(subreddit.hot(limit=1), None)
-
-    if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
-
-        # Get a top-level comment from the trending post
-        trending_post.comments.replace_more(limit=0)
-        top_comments = trending_post.comments.list()
+        # Generate engaging comment
+        engaging_comment = reddit_agent._generate_engaging_comment(post_context)
         
-        if top_comments:
-            target_comment = top_comments[0]
-            print(f"\nFound target comment: {target_comment.body[:50]}... (ID: {target_comment.id})")
-            
-            # Create a dummy Product object for testing
-            product = Product(
-                product_id="test_product_123",
-                name="Custom Golf Driver",
-                content="Improve your swing with our new custom golf driver!",
-                affiliate_link="https://www.zazzle.com/custom_golf_driver_link"
-            )
-
-            # Analyze post context
-            post_context = reddit_agent._analyze_post_context(trending_post)
-            
-            # Reply to the comment with marketing content
-            action = reddit_agent.reply_to_comment_with_marketing(target_comment.id, product, post_context)
-
-            if action:
-                print("\nProposed Comment Marketing Reply Action:")
-                print(f"Type: {action['type']}")
-                print(f"Comment ID: {action['comment_id']}")
-                print(f"Original Comment Text: {action['comment_text'][:50]}...")
-                print(f"Post Title: {action['post_title']}")
-                print(f"Post URL: {action['post_link']}")
-                print("\nProduct Info:")
-                print(f"Name: {action['product_info']['name']}")
-                print(f"Affiliate Link: {action['product_info']['affiliate_link']}")
-                print("\nGenerated Reply Text:")
-                print(f"Text: {action['reply_text']}")
-                print(f"Action: {action['action']}")
+        if engaging_comment:
+            print("\nEngaging Comment:")
+            print(engaging_comment)
         else:
-            print("No top-level comments found for the trending post.")
+            print("No engaging comment generated.")
     else:
         print("No trending post found in r/golf.")
 
-def main():
-    """Main entry point with command line argument support."""
-    parser = argparse.ArgumentParser(description='Zazzle Dynamic Product Generator')
-    parser.add_argument('mode', choices=['full', 'test-voting', 'test-voting-comment', 'test-post-comment', 'test-engaging-comment', 'test-marketing-comment', 'test-marketing-comment-reply'],
-                      help='Mode to run: "full" for complete pipeline, "test-voting" for Reddit voting test, "test-voting-comment" for Reddit comment voting test, "test-post-comment" for testing post commenting, "test-engaging-comment" for testing engaging comment generation, "test-marketing-comment" for testing marketing comment generation, "test-marketing-comment-reply" for testing marketing comment replies to comments')
+async def test_reddit_marketing_comment():
+    """Test the Reddit agent's ability to generate marketing comments based on post context and product."""
+    reddit_agent = RedditAgent()
     
-    args = parser.parse_args()
+    # Mock a product for testing
+    mock_product = Product(
+        product_id="mock_product_id",
+        name="Cool Golf Sticker",
+        description="A cool sticker for golf enthusiasts",
+        content="This is a mock content for the sticker.",
+        affiliate_link="https://example.com/mock_sticker"
+    )
     
-    if args.mode == 'full':
-        run_full_pipeline()
-    elif args.mode == 'test-voting':
-        test_reddit_voting()
-    elif args.mode == 'test-voting-comment':
-        test_reddit_comment_voting()
-    elif args.mode == 'test-post-comment':
-        test_reddit_post_comment()
-    elif args.mode == 'test-engaging-comment':
-        test_reddit_engaging_comment()
-    elif args.mode == 'test-marketing-comment':
-        test_reddit_marketing_comment()
-    elif args.mode == 'test-marketing-comment-reply':
-        test_reddit_comment_marketing_reply()
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+    
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+        
+        # Analyze post context
+        post_context = reddit_agent._analyze_post_context(trending_post)
+        
+        # Generate marketing comment
+        marketing_comment = reddit_agent._generate_marketing_comment(mock_product, post_context)
+        
+        if marketing_comment:
+            print("\nMarketing Comment:")
+            print(marketing_comment)
+        else:
+            print("No marketing comment generated.")
+    else:
+        print("No trending post found in r/golf.")
 
-if __name__ == "__main__":
-    main() 
+async def test_reddit_comment_marketing_reply():
+    """Test the Reddit agent's ability to reply to a comment with marketing content."""
+    reddit_agent = RedditAgent()
+    
+    # Mock a product for testing
+    mock_product = Product(
+        product_id="mock_product_id",
+        name="Awesome Golf Tool",
+        description="A must-have tool for every golfer.",
+        content="This is a mock content for the golf tool.",
+        affiliate_link="https://example.com/mock_golf_tool"
+    )
+
+    # Get a trending post from r/golf
+    subreddit = reddit_agent.reddit.subreddit("golf")
+    trending_post = next(subreddit.hot(limit=1), None)
+
+    if trending_post:
+        print("\nFound trending post:")
+        print(f"Title: {trending_post.title}")
+        print(f"URL: https://reddit.com{trending_post.permalink}")
+
+        # Get top-level comments
+        trending_post.comments.replace_more(limit=0)  # Load top-level comments only
+        for comment in trending_post.comments.list():
+            if not comment.stickied:  # Skip stickied comments
+                print(f"\nFound comment to reply to:")
+                print(f"Text: {comment.body}")
+                print(f"Author: u/{comment.author}")
+
+                # Analyze post context
+                post_context = reddit_agent._analyze_post_context(trending_post)
+
+                # Reply to the comment with marketing content
+                action = reddit_agent.reply_to_comment_with_marketing(comment.id, mock_product, post_context)
+                if action:
+                    print("\nProposed action:")
+                    print(f"Type: {action['type']}")
+                    print(f"Comment ID: {action['comment_id']}")
+                    print(f"Reply text: {action['reply_text']}")
+                    print(f"Action: {action['action']}")
+                break  # Process only one comment for testing
+    else:
+        print("No trending post found in r/golf.")
+
+async def main():
+    """Main entry point for the application."""
+    parser = argparse.ArgumentParser(description='Zazzle Agent')
+    parser.add_argument('--mode', type=str, default='full',
+                      choices=['full', 'test-voting', 'test-voting-comment', 
+                              'test-post-comment', 'test-engaging-comment',
+                              'test-marketing-comment', 'test-marketing-comment-reply'],
+                      help='Operation mode')
+    args = parser.parse_args()
+
+    if args.mode == 'full':
+        await run_full_pipeline()
+    elif args.mode == 'test-voting':
+        await test_reddit_voting()
+    elif args.mode == 'test-voting-comment':
+        await test_reddit_comment_voting()
+    elif args.mode == 'test-post-comment':
+        await test_reddit_post_comment()
+    elif args.mode == 'test-engaging-comment':
+        await test_reddit_engaging_comment()
+    elif args.mode == 'test-marketing-comment':
+        await test_reddit_marketing_comment()
+    elif args.mode == 'test-marketing-comment-reply':
+        await test_reddit_comment_marketing_reply()
+
+if __name__ == '__main__':
+    asyncio.run(main()) 
