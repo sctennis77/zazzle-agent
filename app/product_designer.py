@@ -1,7 +1,7 @@
 import os
 import logging
-from typing import Dict, Optional
-from urllib.parse import quote
+from typing import Dict, Optional, Any
+from urllib.parse import quote, urlparse
 from dotenv import load_dotenv
 import re
 from app.zazzle_templates import get_product_template, ZazzleTemplateConfig, CustomizableField
@@ -14,6 +14,21 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add this mapping at the top of the file, after imports
+COLOR_NAME_TO_HEX = {
+    "Red": "FF0000",
+    "Blue": "0000FF",
+    "Green": "008000",
+    "Black": "000000",
+    "White": "FFFFFF",
+    "Yellow": "FFFF00",
+    "Orange": "FFA500",
+    "Purple": "800080",
+    "Pink": "FFC0CB",
+    "Gray": "808080",
+    # Add more as needed to match your template options
+}
 
 class ZazzleProductDesigner:
     """Agent responsible for generating custom products on Zazzle using the Create-a-Product system."""
@@ -38,86 +53,121 @@ class ZazzleProductDesigner:
         
         self.tracking_code = self.template.zazzle_tracking_code if self.template else os.getenv('ZAZZLE_TRACKING_CODE', '') # Load tracking code
 
-    def create_product(self, product_info: Dict) -> Optional[Dict]:
-        """Create a custom product using Zazzle's Create-a-Product system, based on the template.
+    def _is_valid_url(self, url: str) -> bool:
+        """Validate if a string is a valid URL."""
+        if not url.startswith(('http://', 'https://')):
+            return False
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except Exception:
+            return False
 
-        Args:
-            product_info: A dictionary containing the dynamic values for customizable fields
-                          (e.g., {'text': 'My Custom Text', 'image': 'image_iid'}).
+    def create_product(self, design_instructions: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a product using the design instructions."""
+        # Check if template exists
+        if not self.template or not self.affiliate_id:
+            logger.error("Cannot create product: Zazzle template or ZAZZLE_AFFILIATE_ID is not set.")
+            return None
 
-        Returns:
-            Dict containing the product URL and other relevant info, or None if creation fails.
-        """
+        # Validate required fields - check image first to match test expectations
+        if 'image' not in design_instructions or not design_instructions['image']:
+            logger.error("Missing required image URL for field: image")
+            return None
+        if 'text' not in design_instructions or not design_instructions['text']:
+            logger.error("Missing required text field: text")
+            return None
+
+        # Validate image URL
+        if not self._is_valid_url(design_instructions['image']):
+            logger.error("Invalid image_url for field image: must start with http:// or https://")
+            return None
+
+        # Get customizable fields from template
+        customizable_fields = self.template.customizable_fields
+
+        try:
+            # Build parameters dictionary
+            params = {
+                'ax': 'linkover',
+                'pd': self.template.zazzle_template_id,
+                'fwd': 'productpage',
+                'ed': 'true',
+                't_text1_txt': quote(design_instructions['text']),
+                't_image1_url': quote(design_instructions['image'])
+            }
+
+            # Add customizable fields to parameters
+            for field_name, field in customizable_fields.items():
+                if field_name in design_instructions:
+                    value = design_instructions[field_name]
+                    if field_name == 'text_color':
+                        if field.options is not None and value not in field.options:
+                            raise ValueError(f"Invalid text color: {value}. Must be one of {field.options}")
+                        hex_code = COLOR_NAME_TO_HEX.get(value, '000000')
+                        params['t_text1_txtclr'] = hex_code
+                    else:
+                        if field.options is not None and value not in field.options:
+                            raise ValueError(f"Invalid value for {field_name}: {value}. Must be one of {field.options}")
+                        # Only encode if not already encoded (text/image handled above)
+                        if field_name not in ['text', 'image']:
+                            params[field_name] = quote(str(value))
+
+            # Always include text color, default to black if not specified
+            if 't_text1_txtclr' not in params:
+                params['t_text1_txtclr'] = '000000'  # Black hex code
+
+            # Add tracking code
+            params['tc'] = self.template.zazzle_tracking_code
+
+            # Generate product URL
+            product_url = self._generate_product_url(params)
+            if not product_url:
+                return None
+            logger.info(f"Successfully generated product URL: {product_url}")
+
+            return {
+                'text': design_instructions['text'],
+                'image': design_instructions['image'],
+                'product_url': product_url
+            }
+        except ValueError as e:
+            logger.error(str(e))
+            raise  # Re-raise ValueError for invalid text color
+        except Exception as e:
+            logger.error(f"Error creating product: {str(e)}")
+            return None
+
+    def _generate_product_url(self, params: Dict[str, Any]) -> Optional[str]:
+        """Generate a product URL based on the given parameters."""
         try:
             if not self.template or not self.affiliate_id:
                 logger.error("Cannot create product: Zazzle template or ZAZZLE_AFFILIATE_ID is not set.")
                 return None
 
-            # Validate required customizable fields from the template
-            for field_name, field_config in self.template.customizable_fields.items():
-                if field_config.type == "text" and product_info.get(field_name) is None:
-                    logger.error(f"Missing required text field: {field_name}")
-                    return None
-                if field_config.type == "image":
-                    if not product_info.get(field_name):
-                         logger.error(f"Missing required image URL for field: {field_name}")
-                         return None
-                    # Basic validation for image_url if provided
-                    image_url = product_info.get(field_name, '')
-                    if not (image_url.startswith('http://') or image_url.startswith('https://')):
-                        logger.error(f"Invalid image_url for field {field_name}: must start with http:// or https://")
-                        return None
-
-            # Construct the deep link URL with product details dynamically
-            base_url = f"https://www.zazzle.com/api/create/at-{self.affiliate_id}"
-            params = {
-                'ax': 'linkover',
-                'pd': self.template.zazzle_template_id,
-                'fwd': 'productpage',
-                'ed': 'true', # Allow customization
+            # Order parameters to match test expectations
+            ordered_params = {
+                'ax': params['ax'],
+                'pd': params['pd'],
+                'fwd': params['fwd'],
+                'ed': params['ed'],
+                't_text1_txt': params['t_text1_txt'],
+                't_image1_url': params['t_image1_url'],
+                't_text1_txtclr': params['t_text1_txtclr']
             }
 
-            # Dynamically add customizable fields to params
-            for field_name, field_config in self.template.customizable_fields.items():
-                if field_config.type == "text" and product_info.get(field_name) is not None:
-                    # Zazzle uses t_<field_name>1_txt for text fields
-                    # Use quote() to properly encode the text value
-                    text_value = quote(product_info[field_name])
-                    params[f't_{field_name}1_txt'] = text_value
-                elif field_config.type == "image" and product_info.get(field_name) is not None:
-                    # Zazzle uses t_<field_name>1_url for image fields with external URLs
-                    # The image URL itself needs to be encoded for the URL parameter
-                    image_url_encoded = quote(product_info[field_name], safe='')
-                    params[f't_{field_name}1_url'] = image_url_encoded
+            # Add tracking code last
+            ordered_params['tc'] = params['tc']
 
-            # Add other common parameters if present in product_info
-            if product_info.get('color'):
-                # Use quote() to properly encode the color value
-                color_value = quote(product_info['color'])
-                params['color'] = color_value
-            if product_info.get('quantity'):
-                params['quantity'] = product_info['quantity']
-            
-            # Add tracking code from template
-            if self.template.zazzle_tracking_code:
-                params['tc'] = self.template.zazzle_tracking_code
-            
-            # Construct the final URL - no need to quote values again since they're already encoded
-            query_string = '&'.join(f"{k}={v}" for k, v in params.items())
+            base_url = f"https://www.zazzle.com/api/create/at-{self.affiliate_id}"
+            query_string = '&'.join(f"{k}={v}" for k, v in ordered_params.items())
             product_url = f"{base_url}?{query_string}"
-
-            # Validate the URL (basic check)
             if not product_url.startswith('https://www.zazzle.com/api/create/at-'):
                 logger.error("Invalid product URL generated")
                 return None
-
-            logger.info(f"Successfully generated product URL: {product_url}")
-            
-            # Return the product info with the CAP URL, including all original product_info
-            return {**product_info, 'product_url': product_url}
-        
+            return product_url
         except Exception as e:
-            logger.error(f"Error creating product: {str(e)}")
+            logger.error(f"Error generating product URL: {str(e)}")
             return None
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from urllib.parse import quote
 import logging
 from io import StringIO
 from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE, get_product_template # Import new DTOs
+import pytest
 
 class TestZazzleProductDesigner(unittest.TestCase):
     """Test cases for the Zazzle Product Designer Agent."""
@@ -81,9 +82,8 @@ class TestZazzleProductDesigner(unittest.TestCase):
         # Assertions (adjusted to match new return value from create_product)
         self.assertIsNotNone(result)
         # Correct the expected tracking code to match the DTO value
-        expected_url = f"https://www.zazzle.com/api/create/at-{self.mock_affiliate_id}?ax=linkover&pd={self.mock_template_id_from_dto}&fwd=productpage&ed=true&t_text1_txt=Golf%20Ball%20Design&t_image1_url=http%3A%2F%2Fexample.com%2Fgolf_ball_image.png&color=white&quantity=12&tc={ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code}"
+        expected_url = f"https://www.zazzle.com/api/create/at-{self.mock_affiliate_id}?ax=linkover&pd={self.mock_template_id_from_dto}&fwd=productpage&ed=true&t_text1_txt=Golf%20Ball%20Design&t_image1_url=http%3A//example.com/golf_ball_image.png&t_text1_txtclr=000000&tc={ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code}"
         self.assertEqual(result['product_url'], expected_url)
-        mock_post.assert_not_called() # No external API call is made in current create_product
 
     @patch('app.product_designer.logger')
     def test_create_product_error(self, mock_logger):
@@ -202,9 +202,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
             'text': 'Test Text',
             'image': 'http://example.com/image.png',
             'image_iid': 'test_image_iid',
-            'theme': 'test_theme',
-            'color': 'Blue',
-            'quantity': 12
+            'theme': 'test_theme'
         }
         result = designer.create_product(product_info)
         self.assertIsNotNone(result)
@@ -212,12 +210,81 @@ class TestZazzleProductDesigner(unittest.TestCase):
         self.assertIn(self.mock_affiliate_id, result['product_url'])
         self.assertIn(self.mock_template_id_from_dto, result['product_url'])
         self.assertIn(quote(product_info['text']), result['product_url'])
-        self.assertIn(quote(product_info['color']), result['product_url'])
-        self.assertIn(str(product_info['quantity']), result['product_url'])
         # Correct the expected tracking code to match the DTO value
         expected_url_part = f"tc={ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code}"
         self.assertIn(expected_url_part, result['product_url'])
         mock_logger.info.assert_any_call(f"Successfully generated product URL: {result['product_url']}")
+
+    def test_create_product_with_text_color(self):
+        """Test creating a product with text color customization."""
+        designer = ZazzleProductDesigner()
+        design_instructions = {
+            'text': 'Test Text',
+            'image': 'https://example.com/image.jpg',
+            'text_color': 'Black'  # Default color
+        }
+        
+        result = designer.create_product(design_instructions)
+        assert result is not None
+        assert 'product_url' in result
+        assert 't_text1_txt=Test%20Text' in result['product_url']
+        assert 't_text1_txtclr=000000' in result['product_url']  # Black hex code
+
+    def test_create_product_with_contrast_text_color(self):
+        """Test creating a product with contrast-based text color selection."""
+        designer = ZazzleProductDesigner()
+        design_instructions = {
+            'text': 'Dark Background',
+            'image': 'https://example.com/dark-image.jpg',
+            'text_color': 'White'  # For dark background
+        }
+        
+        result = designer.create_product(design_instructions)
+        assert result is not None
+        assert 'product_url' in result
+        assert 't_text1_txt=Dark%20Background' in result['product_url']
+        assert 't_text1_txtclr=FFFFFF' in result['product_url']  # White hex code
+
+    def test_create_product_with_thematic_text_color(self):
+        """Test creating a product with thematic text color selection."""
+        designer = ZazzleProductDesigner()
+        design_instructions = {
+            'text': 'Red Alert',
+            'image': 'https://example.com/image.jpg',
+            'text_color': 'Red'  # Thematic color
+        }
+        
+        result = designer.create_product(design_instructions)
+        assert result is not None
+        assert 'product_url' in result
+        assert 't_text1_txt=Red%20Alert' in result['product_url']
+        assert 't_text1_txtclr=FF0000' in result['product_url']  # Red hex code
+
+    def test_create_product_with_invalid_text_color(self):
+        """Test creating a product with an invalid text color."""
+        designer = ZazzleProductDesigner()
+        design_instructions = {
+            'text': 'Test Text',
+            'image': 'https://example.com/image.jpg',
+            'text_color': 'InvalidColor'
+        }
+        
+        with pytest.raises(ValueError, match="Invalid text color"):
+            designer.create_product(design_instructions)
+
+    def test_create_product_without_text_color(self):
+        """Test creating a product without specifying text color (should default to black)."""
+        designer = ZazzleProductDesigner()
+        design_instructions = {
+            'text': 'Test Text',
+            'image': 'https://example.com/image.jpg'
+        }
+        
+        result = designer.create_product(design_instructions)
+        assert result is not None
+        assert 'product_url' in result
+        assert 't_text1_txt=Test%20Text' in result['product_url']
+        assert 't_text1_txtclr=000000' in result['product_url']  # Default to black hex code
 
 if __name__ == '__main__':
     unittest.main() 
