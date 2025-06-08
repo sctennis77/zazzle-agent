@@ -95,45 +95,44 @@ async def run_full_pipeline():
     if product_info:
         products.append(product_info)
         save_to_csv(products, "processed_products.csv")
-        print("\nGenerated Product Info:")
-        print(f"Theme: {product_info.get('theme', 'default')}")
-        print(f"Text: {product_info.get('text', '')}")
-        print(f"Color: {product_info.get('color', 'Blue')}")
-        print(f"Quantity: {product_info.get('quantity', 12)}")
+        logger.info("\nGenerated Product Info:")
+        logger.info(f"Theme: {product_info.get('theme', 'default')}")
+        logger.info(f"Text: {product_info.get('text', '')}")
+        logger.info(f"Color: {product_info.get('color', 'Blue')}")
+        logger.info(f"Quantity: {product_info.get('quantity', 12)}")
         
         reddit_context = product_info.get('reddit_context', {})
         if reddit_context and reddit_context.get('id'):
-            print("\nReddit Context:")
-            print(f"Post Title: {reddit_context.get('title', '')}")
-            print(f"Post URL: {reddit_context.get('url', '')}")
+            logger.info("\nReddit Context:")
+            logger.info(f"Post Title: {reddit_context.get('title', '')}")
+            logger.info(f"Post URL: {reddit_context.get('url', '')}")
         else:
-            print("\nNote: This product was created without a Reddit post context.")
+            logger.info("\nNote: This product was created without a Reddit post context.")
         
-        print("\nProduct URL:")
-        print(f"To view and customize the product, open this URL in your browser:")
-        print(product_info.get('product_url', ''))
+        logger.info("\nProduct URL:")
+        logger.info("To view and customize the product, open this URL in your browser:")
+        logger.info(product_info.get('product_url', ''))
 
         # Print image URL if available
         if product_info.get('image'):
-            print("\nGenerated Image URL:")
-            print(product_info.get('image'))
+            logger.info("\nGenerated Image URL:")
+            logger.info(product_info.get('image'))
         if product_info.get('image_local_path'):
-            print("Generated Image Local Path:")
-            print(product_info.get('image_local_path'))
+            logger.info("Generated Image Local Path:")
+            logger.info(product_info.get('image_local_path'))
 
     else:
-        print("No product was generated.")
+        logger.warning("No product was generated.")
 
 async def run_generate_image_pipeline(image_prompt: str):
     """Run the image generation pipeline with a given prompt."""
     image_generator = ImageGenerator()
     try:
         imgur_url, local_path = await image_generator.generate_image(image_prompt)
-        print(f"\nGenerated Image URL: {imgur_url}")
-        print(f"Generated Image Local Path: {local_path}")
+        logger.info(f"\nGenerated Image URL: {imgur_url}")
+        logger.info(f"Generated Image Local Path: {local_path}")
     except Exception as e:
         logger.error(f"Error generating image: {e}")
-        print(f"Error generating image: {e}")
 
 async def test_reddit_voting():
     """Test the Reddit agent's upvoting/downvoting behavior without posting affiliate material."""
@@ -144,15 +143,15 @@ async def test_reddit_voting():
     trending_post = next(subreddit.hot(limit=1), None)
     
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
         
         # Interact with the post
         action = reddit_agent.interact_with_votes(trending_post.id)
-        print(f"\nAction taken: {action}")
+        logger.info(f"\nAction taken: {action}")
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def test_reddit_comment_voting():
     """Test the Reddit agent's comment upvoting/downvoting behavior without posting affiliate material."""
@@ -163,24 +162,24 @@ async def test_reddit_comment_voting():
     trending_post = next(subreddit.hot(limit=1), None)
     
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
         
         # Get top-level comments
         trending_post.comments.replace_more(limit=0)  # Load top-level comments only
         for comment in trending_post.comments.list():
             if not comment.stickied:  # Skip stickied comments
-                print(f"\nFound comment:")
-                print(f"Text: {comment.body}")
-                print(f"Author: u/{comment.author}")
+                logger.info(f"\nFound comment:")
+                logger.info(f"Text: {comment.body}")
+                logger.info(f"Author: u/{comment.author}")
                 
                 # Interact with the comment
                 action = reddit_agent.interact_with_votes(trending_post.id, comment.id)
-                print(f"\nAction taken: {action}")
+                logger.info(f"\nAction taken: {action}")
                 break  # Process only one comment for testing
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def test_reddit_post_comment():
     """Test the Reddit agent's ability to comment on posts without actually posting."""
@@ -191,9 +190,9 @@ async def test_reddit_post_comment():
     trending_post = next(subreddit.hot(limit=1), None)
     
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
         
         # Generate a test comment
         test_comment = "This is a test comment that would be posted in reply to the post."
@@ -201,14 +200,14 @@ async def test_reddit_post_comment():
         # Attempt to comment on the post
         action = reddit_agent.comment_on_post(trending_post.id, test_comment)
         if action:
-            print("\nProposed action:")
-            print(f"Type: {action['type']}")
-            print(f"Post: {action['post_title']}")
-            print(f"Post URL: {action['post_link']}")
-            print(f"Comment text: {action['comment_text']}")
-            print(f"Action: {action['action']}")
+            logger.info("\nProposed action:")
+            logger.info(f"Type: {action['type']}")
+            logger.info(f"Post: {action['post_title']}")
+            logger.info(f"Post URL: {action['post_link']}")
+            logger.info(f"Comment text: {action['comment_text']}")
+            logger.info(f"Action: {action['action']}")
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def test_reddit_engaging_comment():
     """Test the Reddit agent's ability to generate engaging comments based on post context."""
@@ -219,9 +218,9 @@ async def test_reddit_engaging_comment():
     trending_post = next(subreddit.hot(limit=1), None)
     
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
         
         # Analyze post context
         post_context = reddit_agent._analyze_post_context(trending_post)
@@ -230,12 +229,12 @@ async def test_reddit_engaging_comment():
         engaging_comment = reddit_agent._generate_engaging_comment(post_context)
         
         if engaging_comment:
-            print("\nEngaging Comment:")
-            print(engaging_comment)
+            logger.info("\nEngaging Comment:")
+            logger.info(engaging_comment)
         else:
-            print("No engaging comment generated.")
+            logger.info("No engaging comment generated.")
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def test_reddit_marketing_comment():
     """Test the Reddit agent's ability to generate marketing comments based on post context and product."""
@@ -255,9 +254,9 @@ async def test_reddit_marketing_comment():
     trending_post = next(subreddit.hot(limit=1), None)
     
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
         
         # Analyze post context
         post_context = reddit_agent._analyze_post_context(trending_post)
@@ -266,12 +265,12 @@ async def test_reddit_marketing_comment():
         marketing_comment = reddit_agent._generate_marketing_comment(mock_product, post_context)
         
         if marketing_comment:
-            print("\nMarketing Comment:")
-            print(marketing_comment)
+            logger.info("\nMarketing Comment:")
+            logger.info(marketing_comment)
         else:
-            print("No marketing comment generated.")
+            logger.info("No marketing comment generated.")
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def test_reddit_comment_marketing_reply():
     """Test the Reddit agent's ability to reply to a comment with marketing content."""
@@ -291,17 +290,17 @@ async def test_reddit_comment_marketing_reply():
     trending_post = next(subreddit.hot(limit=1), None)
 
     if trending_post:
-        print("\nFound trending post:")
-        print(f"Title: {trending_post.title}")
-        print(f"URL: https://reddit.com{trending_post.permalink}")
+        logger.info("\nFound trending post:")
+        logger.info(f"Title: {trending_post.title}")
+        logger.info(f"URL: https://reddit.com{trending_post.permalink}")
 
         # Get top-level comments
         trending_post.comments.replace_more(limit=0)  # Load top-level comments only
         for comment in trending_post.comments.list():
             if not comment.stickied:  # Skip stickied comments
-                print(f"\nFound comment to reply to:")
-                print(f"Text: {comment.body}")
-                print(f"Author: u/{comment.author}")
+                logger.info(f"\nFound comment to reply to:")
+                logger.info(f"Text: {comment.body}")
+                logger.info(f"Author: u/{comment.author}")
 
                 # Analyze post context
                 post_context = reddit_agent._analyze_post_context(trending_post)
@@ -309,14 +308,14 @@ async def test_reddit_comment_marketing_reply():
                 # Reply to the comment with marketing content
                 action = reddit_agent.reply_to_comment_with_marketing(comment.id, mock_product, post_context)
                 if action:
-                    print("\nProposed action:")
-                    print(f"Type: {action['type']}")
-                    print(f"Comment ID: {action['comment_id']}")
-                    print(f"Reply text: {action['reply_text']}")
-                    print(f"Action: {action['action']}")
+                    logger.info("\nProposed action:")
+                    logger.info(f"Type: {action['type']}")
+                    logger.info(f"Comment ID: {action['comment_id']}")
+                    logger.info(f"Reply text: {action['reply_text']}")
+                    logger.info(f"Action: {action['action']}")
                 break  # Process only one comment for testing
     else:
-        print("No trending post found in r/golf.")
+        logger.info("No trending post found in r/golf.")
 
 async def main():
     """Main entry point for the application."""

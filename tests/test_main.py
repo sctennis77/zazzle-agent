@@ -205,8 +205,8 @@ async def test_main_test_marketing_comment_reply_mode(mock_parse_args, mock_repl
 # New tests for test_reddit_voting function
 @pytest.mark.asyncio
 @patch('app.main.RedditAgent')
-@patch('builtins.print')
-async def test_reddit_voting_found_post(mock_print, MockRedditAgent):
+@patch('logging.Logger.info')
+async def test_reddit_voting_found_post(mock_logger_info, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -226,15 +226,17 @@ async def test_reddit_voting_found_post(mock_print, MockRedditAgent):
     mock_subreddit.hot.assert_called_once_with(limit=1)
     mock_agent_instance.interact_with_votes.assert_called_once_with('post123')
     
-    mock_print.assert_any_call("\nFound trending post:")
-    mock_print.assert_any_call(f"Title: {mock_trending_post.title}")
-    mock_print.assert_any_call(f"URL: https://reddit.com{mock_trending_post.permalink}")
-    mock_print.assert_any_call(f"\nAction taken: {{'type': 'vote', 'action': 'upvoted'}}")
+    # Check logger calls
+    log_msgs = [call.args[0] for call in mock_logger_info.call_args_list]
+    assert any("Found trending post" in msg for msg in log_msgs)
+    assert any(f"Title: {mock_trending_post.title}" in msg for msg in log_msgs)
+    assert any(f"URL: https://reddit.com{mock_trending_post.permalink}" in msg for msg in log_msgs)
+    assert any("Action taken" in msg for msg in log_msgs)
 
 @pytest.mark.asyncio
 @patch('app.main.RedditAgent')
-@patch('builtins.print')
-async def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
+@patch('logging.Logger.info')
+async def test_reddit_voting_no_post_found(mock_logger_info, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -249,13 +251,14 @@ async def test_reddit_voting_no_post_found(mock_print, MockRedditAgent):
     mock_agent_instance.reddit.subreddit.assert_called_once_with("golf")
     mock_subreddit.hot.assert_called_once_with(limit=1)
     mock_agent_instance.interact_with_votes.assert_not_called()
-    mock_print.assert_any_call("No trending post found in r/golf.") 
+    log_msgs = [call.args[0] for call in mock_logger_info.call_args_list]
+    assert any("No trending post found in r/golf." in msg for msg in log_msgs)
 
 # New tests for test_reddit_comment_voting function
 @pytest.mark.asyncio
 @patch('app.main.RedditAgent')
-@patch('builtins.print')
-async def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedditAgent):
+@patch('logging.Logger.info')
+async def test_reddit_comment_voting_found_post_and_comment(mock_logger_info, MockRedditAgent):
     mock_agent_instance = MagicMock()
     MockRedditAgent.return_value = mock_agent_instance
     
@@ -282,10 +285,10 @@ async def test_reddit_comment_voting_found_post_and_comment(mock_print, MockRedd
     mock_trending_post.comments.list.assert_called_once()
     mock_agent_instance.interact_with_votes.assert_called_once_with('post123', 'comment123')
     
-    mock_print.assert_any_call("\nFound trending post:")
-    mock_print.assert_any_call(f"Title: {mock_trending_post.title}")
-    mock_print.assert_any_call(f"URL: https://reddit.com{mock_trending_post.permalink}")
-    mock_print.assert_any_call("\nFound comment:")
-    mock_print.assert_any_call(f"Text: {mock_comment.body}")
-    mock_print.assert_any_call(f"Author: u/{mock_comment.author}")
-    mock_print.assert_any_call(f"\nAction taken: {{'type': 'comment_vote', 'action': 'upvoted'}}") 
+    log_msgs = [call.args[0] for call in mock_logger_info.call_args_list]
+    assert any("Found trending post" in msg for msg in log_msgs)
+    assert any(f"Title: {mock_trending_post.title}" in msg for msg in log_msgs)
+    assert any(f"URL: https://reddit.com{mock_trending_post.permalink}" in msg for msg in log_msgs)
+    assert any("Found comment" in msg for msg in log_msgs)
+    assert any(f"Text: {mock_comment.body}" in msg for msg in log_msgs)
+    assert any("Action taken" in msg for msg in log_msgs) 

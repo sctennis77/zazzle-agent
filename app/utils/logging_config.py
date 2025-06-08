@@ -103,7 +103,11 @@ def setup_logging(
         'app.clients': 'INFO',
         'app.product_designer': 'INFO',
         'app.distribution': 'INFO',
-        'app.utils': 'INFO'
+        'app.utils': 'INFO',
+        # Reduce noise from third-party libraries
+        'httpx': 'WARNING',
+        'praw': 'WARNING',
+        'openai': 'WARNING',
     }
     
     for logger_name, level in component_loggers.items():

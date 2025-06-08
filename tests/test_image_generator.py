@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import os
 import pytest
 import base64
+from typing import Tuple, Generator
 
 # Module-level fixture to patch openai.OpenAI for all async tests
 @pytest.fixture(autouse=True, scope="module")
@@ -12,15 +13,24 @@ def patch_openai():
         mock_openai.return_value = mock_openai_instance
         yield mock_openai, mock_openai_instance
 
+@pytest.fixture(scope="module")
+def mock_imgur_responses() -> Tuple[str, str]:
+    """Fixture providing mock Imgur responses."""
+    return 'https://imgur.com/test.jpg', 'outputs/images/test.png'
+
+@pytest.fixture(autouse=True)
+def setup_test_env():
+    """Setup test environment variables."""
+    patcher = patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'})
+    patcher.start()
+    yield
+    patcher.stop()
+
 class TestImageGenerator(unittest.TestCase):
     """Test cases for the ImageGenerator class."""
     
     def setUp(self):
         """Set up test fixtures."""
-        self.patcher_env = patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'})
-        self.patcher_env.start()
-        self.addCleanup(self.patcher_env.stop)
-        
         # Mock OpenAI client
         self.mock_openai = patch('openai.OpenAI').start()
         self.mock_openai_instance = MagicMock()
@@ -54,27 +64,51 @@ class TestImageGenerator(unittest.TestCase):
 @pytest.mark.asyncio
 class TestImageGeneratorAsync:
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def setup(self, mock_imgur_responses: Tuple[str, str]) -> Generator[None, None, None]:
+        """Setup async test fixtures."""
+        # Setup OpenAI mock
         patcher_openai = patch('app.image_generator.OpenAI')
         self.mock_openai = patcher_openai.start()
         self.mock_openai_instance = MagicMock()
         self.mock_openai.return_value = self.mock_openai_instance
-        self.patcher_env = patch.dict('os.environ', {'OPENAI_API_KEY': 'test_key'})
-        self.patcher_env.start()
-        # Patch ImgurClient.upload_image and save_image_locally directly BEFORE importing ImageGenerator
-        patcher_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', return_value=('https://imgur.com/test.jpg', 'outputs/images/test.png'))
+
+        # Setup Imgur mocks
+        patcher_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', 
+                                   return_value=mock_imgur_responses)
         self.mock_imgur_upload = patcher_imgur_upload.start()
-        patcher_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', return_value='outputs/images/test.png')
+        
+        patcher_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', 
+                                 return_value=mock_imgur_responses[1])
         self.mock_imgur_save = patcher_imgur_save.start()
-        # Import ImageGenerator only after patching
+
+        # Import and setup ImageGenerator
         from app.image_generator import ImageGenerator
         self.image_generator = ImageGenerator()
+        
         yield
+        
+        # Cleanup
         patch.stopall()
-        self.patcher_env.stop()
-        patcher_openai.stop()
-        patcher_imgur_upload.stop()
-        patcher_imgur_save.stop()
+
+    def _verify_openai_call(self, prompt: str, size: str = "256x256") -> None:
+        """Helper method to verify OpenAI API call."""
+        self.mock_openai_instance.images.generate.assert_called_once_with(
+            model="dall-e-2",
+            prompt=prompt,
+            size=size,
+            n=1,
+            response_format="b64_json"
+        )
+
+    def _verify_imgur_calls(self, image_data: bytes) -> None:
+        """Helper method to verify Imgur client calls."""
+        from app.clients.imgur_client import ImgurClient
+        ImgurClient.save_image_locally.assert_called_once_with(
+            image_data,
+            unittest.mock.ANY,
+            subdirectory='generated_products'
+        )
+        ImgurClient.upload_image.assert_called_once_with('outputs/images/test.png')
 
     @patch('httpx.AsyncClient')
     async def test_generate_image_success(self, mock_httpx):
@@ -84,39 +118,12 @@ class TestImageGeneratorAsync:
             data=[MagicMock(b64_json='Zm9vYmFy')]
         )
 
-        # Mock httpx response
-        mock_httpx_instance = AsyncMock()
-        mock_httpx.return_value.__aenter__.return_value = mock_httpx_instance
-        mock_httpx_instance.get.return_value = MagicMock(
-            content=b'test_image_data'
-        )
-
         # Test image generation
         imgur_url, local_path = await self.image_generator.generate_image('test prompt')
 
-        # Verify OpenAI call
-        self.mock_openai_instance.images.generate.assert_called_once_with(
-            model="dall-e-2",
-            prompt='test prompt',
-            size="256x256",
-            n=1,
-            response_format="b64_json"
-        )
-
-        # Verify httpx call - This should no longer be called as we are using b64_json
-        mock_httpx_instance.get.assert_not_called()
-
-        # Verify local save
-        from app.clients.imgur_client import ImgurClient
-        ImgurClient.save_image_locally.assert_called_once_with(
-            base64.b64decode('Zm9vYmFy'),
-            unittest.mock.ANY,
-            subdirectory='generated_products'
-        )
-
-        # Verify Imgur upload
-        from app.clients.imgur_client import ImgurClient
-        ImgurClient.upload_image.assert_called_once_with('outputs/images/test.png')
+        # Verify calls
+        self._verify_openai_call('test prompt')
+        self._verify_imgur_calls(base64.b64decode('Zm9vYmFy'))
 
         # Verify return values
         assert imgur_url == 'https://imgur.com/test.jpg'
@@ -142,35 +149,9 @@ class TestImageGeneratorAsync:
             data=[MagicMock(b64_json='Zm9vYmFy')]
         )
 
-        mock_httpx_instance = AsyncMock()
-        mock_httpx.return_value.__aenter__.return_value = mock_httpx_instance
-        mock_httpx_instance.get.return_value = MagicMock(
-            content=b'test_image_data'
-        )
-
         # Test with custom size
         await self.image_generator.generate_image('test prompt', size="512x512")
 
-        # Verify size parameter
-        self.mock_openai_instance.images.generate.assert_called_once_with(
-            model="dall-e-2",
-            prompt='test prompt',
-            size="512x512",
-            n=1,
-            response_format="b64_json"
-        )
-
-        # Verify httpx call - This should no longer be called as we are using b64_json
-        mock_httpx_instance.get.assert_not_called()
-
-        # Verify local save
-        from app.clients.imgur_client import ImgurClient
-        ImgurClient.save_image_locally.assert_called_once_with(
-            base64.b64decode('Zm9vYmFy'),
-            unittest.mock.ANY,
-            subdirectory='generated_products'
-        )
-
-        # Verify Imgur upload
-        from app.clients.imgur_client import ImgurClient
-        ImgurClient.upload_image.assert_called_once_with('outputs/images/test.png')
+        # Verify calls
+        self._verify_openai_call('test prompt', size="512x512")
+        self._verify_imgur_calls(base64.b64decode('Zm9vYmFy'))
