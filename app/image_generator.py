@@ -81,7 +81,7 @@ class ImageGenerator:
             logger.info(f"Generating image for prompt: '{prompt}' with size: {size}")
             
             # Consistent base prompt for the agent
-            base_prompt = "You are a graphic designer with impressionist tendencies. Design a circular image for a 1.5 inch diameter sticker. Limit any text to one or two words max if any."
+            base_prompt = "You are a professional graphic designer and illustrator inspired by impressionist painters. Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, it should be creative, clear, or both. Ensure it isnt gibberish."
             full_prompt = f"{base_prompt} {prompt}"
             response = self.client.images.generate(
                 model=self.model,
