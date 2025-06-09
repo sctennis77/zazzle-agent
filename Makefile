@@ -15,7 +15,7 @@ help:
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
 	@echo "  make docker-run   - Run Docker container"
 	@echo "  make scrape       - Run only the scraping part of the program"
-	@echo "  make run-generate-image <image prompt> - Generate an image with DALL-E and upload to Imgur"
+	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -36,7 +36,7 @@ run-test-voting:
 run: run-full
 
 run-generate-image:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main run-generate-image --image-prompt "$(IMAGE_PROMPT)"
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode image --prompt "$(IMAGE_PROMPT)" --model "$(MODEL)"
 
 clean:
 	rm -rf $(VENV_NAME) outputs/ .coverage

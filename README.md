@@ -81,6 +81,28 @@ make run-full  # Run the complete end-to-end pipeline
 make clean     # Clean up development artifacts
 ```
 
+### Example Commands
+
+Run the full pipeline with DALL-E 2 (default):
+```bash
+make run
+```
+
+Run the full pipeline with DALL-E 3:
+```bash
+make run MODEL=dall-e-3
+```
+
+Generate an image with a custom prompt using DALL-E 2 (default):
+```bash
+make run-generate-image IMAGE_PROMPT="A cat playing chess" MODEL=dall-e-2
+```
+
+Generate an image with a custom prompt using DALL-E 3:
+```bash
+make run-generate-image IMAGE_PROMPT="A cat playing chess" MODEL=dall-e-3
+```
+
 ### Command Line Options
 
 The application supports different modes of operation:

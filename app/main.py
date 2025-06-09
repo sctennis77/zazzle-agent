@@ -35,8 +35,12 @@ else:
     logger.warning("OPENAI_API_KEY not loaded.")
 
 def ensure_output_dir():
-    """Ensure the outputs directory exists."""
-    os.makedirs('outputs', exist_ok=True)
+    """Ensure the output directory exists."""
+    output_dir = os.getenv('OUTPUT_DIR', 'outputs')
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'screenshots'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'images'), exist_ok=True)
+    logger.info("Ensured outputs directory exists")
 
 def save_to_csv(products: List, filename: str):
     """Save products to a CSV file with detailed information."""
@@ -124,9 +128,9 @@ async def run_full_pipeline():
     else:
         logger.warning("No product was generated.")
 
-async def run_generate_image_pipeline(image_prompt: str):
+async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):
     """Run the image generation pipeline with a given prompt."""
-    image_generator = ImageGenerator()
+    image_generator = ImageGenerator(model=model)
     try:
         imgur_url, local_path = await image_generator.generate_image(image_prompt)
         logger.info(f"\nGenerated Image URL: {imgur_url}")
@@ -318,29 +322,33 @@ async def test_reddit_comment_marketing_reply():
         logger.info("No trending post found in r/golf.")
 
 async def main():
-    """Main entry point for the application."""
-    parser = argparse.ArgumentParser(description='Zazzle Agent')
+    parser = argparse.ArgumentParser(description='Run the Reddit-to-Zazzle dynamic product flow.')
     parser.add_argument('--mode', type=str, default='full',
-                      choices=['full', 'test-voting', 'test-voting-comment', 
-                              'test-post-comment', 'test-engaging-comment',
-                              'test-marketing-comment', 'test-marketing-comment-reply'],
+                      choices=['full', 'image', 'test-vote', 'test-comment', 'test-engaging', 'test-marketing'],
                       help='Operation mode')
+    parser.add_argument('--prompt', type=str, help='Image generation prompt (required for image mode)')
+    parser.add_argument('--model', type=str, default='dall-e-2',
+                      choices=['dall-e-2', 'dall-e-3'],
+                      help='DALL-E model to use for image generation')
     args = parser.parse_args()
+
+    if args.mode == 'image' and not args.prompt:
+        parser.error("--prompt is required for image mode")
+
+    ensure_output_dir()
 
     if args.mode == 'full':
         await run_full_pipeline()
-    elif args.mode == 'test-voting':
+    elif args.mode == 'image':
+        await run_generate_image_pipeline(args.prompt, args.model)
+    elif args.mode == 'test-vote':
         await test_reddit_voting()
-    elif args.mode == 'test-voting-comment':
-        await test_reddit_comment_voting()
-    elif args.mode == 'test-post-comment':
+    elif args.mode == 'test-comment':
         await test_reddit_post_comment()
-    elif args.mode == 'test-engaging-comment':
+    elif args.mode == 'test-engaging':
         await test_reddit_engaging_comment()
-    elif args.mode == 'test-marketing-comment':
+    elif args.mode == 'test-marketing':
         await test_reddit_marketing_comment()
-    elif args.mode == 'test-marketing-comment-reply':
-        await test_reddit_comment_marketing_reply()
 
 if __name__ == '__main__':
     asyncio.run(main()) 

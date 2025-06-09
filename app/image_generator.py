@@ -20,26 +20,41 @@ class ImageGenerationError(Exception):
 class ImageGenerator:
     """Handles image generation using DALL-E and storage using Imgur."""
     
-    VALID_SIZES = {"256x256", "512x512", "1024x1024"}
+    VALID_SIZES = {
+        "dall-e-2": {"256x256", "512x512", "1024x1024"},
+        "dall-e-3": {"1024x1024", "1024x1792", "1792x1024"}
+    }
+    DEFAULT_SIZE = {
+        "dall-e-2": "256x256",
+        "dall-e-3": "1024x1024"
+    }
+    VALID_MODELS = {"dall-e-2", "dall-e-3"}
     
-    def __init__(self) -> None:
+    def __init__(self, model: str = "dall-e-2") -> None:
         """
         Initialize the image generator with OpenAI and Imgur clients.
         
+        Args:
+            model: The DALL-E model to use (default: "dall-e-2")
+            
         Raises:
-            ValueError: If OPENAI_API_KEY is not set
+            ValueError: If OPENAI_API_KEY is not set or if model is invalid
         """
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("OPENAI_API_KEY must be set")
             
+        if model not in self.VALID_MODELS:
+            raise ValueError(f"Invalid model. Must be one of: {', '.join(self.VALID_MODELS)}")
+            
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
+        self.model = model
         
     async def generate_image(
         self, 
         prompt: str, 
-        size: str = "1024x1024", 
+        size: str = None, 
         template_id: Optional[str] = None
     ) -> Tuple[str, str]:
         """
@@ -47,7 +62,7 @@ class ImageGenerator:
         
         Args:
             prompt: The text prompt for image generation
-            size: The size of the image to generate (default: "1024x1024")
+            size: The size of the image to generate (default: None, which uses the model's default size)
             template_id: Optional Zazzle template ID for naming the image file
             
         Returns:
@@ -55,10 +70,12 @@ class ImageGenerator:
             
         Raises:
             ImageGenerationError: If image generation or upload fails
-            ValueError: If size is not valid
+            ValueError: If size is not valid for the selected model
         """
-        if size not in self.VALID_SIZES:
-            raise ValueError(f"Invalid size. Must be one of: {', '.join(self.VALID_SIZES)}")
+        if size is None:
+            size = self.DEFAULT_SIZE[self.model]
+        if size not in self.VALID_SIZES[self.model]:
+            raise ValueError(f"Invalid size '{size}' for model '{self.model}'. Allowed: {', '.join(self.VALID_SIZES[self.model])}")
             
         try:
             logger.info(f"Generating image for prompt: '{prompt}' with size: {size}")
@@ -67,10 +84,9 @@ class ImageGenerator:
             base_prompt = "You are a graphic designer with impressionist tendencies. Design a circular image for a 1.5 inch diameter sticker. Limit any text to one or two words max if any."
             full_prompt = f"{base_prompt} {prompt}"
             response = self.client.images.generate(
-                model="dall-e-3",
+                model=self.model,
                 prompt=full_prompt,
                 size=size,
-                quality="standard",
                 n=1,
                 response_format="b64_json"
             )
