@@ -74,9 +74,6 @@ class ZazzleProductDesigner:
         if 'image' not in design_instructions or not design_instructions['image']:
             logger.error("Missing required image URL for field: image")
             return None
-        if 'text' not in design_instructions or not design_instructions['text']:
-            logger.error("Missing required text field: text")
-            return None
 
         # Validate image URL
         if not self._is_valid_url(design_instructions['image']):
@@ -93,7 +90,6 @@ class ZazzleProductDesigner:
                 'pd': self.template.zazzle_template_id,
                 'fwd': 'productpage',
                 'ed': 'true',
-                't_text1_txt': quote(design_instructions['text']),
                 't_image1_url': quote(design_instructions['image'])
             }
 
@@ -101,21 +97,11 @@ class ZazzleProductDesigner:
             for field_name, field in customizable_fields.items():
                 if field_name in design_instructions:
                     value = design_instructions[field_name]
-                    if field_name == 'text_color':
-                        if field.options is not None and value not in field.options:
-                            raise ValueError(f"Invalid text color: {value}. Must be one of {field.options}")
-                        hex_code = COLOR_NAME_TO_HEX.get(value, '000000')
-                        params['t_text1_txtclr'] = hex_code
-                    else:
-                        if field.options is not None and value not in field.options:
-                            raise ValueError(f"Invalid value for {field_name}: {value}. Must be one of {field.options}")
-                        # Only encode if not already encoded (text/image handled above)
-                        if field_name not in ['text', 'image']:
-                            params[field_name] = quote(str(value))
-
-            # Always include text color, default to black if not specified
-            if 't_text1_txtclr' not in params:
-                params['t_text1_txtclr'] = '000000'  # Black hex code
+                    if field.options is not None and value not in field.options:
+                        raise ValueError(f"Invalid value for {field_name}: {value}. Must be one of {field.options}")
+                    # Only encode if not already encoded (image handled above)
+                    if field_name not in ['image']:
+                        params[field_name] = quote(str(value))
 
             # Add tracking code
             params['tc'] = self.template.zazzle_tracking_code
@@ -127,13 +113,12 @@ class ZazzleProductDesigner:
             logger.info(f"Successfully generated product URL: {product_url}")
 
             return {
-                'text': design_instructions['text'],
                 'image': design_instructions['image'],
                 'product_url': product_url
             }
         except ValueError as e:
             logger.error(str(e))
-            raise  # Re-raise ValueError for invalid text color
+            raise  # Re-raise ValueError for invalid values
         except Exception as e:
             logger.error(f"Error creating product: {str(e)}")
             return None
@@ -151,9 +136,7 @@ class ZazzleProductDesigner:
                 'pd': params['pd'],
                 'fwd': params['fwd'],
                 'ed': params['ed'],
-                't_text1_txt': params['t_text1_txt'],
-                't_image1_url': params['t_image1_url'],
-                't_text1_txtclr': params['t_text1_txtclr']
+                't_image1_url': params['t_image1_url']
             }
 
             # Add tracking code last

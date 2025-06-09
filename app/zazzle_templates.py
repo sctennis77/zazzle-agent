@@ -8,6 +8,7 @@ class CustomizableField:
     max_length: Optional[int] = None
     formats: Optional[List[str]] = None
     max_size_mb: Optional[int] = None
+    options: Optional[List[str]] = None
 
 @dataclass
 class ZazzleTemplateConfig:
@@ -20,21 +21,17 @@ class ZazzleTemplateConfig:
 # Define the Zazzle Sticker Template
 ZAZZLE_STICKER_TEMPLATE = ZazzleTemplateConfig(
     product_type="Sticker",
-    zazzle_template_id="256026928356227568",
-    original_url="https://www.zazzle.com/fire_away_vintage_cannon_golf_ball_sticker-256026928356227568?t_text1_txt=Osprey%20Valley%20Golf%20Mecca&color=Blue&quantity=6&t_image1_iid=4b2bbb87-ee28-47a3-9de9-5ddb045ec8bc&ed=True&r=4834233&dz=ad291f5e-9048-4ab9-9ca9-10757e8f7555",
-    zazzle_tracking_code="stickerattempt1",
+    zazzle_template_id="256689990112831136",
+    original_url="https://www.zazzle.com/beautiful_stickers_for_beautiful_moments-256689990112831136",
+    zazzle_tracking_code="RedditStickerz_0",
     customizable_fields={
-        "text": CustomizableField(
-            type="text",
-            description="Custom text to be displayed on the sticker",
-            max_length=100
-        ),
         "image": CustomizableField(
             type="image",
             description="Custom image to be displayed on the sticker",
             formats=["png", "jpg", "jpeg"],
             max_size_mb=5
-        )
+        ),
+  
     }
 )
 
