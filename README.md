@@ -42,10 +42,10 @@ graph TD
 
 - **Reddit Integration**: Automated monitoring and interaction with r/golf
 - **LLM-Powered Analysis**: Dynamic product idea generation using OpenAI GPT
-- **Product Generation**: Dynamic sticker design creation
+- **Product Generation**: Dynamic sticker design creation with configurable image generation models (DALL-E 2 and DALL-E 3)
 - **Marketing Automation**: Context-aware comment generation
 - **Test Mode**: Safe development environment with dry-run capabilities
-- **Comprehensive Testing**: Unit, integration, and end-to-end test coverage
+- **Comprehensive Testing**: Unit, integration, and end-to-end test coverage with dedicated test output directory
 - **DTO-Based Configuration**: Type-safe product configuration using Python DTOs
 
 ## Prerequisites
@@ -143,6 +143,11 @@ python -m pytest tests/test_integration.py
 - **End-to-End Tests**: Complete pipeline testing
 - **Reddit Agent Tests**: Voting and interaction pattern testing
 - **Product Designer Tests**: URL encoding and parameter handling
+- **Image Generation Tests**: Tests for both DALL-E 2 and DALL-E 3 models
+
+### Test Output Directory
+
+Test outputs, including generated images and product data, are stored in a dedicated `test_output` directory. This ensures that test artifacts are properly isolated and managed.
 
 ## License
 
