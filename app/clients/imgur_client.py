@@ -59,12 +59,10 @@ class ImgurClient:
                     raise requests.exceptions.RequestException(
                         f"Imgur API error: {data.get('data', {}).get('error', 'Unknown error')}"
                     )
-                    
                 imgur_url = data['data']['link']
                 logger.info(f"Successfully uploaded image to Imgur: {imgur_url}")
-                
-                return imgur_url, image_path
-                
+                # Always return the absolute path for consistency
+                return imgur_url, str(Path(image_path).resolve())
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to upload image to Imgur: {str(e)}")
             raise
@@ -76,25 +74,27 @@ class ImgurClient:
         Args:
             image_data: The image content as bytes.
             filename: The name of the file to save.
-            subdirectory: Optional subdirectory within 'outputs' to save the image.
+            subdirectory: Optional subdirectory within the output directory to save the image.
             
         Returns:
-            The full path to the saved image file.
+            The full absolute path to the saved image file.
         """
-        base_dir = Path('outputs')
+        base_dir = Path(os.getenv('OUTPUT_DIR', 'outputs'))
         if subdirectory:
             save_dir = base_dir / subdirectory
         else:
             save_dir = base_dir
-            
         save_dir.mkdir(parents=True, exist_ok=True)
         file_path = save_dir / filename
-        
+        abs_path = file_path.resolve()
+        print(f"DEBUG: file_path={file_path}")
+        print(f"DEBUG: abs_path={abs_path}")
         try:
-            with open(file_path, 'wb') as f:
+            with open(abs_path, 'wb') as f:
                 f.write(image_data)
-            logger.info(f"Image saved locally: {file_path}")
-            return str(file_path)
+            logger.info(f"Image saved locally: {abs_path}")
+            print(f"DEBUG: returning abs_path={abs_path}")
+            return str(abs_path)
         except IOError as e:
-            logger.error(f"Error saving image locally to {file_path}: {e}")
+            logger.error(f"Error saving image locally to {abs_path}: {e}")
             raise 
