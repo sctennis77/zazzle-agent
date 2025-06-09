@@ -552,7 +552,7 @@ Marketing Comment:"""
             system_prompt = """You are a creative assistant that specializes in generating unique product ideas for Zazzle, specifically customizable stickers. 
             Based on Reddit post and comment content, identify a fun, witty, or relevant concept for a sticker. 
             Provide design instructions including text for the sticker, a description for an image to go on the sticker, a theme, and suggested color and quantity.
-            If you cannot find a suitable idea, respond with an empty JSON object. Make sure the 'text' is short and punchy.
+            If you cannot find a suitable idea, respond with an empty JSON object. Make sure the 'text' is concise and punchy, it has to fit into a 1.5 inch round sticker.
             The image_description should be detailed enough for an image generation model.
             Output your response as a JSON object with the following keys: 'text', 'image_description', 'theme', 'color', 'quantity'.
             Example: {'text': 'Fore Moon', 'image_description': 'A golfball soaring to space on a starry evening in impressionist style', 'theme': 'golf joke', 'color': 'Blue', 'quantity': 1}

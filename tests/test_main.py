@@ -135,7 +135,7 @@ async def test_main_full_mode(mock_parse_args, mock_reply, mock_marketing_commen
 @patch('app.main.test_reddit_engaging_comment')
 @patch('app.main.test_reddit_marketing_comment')
 @patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-voting'))
+@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-vote'))
 async def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
     await main()
     mock_voting.assert_called_once()
@@ -143,68 +143,27 @@ async def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing
 
 @pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
 @patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-voting-comment'))
-async def test_main_test_voting_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    await main()
-    mock_comment_voting.assert_called_once()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-post-comment'))
-async def test_main_test_post_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-comment'))
+async def test_main_test_post_comment_mode(mock_parse_args, mock_post_comment, mock_full_pipeline):
     await main()
     mock_post_comment.assert_called_once()
 
 @pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
 @patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-engaging-comment'))
-async def test_main_test_engaging_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-engaging'))
+async def test_main_test_engaging_comment_mode(mock_parse_args, mock_engaging_comment, mock_full_pipeline):
     await main()
     mock_engaging_comment.assert_called_once()
 
 @pytest.mark.asyncio
 @patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
 @patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing-comment'))
-async def test_main_test_marketing_comment_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
+@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing'))
+async def test_main_test_marketing_comment_mode(mock_parse_args, mock_marketing_comment, mock_full_pipeline):
     await main()
     mock_marketing_comment.assert_called_once()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing-comment-reply'))
-async def test_main_test_marketing_comment_reply_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    await main()
-    mock_reply.assert_called_once()
 
 # New tests for test_reddit_voting function
 @pytest.mark.asyncio

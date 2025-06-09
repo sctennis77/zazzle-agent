@@ -13,6 +13,20 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Versioned base prompts for image generation
+IMAGE_GENERATION_BASE_PROMPTS = {
+    "dall-e-2": (
+        "You are a professional graphic designer and illustrator inspired by impressionist painters. "
+        "Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, "
+        "it should be creative, clear, or both. Ensure it isnt gibberish."
+    ),
+    "dall-e-3": (
+        "You are a professional graphic designer and illustrator inspired by impressionist painters. "
+        "Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, "
+        "it should be creative, clear, or both. Ensure it isnt gibberish."
+    ),
+}
+
 class ImageGenerationError(Exception):
     """Custom exception for image generation errors."""
     pass
@@ -50,6 +64,7 @@ class ImageGenerator:
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
         self.model = model
+        self.base_prompt = IMAGE_GENERATION_BASE_PROMPTS[model]
         
     async def generate_image(
         self, 
@@ -80,9 +95,7 @@ class ImageGenerator:
         try:
             logger.info(f"Generating image for prompt: '{prompt}' with size: {size}")
             
-            # Consistent base prompt for the agent
-            base_prompt = "You are a professional graphic designer and illustrator inspired by impressionist painters. Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, it should be creative, clear, or both. Ensure it isnt gibberish."
-            full_prompt = f"{base_prompt} {prompt}"
+            full_prompt = f"{self.base_prompt} {prompt}"
             response = self.client.images.generate(
                 model=self.model,
                 prompt=full_prompt,

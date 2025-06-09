@@ -5,7 +5,7 @@ import pytest
 import base64
 from typing import Tuple, Generator
 from unittest import IsolatedAsyncioTestCase
-from app.image_generator import ImageGenerator
+from app.image_generator import ImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
 
 # Module-level fixture to patch openai.OpenAI for all async tests
 @pytest.fixture(autouse=True, scope="module")
@@ -79,7 +79,7 @@ class TestImageGeneratorAsync(IsolatedAsyncioTestCase):
         
     def _verify_openai_call(self, prompt: str, size: str = "256x256"):
         """Verify OpenAI API call with expected parameters."""
-        expected_prompt = f"You are a graphic designer with impressionist tendencies. Design a circular image for a 1.5 inch diameter sticker. Limit any text to one or two words max if any. {prompt}"
+        expected_prompt = f"{IMAGE_GENERATION_BASE_PROMPTS['dall-e-2']} {prompt}"
         self.mock_openai_instance.images.generate.assert_called_once_with(
             model="dall-e-2",
             prompt=expected_prompt,
