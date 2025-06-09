@@ -9,8 +9,12 @@ from app.models import Product, ContentType
 # Mock os.makedirs for ensure_output_dir
 @patch('os.makedirs')
 def test_ensure_output_dir_creates_directory(mock_makedirs):
+    """Test that ensure_output_dir creates the necessary directories."""
     ensure_output_dir()
-    mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
+    # Verify that makedirs was called for the base directory and subdirectories
+    mock_makedirs.assert_any_call(os.getenv('OUTPUT_DIR', 'outputs'), exist_ok=True)
+    mock_makedirs.assert_any_call(os.path.join(os.getenv('OUTPUT_DIR', 'outputs'), 'screenshots'), exist_ok=True)
+    mock_makedirs.assert_any_call(os.path.join(os.getenv('OUTPUT_DIR', 'outputs'), 'images'), exist_ok=True)
 
 # Tests for save_to_csv
 @patch('os.makedirs')
