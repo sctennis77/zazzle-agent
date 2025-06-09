@@ -39,7 +39,7 @@ class ImageGenerator:
     async def generate_image(
         self, 
         prompt: str, 
-        size: str = "256x256", 
+        size: str = "1024x1024", 
         template_id: Optional[str] = None
     ) -> Tuple[str, str]:
         """
@@ -47,7 +47,7 @@ class ImageGenerator:
         
         Args:
             prompt: The text prompt for image generation
-            size: The size of the image to generate (default: "256x256")
+            size: The size of the image to generate (default: "1024x1024")
             template_id: Optional Zazzle template ID for naming the image file
             
         Returns:
@@ -63,8 +63,21 @@ class ImageGenerator:
         try:
             logger.info(f"Generating image for prompt: '{prompt}' with size: {size}")
             
-            # Generate image using DALL-E
-            response = self._generate_dalle_image(prompt, size)
+            # Consistent base prompt for the agent
+            base_prompt = "You are a graphic designer with impressionist tendencies. Design a circular image for a 1.5 inch diameter sticker. Limit any text to one or two words max if any."
+            full_prompt = f"{base_prompt} {prompt}"
+            response = self.client.images.generate(
+                model="dall-e-3",
+                prompt=full_prompt,
+                size=size,
+                quality="standard",
+                n=1,
+                response_format="b64_json"
+            )
+            image_data_b64 = response.data[0].b64_json
+            if not image_data_b64:
+                raise ImageGenerationError("DALL-E did not return base64 image data.")
+            logger.info("Image data successfully retrieved from DALL-E response.")
             
             # Process and store the image
             return await self._process_and_store_image(response, template_id, size)
