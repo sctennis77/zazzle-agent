@@ -3,11 +3,12 @@ import pytest
 import json
 import csv
 from unittest.mock import patch, mock_open, MagicMock, AsyncMock, Mock
-from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main, log_product_info
+from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main, log_product_info, run_generate_image_pipeline
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig
 from app.agents.reddit_agent import RedditAgent
 from app.content_generator import ContentGenerator
 from app.affiliate_linker import ZazzleAffiliateLinker
+import sys
 
 @pytest.fixture
 def mock_product_info():
@@ -146,58 +147,54 @@ async def test_run_full_pipeline_error_handling():
             # Verify RedditAgent was initialized with correct config
             mock_reddit_agent_class.assert_called_once_with(config_or_model=config.model)
 
-# Tests for main function argument parsing
 @pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='full'))
-async def test_main_full_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    await main()
-    mock_full_pipeline.assert_called_once()
-    mock_voting.assert_not_called()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_voting')
-@patch('app.main.test_reddit_comment_voting')
-@patch('app.main.test_reddit_post_comment')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('app.main.test_reddit_comment_marketing_reply')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-vote'))
-async def test_main_test_voting_mode(mock_parse_args, mock_reply, mock_marketing_comment, mock_engaging_comment, mock_post_comment, mock_comment_voting, mock_voting, mock_full_pipeline):
-    await main()
-    mock_voting.assert_called_once()
-    mock_full_pipeline.assert_not_called()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_post_comment')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-comment'))
-async def test_main_test_post_comment_mode(mock_parse_args, mock_post_comment, mock_full_pipeline):
-    await main()
-    mock_post_comment.assert_called_once()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_engaging_comment')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-engaging'))
-async def test_main_test_engaging_comment_mode(mock_parse_args, mock_engaging_comment, mock_full_pipeline):
-    await main()
-    mock_engaging_comment.assert_called_once()
-
-@pytest.mark.asyncio
-@patch('app.main.run_full_pipeline')
-@patch('app.main.test_reddit_marketing_comment')
-@patch('argparse.ArgumentParser.parse_args', return_value=MagicMock(mode='test-marketing'))
-async def test_main_test_marketing_comment_mode(mock_parse_args, mock_marketing_comment, mock_full_pipeline):
-    await main()
-    mock_marketing_comment.assert_called_once()
+class TestMain:
+    """Test the main application entry points."""
+    
+    @patch('app.main.run_full_pipeline')
+    async def test_main_full_mode(self, mock_run_full):
+        test_argv = ['script.py', '--mode', 'full']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_full.assert_called_once()
+        
+    @patch('app.main.run_generate_image_pipeline')
+    async def test_main_image_mode(self, mock_run_image):
+        test_argv = ['script.py', '--mode', 'image', '--prompt', 'Test prompt', '--model', 'dall-e-2']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_image.assert_called_once_with('Test prompt', 'dall-e-2')
+        
+    @patch('app.main.run_full_pipeline')
+    async def test_main_default_mode(self, mock_run_full):
+        test_argv = ['script.py']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_full.assert_called_once()
+        
+    @patch('app.main.run_full_pipeline')
+    async def test_main_invalid_mode(self, mock_run_full):
+        test_argv = ['script.py', '--mode', 'invalid']
+        with patch.object(sys, 'argv', test_argv):
+            with pytest.raises(SystemExit):
+                await main()
+        mock_run_full.assert_not_called()
+        
+    @patch('app.main.run_generate_image_pipeline')
+    async def test_main_image_mode_missing_prompt(self, mock_run_image, caplog):
+        test_argv = ['script.py', '--mode', 'image']
+        with patch.object(sys, 'argv', test_argv):
+            with caplog.at_level('ERROR', logger='app.main'):
+                await main()
+        assert any('prompt is required' in record.message for record in caplog.records)
+        mock_run_image.assert_not_called()
+        
+    @patch('app.main.run_generate_image_pipeline')
+    async def test_main_image_mode_default_model(self, mock_run_image):
+        test_argv = ['script.py', '--mode', 'image', '--prompt', 'Test prompt']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_image.assert_called_once_with('Test prompt', 'dall-e-3')  # Default model
 
 def test_save_to_csv():
     """Test saving product information to CSV with model and version."""

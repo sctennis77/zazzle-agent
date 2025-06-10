@@ -85,13 +85,13 @@ def log_product_info(product_info: ProductInfo):
     logger.info("\nGenerated Image URL:")
     logger.info(f"{product_info.image_url}")
 
-async def run_full_pipeline(config: PipelineConfig = None):
+async def run_full_pipeline(config: PipelineConfig = None, model: str = "dall-e-3"):
     """Run the full pipeline: find post, generate image, create product."""
     try:
         # Initialize RedditAgent with the config
         if config is None:
             config = PipelineConfig(
-                model="dall-e-3",
+                model=model,
                 zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
                 zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
                 prompt_version="1.0.0"
@@ -142,8 +142,11 @@ async def main():
         args = parser.parse_args()
 
         if args.mode == 'full':
-            await run_full_pipeline()
+            await run_full_pipeline(model=args.model)
         elif args.mode == 'image':
+            if not args.prompt:
+                logger.error("--prompt is required when running in image mode.")
+                return
             await run_generate_image_pipeline(args.prompt, args.model)
         else:
             logger.error(f"Unknown mode: {args.mode}")
