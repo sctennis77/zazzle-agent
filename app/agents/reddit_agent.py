@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class RedditAgent(ChannelAgent):
     """Reddit agent that behaves like a user to distribute content effectively."""
 
-    def __init__(self, personality: Optional[Dict[str, Any]] = None, subreddit_name: str = None):
+    def __init__(self, personality: Optional[Dict[str, Any]] = None, subreddit_name: str = None, model: str = "dall-e-2"):
         """Initialize the Reddit agent with personality traits and Reddit API client."""
         super().__init__()
         self.distribution_channel = RedditDistributionChannel()
@@ -34,8 +34,8 @@ class RedditAgent(ChannelAgent):
         # Initialize OpenAI client
         self.openai_client = openai.OpenAI()
         
-        # Initialize ImageGenerator
-        self.image_generator = ImageGenerator()
+        # Initialize ImageGenerator with specified model
+        self.image_generator = ImageGenerator(model=model)
         
         # Default personality traits
         self.personality = personality or {

@@ -17,13 +17,12 @@ logger = logging.getLogger(__name__)
 IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-2": (
         "You are a professional graphic designer and illustrator inspired by impressionist painters. "
-        "Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, "
-        "it should be creative, clear, or both. Ensure it isnt gibberish."
+        "Design an image to fill a 1.5 inch diameter round sticker. Design the picture first it must be visually appealing. "
+        "Consider the text next, but be intentional if you add text into the design. The text element must be clear and easy to read. "
     ),
     "dall-e-3": (
-        "You are a professional graphic designer and illustrator inspired by impressionist painters. "
-        "Design an image to fill a 1.5 diameter round sticker. Integrate any text content seamlessly into the image, "
-        "it should be creative, clear, or both. Ensure it isnt gibberish."
+        "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. "
+        "Design an image optimized for a 1.5 inch diameter round image on Zazzle."
     ),
 }
 
@@ -93,7 +92,7 @@ class ImageGenerator:
             raise ValueError(f"Invalid size '{size}' for model '{self.model}'. Allowed: {', '.join(self.VALID_SIZES[self.model])}")
             
         try:
-            logger.info(f"Generating image for prompt: '{prompt}' with size: {size}")
+            logger.info(f"Generating image for prompt: '{prompt}' with size: {size} with model: {self.model} ")
             
             full_prompt = f"{self.base_prompt} {prompt}"
             response = self.client.images.generate(
@@ -132,7 +131,7 @@ class ImageGenerator:
         """
         try:
             return self.client.images.generate(
-                model="dall-e-2",
+                model=self.model,
                 prompt=prompt,
                 size=size,
                 n=1,

@@ -27,7 +27,7 @@ test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
 run-full:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)"
 
 run-test-voting:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main test-voting

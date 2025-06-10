@@ -62,73 +62,70 @@ class TestImageGenerator(unittest.TestCase):
                 ImageGenerator()
 
 @pytest.mark.asyncio
-class TestImageGeneratorAsync(IsolatedAsyncioTestCase):
-    """Test cases for the ImageGenerator class."""
-    
-    async def asyncSetUp(self):
-        """Set up test fixtures."""
-        self.image_generator = ImageGenerator(model="dall-e-2")
-        self.mock_openai_instance = MagicMock()
-        self.image_generator.client = self.mock_openai_instance
-        
-        # Setup Imgur mocks
-        self.mock_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', 
-                                     return_value=("https://i.imgur.com/test.png", "test.png")).start()
-        self.mock_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', 
-                                   return_value="test.png").start()
-        
-    def _verify_openai_call(self, prompt: str, size: str = "256x256"):
-        """Verify OpenAI API call with expected parameters."""
-        expected_prompt = f"{IMAGE_GENERATION_BASE_PROMPTS['dall-e-2']} {prompt}"
-        self.mock_openai_instance.images.generate.assert_called_once_with(
-            model="dall-e-2",
-            prompt=expected_prompt,
-            size=size,
-            n=1,
-            response_format="b64_json"
-        )
-        
-    def _verify_imgur_calls(self, image_data: bytes, expected_filename=None):
-        """Verify Imgur API calls."""
-        self.mock_imgur_save.assert_called_once_with(image_data, ANY, subdirectory="generated_products")
-        self.mock_imgur_upload.assert_called_once_with(ANY)
-        
-    @patch('httpx.AsyncClient')
-    async def test_generate_image_success(self, mock_httpx):
-        """Test successful image generation and storage."""
-        # Mock OpenAI response
-        self.mock_openai_instance.images.generate.return_value = MagicMock(
-            data=[MagicMock(b64_json='Zm9vYmFy')]
-        )
-        
-        # Test image generation
-        imgur_url, local_path = await self.image_generator.generate_image('test prompt')
-        
-        # Verify calls
-        self._verify_openai_call('test prompt')
-        self._verify_imgur_calls(base64.b64decode('Zm9vYmFy'))
-        
-    @patch('httpx.AsyncClient')
-    async def test_generate_image_custom_size(self, mock_httpx):
-        """Test image generation with custom size."""
-        # Mock successful responses
-        self.mock_openai_instance.images.generate.return_value = MagicMock(
-            data=[MagicMock(b64_json='Zm9vYmFy')]
-        )
-        
-        # Test with custom size
-        await self.image_generator.generate_image('test prompt', size="512x512")
-        
-        # Verify calls
-        self._verify_openai_call('test prompt', size="512x512")
-        self._verify_imgur_calls(base64.b64decode('Zm9vYmFy'))
-        
-    @patch('httpx.AsyncClient')
-    async def test_generate_image_failure(self, mock_httpx):
-        """Test image generation failure."""
-        # Mock OpenAI error
-        self.mock_openai_instance.images.generate.side_effect = Exception("API Error")
-        
-        # Test error handling
-        with self.assertRaises(Exception):
-            await self.image_generator.generate_image('test prompt')
+@pytest.mark.parametrize("model,default_size,expected_prompt_base,custom_size", [
+    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"], "512x512"),
+    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"], "1024x1792"),
+])
+@patch('httpx.AsyncClient')
+async def test_generate_image_success(mock_httpx, model, default_size, expected_prompt_base, custom_size):
+    image_generator = ImageGenerator(model=model)
+    mock_openai_instance = MagicMock()
+    image_generator.client = mock_openai_instance
+    mock_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', return_value="test.png").start()
+    mock_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', return_value=("https://i.imgur.com/test.png", "test.png")).start()
+    mock_openai_instance.images.generate.return_value = MagicMock(data=[MagicMock(b64_json='Zm9vYmFy')])
+    imgur_url, local_path = await image_generator.generate_image('test prompt')
+    expected_prompt = f"{expected_prompt_base} test prompt"
+    mock_openai_instance.images.generate.assert_called_once_with(
+        model=model,
+        prompt=expected_prompt,
+        size=default_size,
+        n=1,
+        response_format="b64_json"
+    )
+    mock_imgur_save.assert_called_once_with(base64.b64decode('Zm9vYmFy'), ANY, subdirectory="generated_products")
+    mock_imgur_upload.assert_called_once_with(ANY)
+    patch.stopall()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model,default_size,expected_prompt_base,custom_size", [
+    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"], "512x512"),
+    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"], "1024x1792"),
+])
+@patch('httpx.AsyncClient')
+async def test_generate_image_custom_size(mock_httpx, model, default_size, expected_prompt_base, custom_size):
+    image_generator = ImageGenerator(model=model)
+    mock_openai_instance = MagicMock()
+    image_generator.client = mock_openai_instance
+    mock_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', return_value="test.png").start()
+    mock_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', return_value=("https://i.imgur.com/test.png", "test.png")).start()
+    mock_openai_instance.images.generate.return_value = MagicMock(data=[MagicMock(b64_json='Zm9vYmFy')])
+    await image_generator.generate_image('test prompt', size=custom_size)
+    expected_prompt = f"{expected_prompt_base} test prompt"
+    mock_openai_instance.images.generate.assert_called_once_with(
+        model=model,
+        prompt=expected_prompt,
+        size=custom_size,
+        n=1,
+        response_format="b64_json"
+    )
+    mock_imgur_save.assert_called_once_with(base64.b64decode('Zm9vYmFy'), ANY, subdirectory="generated_products")
+    mock_imgur_upload.assert_called_once_with(ANY)
+    patch.stopall()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model,default_size,expected_prompt_base,custom_size", [
+    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"], "512x512"),
+    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"], "1024x1792"),
+])
+@patch('httpx.AsyncClient')
+async def test_generate_image_failure(mock_httpx, model, default_size, expected_prompt_base, custom_size):
+    image_generator = ImageGenerator(model=model)
+    mock_openai_instance = MagicMock()
+    image_generator.client = mock_openai_instance
+    mock_imgur_save = patch('app.clients.imgur_client.ImgurClient.save_image_locally', return_value="test.png").start()
+    mock_imgur_upload = patch('app.clients.imgur_client.ImgurClient.upload_image', return_value=("https://i.imgur.com/test.png", "test.png")).start()
+    mock_openai_instance.images.generate.side_effect = Exception("API Error")
+    with pytest.raises(Exception):
+        await image_generator.generate_image('test prompt')
+    patch.stopall()

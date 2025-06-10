@@ -91,10 +91,10 @@ def save_to_csv(products: List, filename: str):
         logger.error(f"Error saving to CSV: {str(e)}")
         raise
 
-async def run_full_pipeline():
+async def run_full_pipeline(model: str = "dall-e-2"):
     """Run the complete Reddit-to-Zazzle dynamic product flow."""
     products = []
-    reddit_agent = RedditAgent()
+    reddit_agent = RedditAgent(model=model)
     product_info = await reddit_agent.find_and_create_product()
     if product_info:
         products.append(product_info)
@@ -338,7 +338,7 @@ async def main():
     ensure_output_dir()
 
     if args.mode == 'full':
-        await run_full_pipeline()
+        await run_full_pipeline(model=args.model)
     elif args.mode == 'image':
         await run_generate_image_pipeline(args.prompt, args.model)
     elif args.mode == 'test-vote':
