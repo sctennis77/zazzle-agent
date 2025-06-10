@@ -249,7 +249,6 @@ class TestIntegrationAsync:
         mock_reddit_agent_instance.interact_with_votes = AsyncMock(return_value="upvote")
         
         # Run the test voting function
-        from app.main import test_reddit_voting
         await test_reddit_voting()
         
         # Verify the Reddit agent was used correctly

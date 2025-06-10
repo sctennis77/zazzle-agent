@@ -10,7 +10,6 @@ help:
 	@echo "  make install      - Install dependencies into venv"
 	@echo "  make test         - Run the test suite with coverage"
 	@echo "  make run-full     - Run the complete product generation pipeline"
-	@echo "  make run-test-voting - Test Reddit agent voting behavior"
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
 	@echo "  make docker-run   - Run Docker container"
@@ -31,12 +30,6 @@ test-pattern:
 
 run-full:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)"
-
-run-test-voting:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main test-voting
-
-# Default run target (alias for run-full)
-run: run-full
 
 run-generate-image:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode image --prompt "$(IMAGE_PROMPT)" --model "$(MODEL)"

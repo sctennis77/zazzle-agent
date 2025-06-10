@@ -28,15 +28,157 @@ This project automates the process of dynamically generating products on Zazzle 
 
 ```mermaid
 graph TD
-    A[Reddit Agent] -->|Monitors| B[r/golf Subreddit]
-    B -->|Identifies Opportunity| A
-    A -->|LLM Analysis| F[OpenAI GPT]
-    F -->|Product Idea| A
-    A -->|Design Request| C[Product Designer]
-    C -->|API Call| D[Zazzle API]
-    D -->|Product Created| E[Zazzle Store]
-    A -->|Marketing Comment| B
+    subgraph "Content Discovery"
+        RC[RedditContext] --> |post_id, title, content| PI[ProductIdea]
+        RC --> |subreddit, comments| RA[RedditAgent]
+    end
+
+    subgraph "Product Generation"
+        PI --> |theme, image_description| IG[ImageGenerator]
+        IG --> |imgur_url, local_path| DI[DesignInstructions]
+        DI --> |image, theme, text| ZPD[ZazzleProductDesigner]
+        ZPD --> |product_id, name, urls| PF[ProductInfo]
+    end
+
+    subgraph "Distribution"
+        PF --> |product_url, affiliate_link| DM[DistributionMetadata]
+        DM --> |channel, status| DC[DistributionChannel]
+        DC --> |published_at, channel_url| DS[DistributionStatus]
+    end
+
+    subgraph "Configuration"
+        PC[PipelineConfig] --> |model, template_id| IG
+        PC --> |tracking_code| ZPD
+    end
+
+    subgraph "Data Flow"
+        RC --> |serialize| JSON[JSON Storage]
+        PF --> |to_csv| CSV[CSV Storage]
+        DM --> |to_dict| DB[Database]
+    end
+
+    classDef model fill:#f9f,stroke:#333,stroke-width:2px
+    classDef agent fill:#bbf,stroke:#333,stroke-width:2px
+    classDef storage fill:#bfb,stroke:#333,stroke-width:2px
+    classDef config fill:#fbb,stroke:#333,stroke-width:2px
+
+    class RC,PI,PF,DM model
+    class RA,ZPD,IG,DC agent
+    class JSON,CSV,DB storage
+    class PC config
 ```
+
+## Component Details
+
+### Content Discovery
+- **RedditContext**: Captures all relevant information from a Reddit post, including:
+  - Post ID, title, and content
+  - Subreddit information
+  - Comments and engagement metrics
+  - URL and metadata
+- **ProductIdea**: Represents the initial concept for a product, containing:
+  - Theme and image description
+  - Design instructions
+  - Source Reddit context
+  - Model and prompt version information
+
+### Product Generation
+- **ImageGenerator**: Creates product images using DALL-E models:
+  - Accepts theme and image descriptions
+  - Generates images using specified DALL-E model
+  - Stores images locally and on Imgur
+  - Returns image URLs and local paths
+- **DesignInstructions**: Contains all parameters needed for product creation:
+  - Image URL and theme
+  - Text and color specifications
+  - Product type and quantity
+  - Template and model information
+- **ZazzleProductDesigner**: Creates products on Zazzle:
+  - Uses design instructions to configure products
+  - Integrates with Zazzle's Create-a-Product API
+  - Generates affiliate links
+  - Returns complete product information
+
+### Distribution
+- **DistributionMetadata**: Tracks content distribution:
+  - Channel-specific information
+  - Publication status and timestamps
+  - Error handling and recovery
+  - URL and ID tracking
+- **DistributionChannel**: Manages content publishing:
+  - Handles different distribution platforms
+  - Manages rate limiting and quotas
+  - Tracks engagement metrics
+  - Handles error recovery
+- **DistributionStatus**: Monitors distribution state:
+  - Tracks pending, published, and failed states
+  - Manages retry logic
+  - Records timestamps and metadata
+
+### Configuration
+- **PipelineConfig**: Central configuration management:
+  - AI model selection (DALL-E 2/3)
+  - Zazzle template and tracking settings
+  - Prompt versioning
+  - System-wide parameters
+
+### Data Flow
+- **JSON Storage**: Stores Reddit context and metadata
+- **CSV Storage**: Records product information and metrics
+- **Database**: Maintains distribution status and history
+
+## Data Model Relationships
+
+1. **Content to Product Flow**:
+   ```
+   RedditContext → ProductIdea → DesignInstructions → ProductInfo
+   ```
+   - Each step enriches the data with additional information
+   - Maintains traceability back to source content
+   - Preserves metadata throughout the pipeline
+
+2. **Product to Distribution Flow**:
+   ```
+   ProductInfo → DistributionMetadata → DistributionStatus
+   ```
+   - Tracks product lifecycle
+   - Manages distribution state
+   - Records engagement metrics
+
+3. **Configuration Flow**:
+   ```
+   PipelineConfig → (ImageGenerator, ZazzleProductDesigner)
+   ```
+   - Centralizes configuration
+   - Ensures consistency across components
+   - Manages versioning and updates
+
+## Error Handling and Recovery
+
+The system implements comprehensive error handling at each stage:
+
+1. **Content Discovery**:
+   - Validates Reddit API responses
+   - Handles rate limiting
+   - Manages API timeouts
+
+2. **Product Generation**:
+   - Retries failed image generation
+   - Validates design instructions
+   - Handles Zazzle API errors
+
+3. **Distribution**:
+   - Tracks failed distributions
+   - Implements retry logic
+   - Maintains error logs
+
+## Monitoring and Logging
+
+Each component includes detailed logging:
+- Operation status and timing
+- Error conditions and recovery
+- Performance metrics
+- Data flow tracking
 
 ## Features
 

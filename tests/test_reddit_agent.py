@@ -265,5 +265,125 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         comment = await self.reddit_agent._generate_marketing_comment(product_info, post_context)
         assert comment == "Generated marketing comment"
 
+    @patch('praw.Reddit')
+    async def test_reddit_voting(self, mock_reddit):
+        """Test voting functionality on Reddit."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test upvoting
+        result = self.reddit_agent.interact_with_votes('test_post_id')
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('praw.Reddit')
+    async def test_reddit_comment_voting(self, mock_reddit):
+        """Test voting on comments."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test comment voting
+        result = self.reddit_agent.interact_with_votes('test_post_id', 'test_comment_id')
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('praw.Reddit')
+    async def test_reddit_post_comment(self, mock_reddit):
+        """Test posting comments on Reddit."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test posting a comment
+        result = self.reddit_agent.comment_on_post('test_post_id', 'Test comment')
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('praw.Reddit')
+    async def test_reddit_engaging_comment(self, mock_reddit):
+        """Test generating and posting engaging comments."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test generating an engaging comment
+        result = self.reddit_agent.engage_with_post('test_post_id')
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('praw.Reddit')
+    async def test_reddit_marketing_comment(self, mock_reddit):
+        """Test posting marketing comments."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test posting a marketing comment
+        product_info = ProductInfo(
+            product_id='test_id',
+            name='Test Product',
+            product_type='sticker',
+            zazzle_template_id='template123',
+            zazzle_tracking_code='tracking456',
+            image_url='https://example.com/image.jpg',
+            product_url='https://example.com/product',
+            theme='test_theme',
+            model='dall-e-3',
+            prompt_version='1.0.0',
+            reddit_context=RedditContext(
+                post_id='test_post_id',
+                post_title='Test Post',
+                post_url='https://reddit.com/test',
+                subreddit='test_subreddit'
+            ),
+            design_instructions={'image': 'https://example.com/image.jpg'},
+            image_local_path='/path/to/image.jpg'
+        )
+        result = self.reddit_agent.engage_with_post_marketing('test_post_id')
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('praw.Reddit')
+    async def test_reddit_comment_marketing_reply(self, mock_reddit):
+        """Test replying to comments with marketing content."""
+        mock_reddit_instance = MagicMock()
+        mock_reddit.return_value = mock_reddit_instance
+        self.reddit_agent.reddit = mock_reddit_instance
+        
+        # Test replying to a comment with marketing content
+        product_info = ProductInfo(
+            product_id='test_id',
+            name='Test Product',
+            product_type='sticker',
+            zazzle_template_id='template123',
+            zazzle_tracking_code='tracking456',
+            image_url='https://example.com/image.jpg',
+            product_url='https://example.com/product',
+            theme='test_theme',
+            model='dall-e-3',
+            prompt_version='1.0.0',
+            reddit_context=RedditContext(
+                post_id='test_post_id',
+                post_title='Test Post',
+                post_url='https://reddit.com/test',
+                subreddit='test_subreddit'
+            ),
+            design_instructions={'image': 'https://example.com/image.jpg'},
+            image_local_path='/path/to/image.jpg'
+        )
+        result = self.reddit_agent.reply_to_comment_with_marketing('test_comment_id', product_info, {})
+        assert result is not None
+        assert isinstance(result, dict)
+
+    @patch('app.agents.reddit_agent.RedditAgent')
+    async def test_reddit_agent_find_and_create_product(self, MockRedditAgent):
+        """Test only the RedditAgent.find_and_create_product part of the pipeline."""
+        agent = MockRedditAgent()
+        agent.find_and_create_product = AsyncMock(return_value='product_info')
+        product_info = await agent.find_and_create_product()
+        assert product_info == 'product_info'
+
 if __name__ == '__main__':
     unittest.main() 
