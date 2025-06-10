@@ -61,10 +61,24 @@ class TestImageGenerator(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ImageGenerator()
 
+    def test_get_prompt_info(self):
+        """Test getting prompt info for different models."""
+        # Test DALL-E 2
+        image_generator = ImageGenerator(model="dall-e-2")
+        prompt_info = image_generator.get_prompt_info()
+        assert prompt_info["version"] == "1.0.0"
+        assert "You are a incredibly talented designer" in prompt_info["prompt"]
+        
+        # Test DALL-E 3
+        image_generator = ImageGenerator(model="dall-e-3")
+        prompt_info = image_generator.get_prompt_info()
+        assert prompt_info["version"] == "1.0.0"
+        assert "You are a incredibly talented designer" in prompt_info["prompt"]
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("model,default_size,expected_prompt_base,custom_size", [
-    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"], "512x512"),
-    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"], "1024x1792"),
+    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["prompt"], "512x512"),
+    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["prompt"], "1024x1792"),
 ])
 @patch('httpx.AsyncClient')
 async def test_generate_image_success(mock_httpx, model, default_size, expected_prompt_base, custom_size):
@@ -89,8 +103,8 @@ async def test_generate_image_success(mock_httpx, model, default_size, expected_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("model,default_size,expected_prompt_base,custom_size", [
-    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"], "512x512"),
-    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"], "1024x1792"),
+    ("dall-e-2", "256x256", IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["prompt"], "512x512"),
+    ("dall-e-3", "1024x1024", IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["prompt"], "1024x1792"),
 ])
 @patch('httpx.AsyncClient')
 async def test_generate_image_custom_size(mock_httpx, model, default_size, expected_prompt_base, custom_size):

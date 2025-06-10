@@ -3,7 +3,7 @@ import pytest
 import json
 import csv
 from unittest.mock import patch, mock_open, MagicMock, AsyncMock
-from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main
+from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main, log_product_info
 from app.models import Product, ContentType
 
 # Mock os.makedirs for ensure_output_dir
@@ -24,43 +24,31 @@ def test_save_to_csv_success(mock_file_open, mock_dict_writer, mock_makedirs):
     mock_writer_instance = MagicMock()
     mock_dict_writer.return_value = mock_writer_instance
 
-    products_data = [
-        {'product_url': 'url1', 'text': 'text1', 'image_url': 'img1', 'reddit_context': {'id': 'r1', 'title': 't1', 'url': 'ru1'}},
-        Product(product_id='p2', name='Product 2', affiliate_link='url2', content='text2')
-    ]
-    save_to_csv(products_data, 'test.csv')
+    product_data = {
+        'product_url': 'url1',
+        'text': 'text1',
+        'image_url': 'img1',
+        'reddit_context': {'id': 'r1', 'title': 't1', 'url': 'ru1'}
+    }
+    save_to_csv(product_data)
 
-    mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
-    mock_file_open.assert_called_once_with('outputs/test.csv', 'w', newline='')
+    mock_file_open.assert_called_once_with('processed_products.csv', 'a', newline='')
     mock_dict_writer.assert_called_once()
     assert mock_writer_instance.writeheader.called
-    assert mock_writer_instance.writerow.call_count == 2
+    assert mock_writer_instance.writerow.call_count == 1
 
-    # Verify calls for the first product (dictionary)
-    first_call_args = mock_writer_instance.writerow.call_args_list[0].args[0]
-    assert first_call_args['product_url'] == 'url1'
-    assert first_call_args['text_content'] == 'text1'
-    assert first_call_args['image_url'] == 'img1'
-    assert first_call_args['reddit_post_id'] == 'r1'
-    assert first_call_args['reddit_post_title'] == 't1'
-    assert first_call_args['reddit_post_url'] == 'ru1'
-
-    # Verify calls for the second product (Product object)
-    second_call_args = mock_writer_instance.writerow.call_args_list[1].args[0]
-    assert second_call_args['product_url'] == 'url2'
-    assert second_call_args['text_content'] == 'text2'
-    assert second_call_args['image_url'] is None  # Product object doesn't have image_url by default, screenshot_path is None
-    assert second_call_args['reddit_post_id'] == ''
-    assert second_call_args['reddit_post_title'] == ''
-    assert second_call_args['reddit_post_url'] == ''
+    # Verify calls for the product
+    call_args = mock_writer_instance.writerow.call_args[0][0]
+    assert call_args['product_url'] == 'url1'
+    assert call_args['text'] == 'text1'
+    assert call_args['image_url'] == 'img1'
 
 @patch('os.makedirs')
 @patch('builtins.open', side_effect=IOError('Disk full'))
 def test_save_to_csv_io_error(mock_open, mock_makedirs):
     with pytest.raises(IOError):
-        save_to_csv([], 'test.csv')
-    mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
-    mock_open.assert_called_once()
+        save_to_csv({})
+    mock_open.assert_called_once_with('processed_products.csv', 'a', newline='')
 
 # Tests for run_full_pipeline
 @pytest.mark.asyncio
@@ -87,12 +75,10 @@ async def test_run_full_pipeline_success(MockRedditAgent, mock_save_to_csv):
 
     # Verify save_to_csv was called with the correct data
     mock_save_to_csv.assert_called_once()
-    called_products, called_filename = mock_save_to_csv.call_args[0]
-    assert called_filename == "processed_products.csv"
-    assert len(called_products) == 1
-    assert called_products[0]['product_url'] == 'http://zazzle.com/golf_product'
-    assert called_products[0]['text'] == 'Awesome golf product'
-    assert called_products[0]['theme'] == 'golf'
+    called_product = mock_save_to_csv.call_args[0][0]
+    assert called_product['product_url'] == 'http://zazzle.com/golf_product'
+    assert called_product['text'] == 'Awesome golf product'
+    assert called_product['theme'] == 'golf'
 
 @pytest.mark.asyncio
 @patch('app.main.save_to_csv')
@@ -254,4 +240,86 @@ async def test_reddit_comment_voting_found_post_and_comment(mock_logger_info, Mo
     assert any(f"URL: https://reddit.com{mock_trending_post.permalink}" in msg for msg in log_msgs)
     assert any("Found comment" in msg for msg in log_msgs)
     assert any(f"Text: {mock_comment.body}" in msg for msg in log_msgs)
-    assert any("Action taken" in msg for msg in log_msgs) 
+    assert any("Action taken" in msg for msg in log_msgs)
+
+def test_save_to_csv():
+    """Test saving product information to CSV with model and version."""
+    # Test data
+    product_info = {
+        'theme': 'test_theme',
+        'text': 'test_text',
+        'color': 'test_color',
+        'quantity': '12',
+        'post_title': 'test_title',
+        'post_url': 'test_url',
+        'product_url': 'test_product_url',
+        'image_url': 'test_image_url',
+        'model': 'dall-e-3',
+        'prompt_version': '1.0.0',
+        'product_type': 'sticker',
+        'zazzle_template_id': 'template123',
+        'zazzle_tracking_code': 'tracking456',
+        'design_instructions': 'Create a cheerful cartoon golf ball with sunglasses.'
+    }
+    
+    # Save to CSV
+    save_to_csv(product_info)
+    
+    # Verify CSV file exists and contains correct data
+    assert os.path.exists('processed_products.csv')
+    
+    with open('processed_products.csv', 'r') as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        assert len(rows) > 0
+        last_row = rows[-1]
+        assert last_row['theme'] == 'test_theme'
+        assert last_row['text'] == 'test_text'
+        assert last_row['color'] == 'test_color'
+        assert last_row['quantity'] == '12'
+        assert last_row['post_title'] == 'test_title'
+        assert last_row['post_url'] == 'test_url'
+        assert last_row['product_url'] == 'test_product_url'
+        assert last_row['image_url'] == 'test_image_url'
+        assert last_row['model'] == 'dall-e-3'
+        assert last_row['prompt_version'] == '1.0.0'
+        assert last_row['product_type'] == 'sticker'
+        assert last_row['zazzle_template_id'] == 'template123'
+        assert last_row['zazzle_tracking_code'] == 'tracking456'
+        assert last_row['design_instructions'] == 'Create a cheerful cartoon golf ball with sunglasses.'
+    
+    # Clean up
+    os.remove('processed_products.csv')
+
+def test_save_to_csv_missing_fields():
+    """Test saving product information with missing fields."""
+    # Test data with missing fields
+    product_info = {
+        'theme': 'test_theme',
+        'product_url': 'test_product_url'
+    }
+    
+    # Save to CSV
+    save_to_csv(product_info)
+    
+    # Verify CSV file exists and contains correct data with empty fields
+    assert os.path.exists('processed_products.csv')
+    
+    with open('processed_products.csv', 'r') as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        assert len(rows) > 0
+        last_row = rows[-1]
+        assert last_row['theme'] == 'test_theme'
+        assert last_row['text'] == ''
+        assert last_row['color'] == ''
+        assert last_row['quantity'] == ''
+        assert last_row['post_title'] == ''
+        assert last_row['post_url'] == ''
+        assert last_row['product_url'] == 'test_product_url'
+        assert last_row['image_url'] == ''
+        assert last_row['model'] == ''
+        assert last_row['prompt_version'] == ''
+    
+    # Clean up
+    os.remove('processed_products.csv') 

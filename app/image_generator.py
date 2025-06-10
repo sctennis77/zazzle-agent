@@ -13,17 +13,16 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Versioned base prompts for image generation
+# Base prompts for image generation with versioning
 IMAGE_GENERATION_BASE_PROMPTS = {
-    "dall-e-2": (
-        "You are a professional graphic designer and illustrator inspired by impressionist painters. "
-        "Design an image to fill a 1.5 inch diameter round sticker. Design the picture first it must be visually appealing. "
-        "Consider the text next, but be intentional if you add text into the design. The text element must be clear and easy to read. "
-    ),
-    "dall-e-3": (
-        "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. "
-        "Design an image optimized for a 1.5 inch diameter round image on Zazzle."
-    ),
+    "dall-e-2": {
+        "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
+        "version": "1.0.0"
+    },
+    "dall-e-3": {
+        "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
+        "version": "1.0.0"
+    }
 }
 
 class ImageGenerationError(Exception):
@@ -63,7 +62,15 @@ class ImageGenerator:
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
         self.model = model
-        self.base_prompt = IMAGE_GENERATION_BASE_PROMPTS[model]
+        
+    def get_prompt_info(self) -> Dict[str, str]:
+        """
+        Get the current prompt information for the model.
+        
+        Returns:
+            Dict containing the prompt and version for the current model.
+        """
+        return IMAGE_GENERATION_BASE_PROMPTS[self.model]
         
     async def generate_image(
         self, 
@@ -94,7 +101,10 @@ class ImageGenerator:
         try:
             logger.info(f"Generating image for prompt: '{prompt}' with size: {size} with model: {self.model} ")
             
-            full_prompt = f"{self.base_prompt} {prompt}"
+            # Get the base prompt for the model
+            base_prompt = IMAGE_GENERATION_BASE_PROMPTS[self.model]["prompt"]
+            full_prompt = f"{base_prompt} {prompt}"
+            
             response = self.client.images.generate(
                 model=self.model,
                 prompt=full_prompt,

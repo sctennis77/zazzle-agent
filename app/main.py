@@ -3,7 +3,7 @@ import logging
 import json
 import glob
 import argparse
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import pandas as pd
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -16,6 +16,7 @@ from app.models import Product, ContentType
 from app.agents.reddit_agent import RedditAgent
 from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
 from app.image_generator import ImageGenerator
+from app.utils.logging_config import setup_logging
 
 # Configure logging
 logging.basicConfig(
@@ -42,91 +43,84 @@ def ensure_output_dir():
     os.makedirs(os.path.join(output_dir, 'images'), exist_ok=True)
     logger.info("Ensured outputs directory exists")
 
-def save_to_csv(products: List, filename: str):
-    """Save products to a CSV file with detailed information."""
-    try:
-        os.makedirs('outputs', exist_ok=True)
-        with open(f'outputs/{filename}', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                'product_url',
-                'text_content',
-                'image_url',
-                'reddit_post_id',
-                'reddit_post_title',
-                'reddit_post_url',
-                'created_at',
-                'has_reddit_context'
-            ])
+def save_to_csv(product_info: Dict[str, Any]):
+    """Save product information to CSV file."""
+    csv_file = "processed_products.csv"
+    file_exists = os.path.isfile(csv_file)
+    
+    # Ensure all required fields are present
+    required_fields = ['theme', 'text', 'color', 'quantity', 'post_title', 'post_url', 
+                      'product_url', 'image_url', 'model', 'prompt_version', 'product_type', 'zazzle_template_id', 'zazzle_tracking_code', 'design_instructions']
+    
+    for field in required_fields:
+        if field not in product_info:
+            product_info[field] = ''
+    
+    # Filter out extra fields not in required_fields
+    filtered_product_info = {k: product_info[k] for k in required_fields if k in product_info}
+    
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=required_fields)
+        if not file_exists:
             writer.writeheader()
-            
-            for product in products:
-                # Support both dict and Product object
-                if hasattr(product, 'to_dict'):
-                    product_dict = product.to_dict()
-                    product_url = product_dict.get('affiliate_link', '')
-                    text_content = product_dict.get('content', '')
-                    image_url = product_dict.get('screenshot_path', '') # Assuming screenshot_path can be image_url
-                else:
-                    product_dict = product
-                    product_url = product_dict.get('product_url', '')
-                    text_content = product_dict.get('text', '')
-                    image_url = product_dict.get('image_url', '')
+        writer.writerow(filtered_product_info)
+    
+    logger.info(f"Saved {len(filtered_product_info)} products to {csv_file}")
 
-                reddit_context = product_dict.get('reddit_context', {})
-                has_reddit_context = bool(reddit_context and reddit_context.get('id'))
-                
-                writer.writerow({
-                    'product_url': product_url,
-                    'text_content': text_content,
-                    'image_url': image_url,
-                    'reddit_post_id': reddit_context.get('id', ''),
-                    'reddit_post_title': reddit_context.get('title', ''),
-                    'reddit_post_url': reddit_context.get('url', ''),
-                    'created_at': datetime.now(timezone.utc).isoformat(),
-                    'has_reddit_context': has_reddit_context
-                })
-        
-        logger.info(f"Saved {len(products)} products to {filename}")
-    except Exception as e:
-        logger.error(f"Error saving to CSV: {str(e)}")
-        raise
+def log_product_info(product_info: Dict[str, Any]):
+    """Log product information in a readable format."""
+    logger.info("\nGenerated Product Info:")
+    logger.info(f"Theme: {product_info.get('theme', '')}")
+    logger.info(f"Text: {product_info.get('text', '')}")
+    logger.info(f"Color: {product_info.get('color', '')}")
+    logger.info(f"Quantity: {product_info.get('quantity', '')}")
+    logger.info(f"Model: {product_info.get('model', '')}")
+    logger.info(f"Prompt Version: {product_info.get('prompt_version', '')}")
+    
+    logger.info("\nReddit Context:")
+    logger.info(f"Post Title: {product_info.get('post_title', '')}")
+    logger.info(f"Post URL: {product_info.get('post_url', '')}")
+    
+    logger.info("\nProduct URL:")
+    logger.info("To view and customize the product, open this URL in your browser:")
+    logger.info(f"{product_info.get('product_url', '')}")
+    
+    logger.info("\nGenerated Image URL:")
+    logger.info(f"{product_info.get('image_url', '')}")
 
 async def run_full_pipeline(model: str = "dall-e-2"):
-    """Run the complete Reddit-to-Zazzle dynamic product flow."""
-    products = []
-    reddit_agent = RedditAgent(model=model)
-    product_info = await reddit_agent.find_and_create_product()
-    if product_info:
-        products.append(product_info)
-        save_to_csv(products, "processed_products.csv")
-        logger.info("\nGenerated Product Info:")
-        logger.info(f"Theme: {product_info.get('theme', 'default')}")
-        logger.info(f"Text: {product_info.get('text', '')}")
-        logger.info(f"Color: {product_info.get('color', 'Blue')}")
-        logger.info(f"Quantity: {product_info.get('quantity', 12)}")
+    """Run the full pipeline: find post, generate image, create product."""
+    try:
+        # Initialize RedditAgent with the specified model
+        reddit_agent = RedditAgent(model=model)
         
-        reddit_context = product_info.get('reddit_context', {})
-        if reddit_context and reddit_context.get('id'):
-            logger.info("\nReddit Context:")
-            logger.info(f"Post Title: {reddit_context.get('title', '')}")
-            logger.info(f"Post URL: {reddit_context.get('url', '')}")
+        # Find a post and create a product
+        product_info = await reddit_agent.find_and_create_product()
+        
+        if product_info:
+            # Get prompt info from the image generator
+            prompt_info = reddit_agent.image_generator.get_prompt_info()
+            
+            # Add model and version info to the product info
+            product_info.update({
+                'model': model,
+                'prompt_version': prompt_info['version']
+            })
+            
+            # Save to CSV
+            save_to_csv(product_info)
+            
+            # Log the results
+            log_product_info(product_info)
+            
+            return product_info
         else:
-            logger.info("\nNote: This product was created without a Reddit post context.")
-        
-        logger.info("\nProduct URL:")
-        logger.info("To view and customize the product, open this URL in your browser:")
-        logger.info(product_info.get('product_url', ''))
-
-        # Print image URL if available
-        if product_info.get('image'):
-            logger.info("\nGenerated Image URL:")
-            logger.info(product_info.get('image'))
-        if product_info.get('image_local_path'):
-            logger.info("Generated Image Local Path:")
-            logger.info(product_info.get('image_local_path'))
-
-    else:
-        logger.warning("No product was generated.")
+            logger.warning("No suitable post found for product creation")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error in full pipeline: {str(e)}")
+        raise
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):
     """Run the image generation pipeline with a given prompt."""

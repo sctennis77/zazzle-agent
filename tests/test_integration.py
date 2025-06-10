@@ -64,42 +64,41 @@ class TestIntegration(unittest.TestCase):
     @patch('app.main.os.makedirs')
     @patch('app.main.open', new_callable=mock_open)
     def test_save_to_csv_success(self, mock_open, mock_makedirs, mock_dict_writer):
-        test_products = [
-            {
-                "product_url": "http://test.com/product",
-                "text": "Test text",
-                "image_url": "http://test.com/image.png",
-                "reddit_post_id": "id1",
-                "reddit_post_title": "title1",
-                "reddit_post_url": "url1",
-                "created_at": "2023-01-01T12:00:00+00:00"
-            }
-        ]
-        save_to_csv(test_products, "test_output.csv")
-        mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
-        mock_open.assert_called_once_with('outputs/test_output.csv', 'w', newline='')
+        test_product = {
+            "product_url": "http://test.com/product",
+            "text": "Test text",
+            "image_url": "http://test.com/image.png",
+            "reddit_post_id": "id1",
+            "reddit_post_title": "title1",
+            "reddit_post_url": "url1",
+            "created_at": "2023-01-01T12:00:00+00:00",
+            "design_instructions": "Create a cheerful cartoon golf ball with sunglasses."
+        }
+        save_to_csv(test_product)
+        mock_makedirs.assert_not_called()  # No makedirs in new version
+        mock_open.assert_called_once_with('processed_products.csv', 'a', newline='')
         mock_dict_writer.assert_called_once()
         mock_dict_writer.return_value.writeheader.assert_called_once()
         mock_dict_writer.return_value.writerow.assert_called_once()
+        # Verify design_instructions is included
+        assert 'design_instructions' in mock_dict_writer.call_args[1]['fieldnames']
 
     @patch('app.main.os.makedirs')
     @patch('builtins.open', side_effect=Exception("Open error")) # Patch open to raise an exception
     def test_save_to_csv_error(self, mock_open, mock_makedirs):
-        test_products = [
-            {
-                "product_url": "http://test.com/product",
-                "text": "Test text",
-                "image_url": "http://test.com/image.png",
-                "reddit_post_id": "id1",
-                "reddit_post_title": "title1",
-                "reddit_post_url": "url1",
-                "created_at": "2023-01-01T12:00:00+00:00"
-            }
-        ]
+        test_product = {
+            "product_url": "http://test.com/product",
+            "text": "Test text",
+            "image_url": "http://test.com/image.png",
+            "reddit_post_id": "id1",
+            "reddit_post_title": "title1",
+            "reddit_post_url": "url1",
+            "created_at": "2023-01-01T12:00:00+00:00"
+        }
         with self.assertRaises(Exception) as cm:
-            save_to_csv(test_products, "test_output.csv")
+            save_to_csv(test_product)
         self.assertIn("Open error", str(cm.exception))
-        mock_makedirs.assert_called_once_with('outputs', exist_ok=True)
+        mock_makedirs.assert_not_called()  # No makedirs in new version
 
 @pytest.mark.asyncio
 class TestIntegrationAsync:
@@ -148,11 +147,11 @@ class TestIntegrationAsync:
 
         # Verify save_to_csv was called with the correct data
         mock_save_to_csv.assert_called_once()
-        called_products, called_filename = mock_save_to_csv.call_args[0]
-        assert called_filename == "processed_products.csv"
-        assert len(called_products) == 1
-        assert called_products[0]['product_url'] == 'http://test.zazzle.com/generated_product'
-        reddit_context = called_products[0]['reddit_context']
+        called_product = mock_save_to_csv.call_args[0][0]
+        assert called_product['product_url'] == 'http://test.zazzle.com/generated_product'
+        assert called_product['text'] == 'Generated Text'
+        assert called_product['theme'] == 'test_theme'
+        reddit_context = called_product['reddit_context']
         assert reddit_context['id'] == 'post_id'
         assert reddit_context['title'] == 'Post Title'
 

@@ -122,6 +122,27 @@ python main.py test-marketing-comment
 python main.py test-marketing-comment-reply
 ```
 
+## CSV Output
+
+The system saves product information to a CSV file (`processed_products.csv`) with the following columns:
+
+- theme
+- text
+- color
+- quantity
+- post_title
+- post_url
+- product_url
+- image_url
+- model
+- prompt_version
+- product_type
+- zazzle_template_id
+- zazzle_tracking_code
+- design_instructions
+
+The CSV output is designed to handle extra fields gracefully, ensuring that only the required fields are written to the file.
+
 ## Testing
 
 The project includes comprehensive test coverage:
