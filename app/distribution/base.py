@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from app.models import Product, DistributionMetadata, DistributionStatus
+from app.models import ProductInfo, DistributionMetadata, DistributionStatus
 
 
 class DistributionError(Exception):
@@ -18,11 +18,11 @@ class DistributionChannel(ABC):
         pass
 
     @abstractmethod
-    def publish(self, product: Product) -> DistributionMetadata:
+    def publish(self, product_info: ProductInfo) -> DistributionMetadata:
         """Publish content to the distribution channel.
         
         Args:
-            product: The product to publish content for.
+            product_info: The product to publish content for.
             
         Returns:
             DistributionMetadata: Metadata about the publication status.

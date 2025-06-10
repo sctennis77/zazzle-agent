@@ -1,3 +1,10 @@
+"""
+Reddit agent module for the Zazzle Agent application.
+
+This module defines the RedditAgent, which automates content distribution, product idea generation,
+image creation, and engagement on Reddit. It integrates with OpenAI, PRAW, and Zazzle product workflows.
+"""
+
 from .base import ChannelAgent
 import logging
 import os
@@ -7,7 +14,6 @@ from typing import Dict, Any, List, Optional
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DistributionStatus, DistributionMetadata, DesignInstructions
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
 import praw
-from app.product_designer import ProductDesigner
 from app.zazzle_product_designer import ZazzleProductDesigner
 import openai
 import json
@@ -18,10 +24,25 @@ from dataclasses import asdict
 logger = get_logger(__name__)
 
 class RedditAgent(ChannelAgent):
-    """Reddit agent that behaves like a user to distribute content effectively."""
+    """
+    Reddit agent that behaves like a user to distribute content effectively.
+    
+    This agent can:
+    - Analyze Reddit posts to generate product ideas
+    - Generate images using OpenAI DALL-E
+    - Create Zazzle products
+    - Post and interact on Reddit
+    - Track daily engagement statistics
+    """
 
     def __init__(self, config_or_model: Any = None, subreddit_name=None):
-        """Initialize the Reddit agent with configuration or model string."""
+        """
+        Initialize the Reddit agent with configuration or model string.
+        
+        Args:
+            config_or_model: PipelineConfig dict or model string (for backward compatibility)
+            subreddit_name: Optional subreddit to target
+        """
         super().__init__()
         # Support both config dict and model string for backward compatibility in tests
         if isinstance(config_or_model, dict):
@@ -70,7 +91,15 @@ class RedditAgent(ChannelAgent):
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
 
     def _determine_product_idea(self, reddit_context: RedditContext) -> Optional[ProductIdea]:
-        """Determine product idea from Reddit post context."""
+        """
+        Determine product idea from Reddit post context using OpenAI.
+        
+        Args:
+            reddit_context: RedditContext object with post details
+        
+        Returns:
+            ProductIdea object or None if generation fails
+        """
         try:
             # Use OpenAI to analyze post and generate product idea
             response = self.openai.chat.completions.create(
@@ -112,7 +141,12 @@ class RedditAgent(ChannelAgent):
             return None
 
     async def find_and_create_product(self) -> Optional[ProductInfo]:
-        """Find a trending post and create a product from it."""
+        """
+        Find a trending post and create a product from it.
+        
+        Returns:
+            ProductInfo object if successful, None otherwise
+        """
         try:
             # Find a trending post
             trending_post = await self._find_trending_post()
@@ -181,7 +215,9 @@ class RedditAgent(ChannelAgent):
             return None
 
     def _reset_daily_stats_if_needed(self):
-        """Reset daily statistics if it's a new day."""
+        """
+        Reset daily statistics if it's a new day.
+        """
         now = datetime.now(timezone.utc)
         if (not self.daily_stats['last_action_time'] or 
             (now - self.daily_stats['last_action_time']).days >= 1):
@@ -195,7 +231,9 @@ class RedditAgent(ChannelAgent):
             }
 
     def _should_take_action(self, action_type: str) -> bool:
-        """Check if agent should take action based on daily limits and timing."""
+        """
+        Check if agent should take action based on daily limits and timing.
+        """
         self._reset_daily_stats_if_needed()
         
         # Check daily limits

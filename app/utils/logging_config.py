@@ -101,7 +101,6 @@ def setup_logging(
     component_loggers = {
         'app.agents': 'INFO',
         'app.clients': 'INFO',
-        'app.product_designer': 'INFO',
         'app.distribution': 'INFO',
         'app.utils': 'INFO',
         # Reduce noise from third-party libraries

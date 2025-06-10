@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Optional
-from app.models import Product, DistributionStatus, DistributionMetadata, ContentType
+from app.models import ProductInfo, DistributionStatus, DistributionMetadata
 from app.distribution.base import DistributionChannel, DistributionError
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class RedditDistributionChannel(DistributionChannel):
         """Return the name of the distribution channel."""
         return "reddit"
 
-    def publish(self, product: Product) -> DistributionMetadata:
+    def publish(self, product_info: ProductInfo) -> DistributionMetadata:
         """Publish content to Reddit."""
         try:
             # TODO: Implement actual Reddit API call

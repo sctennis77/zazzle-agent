@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import List, Dict
 from dotenv import load_dotenv
 
-from design_generator import create_design_generator
-from metadata_generator import MetadataGenerator
-from zazzle_url_generator import ZazzleUrlGenerator
-from publish_to_zazzle import publish_to_zazzle
+from app.design_generator import create_design_generator
+from app.metadata_generator import MetadataGenerator
+from app.zazzle_url_generator import ZazzleUrlGenerator
+from app.publish_to_zazzle import publish_to_zazzle
 
 # Configure logging
 logging.basicConfig(

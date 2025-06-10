@@ -1,3 +1,10 @@
+"""
+Test suite for the ZazzleProductDesigner class.
+
+This module contains comprehensive tests for the ZazzleProductDesigner class,
+covering product creation, URL generation, error handling, and various edge cases.
+"""
+
 import unittest
 from unittest.mock import patch, MagicMock
 import os
@@ -10,10 +17,23 @@ import pytest
 from app.models import DesignInstructions, RedditContext
 
 class TestZazzleProductDesigner(unittest.TestCase):
-    """Test cases for the Zazzle Product Designer Agent."""
+    """
+    Test cases for the Zazzle Product Designer Agent.
+    
+    This test suite verifies the functionality of the ZazzleProductDesigner class,
+    including initialization, product creation, URL generation, and error handling.
+    """
 
     def setUp(self):
-        """Set up the test environment."""
+        """
+        Set up the test environment.
+        
+        This method:
+        1. Mocks environment variables
+        2. Sets up logging capture
+        3. Initializes the designer instance
+        4. Creates test data
+        """
         # Mock environment variables for ZazzleProductDesigner
         self.patcher_env = patch.dict(os.environ, {
             'ZAZZLE_AFFILIATE_ID': 'test_affiliate_id',
@@ -62,6 +82,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
         self.env_patcher.stop()
 
     def test_initialization_loads_env_vars(self):
+        """Test that environment variables are properly loaded during initialization."""
         designer = ZazzleProductDesigner()
         self.assertEqual(designer.affiliate_id, self.mock_affiliate_id)
         # Template is now obtained from design instructions, not stored in the class
@@ -77,7 +98,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('requests.post')
     async def test_create_product_success(self, mock_post):
-        """Test successful product creation."""
+        """Test successful product creation with valid parameters."""
         # Mock the response from the Zazzle API
         mock_response = MagicMock()
         mock_response.json.return_value = {'product_id': '12345', 'status': 'success'}
@@ -94,7 +115,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_error(self, mock_logger):
-        """Test error handling during product creation (e.g., malformed URL components)."""
+        """Test error handling during product creation with malformed URL components."""
         # Simulate an error during URL quoting (e.g., malformed input)
         with patch('app.zazzle_product_designer.quote', side_effect=Exception("Quote Error")):
             designer = ZazzleProductDesigner()
@@ -112,6 +133,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_success_url_validation(self, mock_logger):
+        """Test URL validation during successful product creation."""
         designer = ZazzleProductDesigner()
         design_instructions = DesignInstructions(
             image='http://example.com/image.png',
@@ -128,6 +150,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @patch('app.zazzle_product_designer.logger')
     @patch('app.zazzle_product_designer.get_product_template', return_value=None)
     async def test_create_product_missing_template(self, mock_get_template, mock_logger):
+        """Test product creation with missing template configuration."""
         designer = ZazzleProductDesigner()
         product_info = {'text': 'test', 'image': 'http://a.com/i.png', 'image_iid': '123'}
         result = await designer.create_product(product_info)
@@ -138,6 +161,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @patch.dict(os.environ, {'ZAZZLE_AFFILIATE_ID': ''})
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_missing_affiliate_id(self, mock_logger):
+        """Test product creation with missing affiliate ID."""
         designer = ZazzleProductDesigner()
         product_info = {'text': 'test', 'image': 'http://a.com/i.png', 'image_iid': '123'}
         result = await designer.create_product(product_info)
@@ -147,6 +171,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_empty_text_and_image(self, mock_logger):
+        """Test product creation with empty text and image fields."""
         designer = ZazzleProductDesigner()
         product_info = {
             'text': '',
@@ -161,6 +186,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_exception_handling(self, mock_logger):
+        """Test exception handling during product creation."""
         # Simulate an error during URL quoting (e.g., malformed input)
         with patch('app.zazzle_product_designer.quote', side_effect=Exception("Quote Error")):
             designer = ZazzleProductDesigner()
@@ -176,7 +202,7 @@ class TestZazzleProductDesigner(unittest.TestCase):
     @pytest.mark.asyncio
     @patch('app.zazzle_product_designer.logger')
     async def test_create_product_missing_required_fields(self, mock_logger):
-        """Test product creation with missing required customizable fields."""
+        """Test product creation with missing required fields."""
         designer = ZazzleProductDesigner()
         # Missing image field from design_instructions
         design_instructions = DesignInstructions(
