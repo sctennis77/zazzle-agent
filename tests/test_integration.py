@@ -8,7 +8,7 @@ from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerErr
 from app.content_generator import ContentGenerator
 import logging # Import logging to check log output
 from datetime import datetime
-from app.models import Product, ContentType
+from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig
 import pytest
 import json
 import glob
@@ -36,20 +36,67 @@ class TestIntegration(unittest.TestCase):
         self.patcher_env.start()
         self.addCleanup(self.patcher_env.stop)
 
-        # Mock product data as a list of dictionaries, matching config file structure
+        # Create test data
+        self.reddit_context = RedditContext(
+            post_id='test_post_id',
+            post_title='Test Post Title',
+            post_url='https://reddit.com/test',
+            subreddit='test_subreddit'
+        )
+
         self.mock_products_data = [
-            {"product_id": "ID_A", "name": "Product A", "screenshot_path": "outputs/screenshots/ID_A.png"},
-            {"product_id": "ID_B", "name": "Product B", "screenshot_path": "outputs/screenshots/ID_B.png"},
-            {"product_id": "ID_C", "name": "Product C", "screenshot_path": "outputs/screenshots/ID_C.png"},
+            ProductInfo(
+                product_id="ID_A",
+                name="Product A",
+                product_type="sticker",
+                zazzle_template_id="template1",
+                zazzle_tracking_code="tracking1",
+                image_url="https://example.com/image1.jpg",
+                product_url="https://example.com/product1",
+                theme="test_theme",
+                model="dall-e-3",
+                prompt_version="1.0.0",
+                reddit_context=self.reddit_context,
+                design_instructions={"image": "https://example.com/image1.jpg"},
+                image_local_path="/path/to/image1.jpg"
+            ),
+            ProductInfo(
+                product_id="ID_B",
+                name="Product B",
+                product_type="sticker",
+                zazzle_template_id="template2",
+                zazzle_tracking_code="tracking2",
+                image_url="https://example.com/image2.jpg",
+                product_url="https://example.com/product2",
+                theme="test_theme",
+                model="dall-e-3",
+                prompt_version="1.0.0",
+                reddit_context=self.reddit_context,
+                design_instructions={"image": "https://example.com/image2.jpg"},
+                image_local_path="/path/to/image2.jpg"
+            ),
+            ProductInfo(
+                product_id="ID_C",
+                name="Product C",
+                product_type="sticker",
+                zazzle_template_id="template3",
+                zazzle_tracking_code="tracking3",
+                image_url="https://example.com/image3.jpg",
+                product_url="https://example.com/product3",
+                theme="test_theme",
+                model="dall-e-3",
+                prompt_version="1.0.0",
+                reddit_context=self.reddit_context,
+                design_instructions={"image": "https://example.com/image3.jpg"},
+                image_local_path="/path/to/image3.jpg"
+            )
         ]
-        # A mock Product object for process_product tests
-        self.mock_product_object = Product(product_id="ID_A", name="Product A", screenshot_path="outputs/screenshots/ID_A.png")
 
         # Create dummy config file for tests that read it
         self.dummy_config_dir = 'app'
         self.dummy_config_path = os.path.join(self.dummy_config_dir, 'products_config.json')
         with open(self.dummy_config_path, 'w') as f:
-            json.dump({'products': self.mock_products_data}, f, indent=4)
+            json.dump({'products': [product.to_dict() for product in self.mock_products_data]}, f, indent=4)
         self.addCleanup(lambda: os.remove(self.dummy_config_path))
 
         # Create dummy screenshot directory and file for tests (if needed by other tests)
@@ -64,41 +111,56 @@ class TestIntegration(unittest.TestCase):
     @patch('app.main.os.makedirs')
     @patch('app.main.open', new_callable=mock_open)
     def test_save_to_csv_success(self, mock_open, mock_makedirs, mock_dict_writer):
-        test_product = {
-            "product_url": "http://test.com/product",
-            "text": "Test text",
-            "image_url": "http://test.com/image.png",
-            "reddit_post_id": "id1",
-            "reddit_post_title": "title1",
-            "reddit_post_url": "url1",
-            "created_at": "2023-01-01T12:00:00+00:00",
-            "design_instructions": "Create a cheerful cartoon golf ball with sunglasses."
-        }
-        save_to_csv(test_product)
-        mock_makedirs.assert_not_called()  # No makedirs in new version
-        mock_open.assert_called_once_with('processed_products.csv', 'a', newline='')
+        test_product = ProductInfo(
+            product_id="test_id",
+            name="Test Product",
+            product_type="sticker",
+            zazzle_template_id="template1",
+            zazzle_tracking_code="tracking1",
+            image_url="http://test.com/image.png",
+            product_url="http://test.com/product",
+            theme="test_theme",
+            model="dall-e-3",
+            prompt_version="1.0.0",
+            reddit_context=self.reddit_context,
+            design_instructions={"image": "http://test.com/image.png"}
+        )
+        # Set up the mock to return a mock writer
+        mock_writer = MagicMock()
+        mock_dict_writer.return_value = mock_writer
+        
+        # Mock os.path.exists to return False to test header writing
+        with patch('app.main.os.path.exists', return_value=False):
+            save_to_csv(test_product)
+        # Check that open was called with a file ending in 'processed_products.csv'
+        open_call_args = mock_open.call_args[0][0]
+        assert open_call_args.endswith('processed_products.csv')
         mock_dict_writer.assert_called_once()
-        mock_dict_writer.return_value.writeheader.assert_called_once()
-        mock_dict_writer.return_value.writerow.assert_called_once()
+        mock_writer.writeheader.assert_called_once()
+        mock_writer.writerows.assert_called_once()
         # Verify design_instructions is included
         assert 'design_instructions' in mock_dict_writer.call_args[1]['fieldnames']
 
     @patch('app.main.os.makedirs')
     @patch('builtins.open', side_effect=Exception("Open error")) # Patch open to raise an exception
     def test_save_to_csv_error(self, mock_open, mock_makedirs):
-        test_product = {
-            "product_url": "http://test.com/product",
-            "text": "Test text",
-            "image_url": "http://test.com/image.png",
-            "reddit_post_id": "id1",
-            "reddit_post_title": "title1",
-            "reddit_post_url": "url1",
-            "created_at": "2023-01-01T12:00:00+00:00"
-        }
+        test_product = ProductInfo(
+            product_id="test_id",
+            name="Test Product",
+            product_type="sticker",
+            zazzle_template_id="template1",
+            zazzle_tracking_code="tracking1",
+            image_url="http://test.com/image.png",
+            product_url="http://test.com/product",
+            theme="test_theme",
+            model="dall-e-3",
+            prompt_version="1.0.0",
+            reddit_context=self.reddit_context,
+            design_instructions={"image": "http://test.com/image.png"}
+        )
         with self.assertRaises(Exception) as cm:
             save_to_csv(test_product)
         self.assertIn("Open error", str(cm.exception))
-        mock_makedirs.assert_not_called()  # No makedirs in new version
 
 @pytest.mark.asyncio
 class TestIntegrationAsync:
@@ -120,6 +182,32 @@ class TestIntegrationAsync:
         })
         self.patcher_env.start()
         
+        # Create test data
+        self.reddit_context = RedditContext(
+            post_id='test_post_id',
+            post_title='Test Post Title',
+            post_url='https://reddit.com/test',
+            subreddit='test_subreddit'
+        )
+
+        self.mock_products_data = [
+            ProductInfo(
+                product_id="ID_A",
+                name="Product A",
+                product_type="sticker",
+                zazzle_template_id="template1",
+                zazzle_tracking_code="tracking1",
+                image_url="https://example.com/image1.jpg",
+                product_url="https://example.com/product1",
+                theme="test_theme",
+                model="dall-e-3",
+                prompt_version="1.0.0",
+                reddit_context=self.reddit_context,
+                design_instructions={"image": "https://example.com/image1.jpg"},
+                image_local_path="/path/to/image1.jpg"
+            )
+        ]
+        
         yield
         
         self.patcher_env.stop()
@@ -130,13 +218,7 @@ class TestIntegrationAsync:
         # Configure mock_reddit_agent to return a successful product info
         mock_reddit_agent_instance = MagicMock()
         mock_reddit_agent.return_value = mock_reddit_agent_instance
-        mock_reddit_agent_instance.find_and_create_product = AsyncMock(return_value={
-            'product_url': 'http://test.zazzle.com/generated_product',
-            'text': 'Generated Text',
-            'image_url': 'http://test.image.com/generated_image.png',
-            'theme': 'test_theme',
-            'reddit_context': {'id': 'post_id', 'title': 'Post Title', 'url': 'http://reddit.com/post', 'created_utc': 1234567890}
-        })
+        mock_reddit_agent_instance.find_and_create_product = AsyncMock(return_value=self.mock_products_data[0])
 
         # Run the full pipeline function directly instead of main()
         await run_full_pipeline()
@@ -146,14 +228,7 @@ class TestIntegrationAsync:
         mock_reddit_agent_instance.find_and_create_product.assert_called_once()
 
         # Verify save_to_csv was called with the correct data
-        mock_save_to_csv.assert_called_once()
-        called_product = mock_save_to_csv.call_args[0][0]
-        assert called_product['product_url'] == 'http://test.zazzle.com/generated_product'
-        assert called_product['text'] == 'Generated Text'
-        assert called_product['theme'] == 'test_theme'
-        reddit_context = called_product['reddit_context']
-        assert reddit_context['id'] == 'post_id'
-        assert reddit_context['title'] == 'Post Title'
+        mock_save_to_csv.assert_called_once_with(self.mock_products_data[0])
 
     @patch('app.main.save_to_csv')
     @patch('app.main.RedditAgent')
@@ -181,6 +256,97 @@ class TestIntegrationAsync:
         mock_reddit_agent.assert_called_once()
         mock_reddit_agent_instance.reddit.subreddit.assert_called_once_with("golf")
         mock_reddit_agent_instance.interact_with_votes.assert_called_once_with("test123")
+
+    @patch('app.affiliate_linker.ZazzleAffiliateLinker')
+    @patch('app.content_generator.ContentGenerator')
+    @patch('app.agents.reddit_agent.RedditAgent')
+    async def test_full_pipeline(self, mock_reddit_agent, mock_content_generator, mock_affiliate_linker):
+        # Setup mocks
+        mock_reddit_agent.return_value.get_reddit_posts.return_value = [
+            ProductIdea(
+                theme="Test Post",
+                image_description="Test image description",
+                design_instructions={"image": "https://example.com/test.jpg"},
+                reddit_context=self.reddit_context,
+                model="dall-e-3",
+                prompt_version="1.0.0"
+            )
+        ]
+
+        mock_content_generator.return_value.generate_content.return_value = self.mock_products_data
+
+        mock_affiliate_linker_instance = mock_affiliate_linker.return_value
+        mock_affiliate_linker_instance.generate_links_batch.return_value = self.mock_products_data
+
+        # Run pipeline
+        config = PipelineConfig(
+            model="dall-e-3",
+            zazzle_template_id="test_template_id",
+            zazzle_tracking_code="test_tracking_code",
+            prompt_version="1.0.0"
+        )
+
+        await run_full_pipeline(config)
+
+    @patch('app.affiliate_linker.ZazzleAffiliateLinker')
+    @patch('app.content_generator.ContentGenerator')
+    @patch('app.agents.reddit_agent.RedditAgent')
+    async def test_pipeline_error_handling(self, mock_reddit_agent, mock_content_generator, mock_affiliate_linker):
+        # Setup mocks to raise exceptions
+        mock_agent = AsyncMock(spec=RedditAgent)
+        mock_agent.find_and_create_product.side_effect = Exception("Reddit API error")
+        mock_agent.reddit = MagicMock()
+        mock_reddit_agent.return_value = mock_agent
+
+        # Run pipeline
+        config = PipelineConfig(
+            model="dall-e-3",
+            zazzle_template_id="test_template_id",
+            zazzle_tracking_code="test_tracking_code",
+            prompt_version="1.0.0"
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            await run_full_pipeline(config)
+            assert "Reddit API error" in str(exc_info.value)
+
+    @patch('app.affiliate_linker.ZazzleAffiliateLinker')
+    @patch('app.content_generator.ContentGenerator')
+    @patch('app.agents.reddit_agent.RedditAgent')
+    async def test_pipeline_no_products(self, mock_reddit_agent, mock_content_generator, mock_affiliate_linker):
+        # Setup mocks to return empty lists
+        mock_reddit_agent.return_value.get_reddit_posts.return_value = []
+        mock_content_generator.return_value.generate_content.return_value = []
+
+        # Run pipeline
+        config = PipelineConfig(
+            model="dall-e-3",
+            zazzle_template_id="test_template_id",
+            zazzle_tracking_code="test_tracking_code",
+            prompt_version="1.0.0"
+        )
+
+        result = await run_full_pipeline(config)
+        assert result is None
+
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('csv.DictWriter')
+    async def test_save_to_csv(self, mock_dict_writer, mock_file):
+        # Test saving products to CSV
+        # Set up the mock to return a mock writer
+        mock_writer = MagicMock()
+        mock_dict_writer.return_value = mock_writer
+        
+        # Mock os.path.exists to return False to test header writing
+        with patch('app.main.os.path.exists', return_value=False):
+            save_to_csv(self.mock_products_data)
+
+        # Check that open was called with a file ending in 'processed_products.csv'
+        open_call_args = mock_file.call_args[0][0]
+        assert open_call_args.endswith('processed_products.csv')
+        mock_dict_writer.assert_called_once()
+        mock_writer.writeheader.assert_called_once()
+        mock_writer.writerows.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main() 
