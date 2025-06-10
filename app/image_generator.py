@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 import httpx
 from openai import OpenAI
 from openai.types.images_response import ImagesResponse
@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from app.clients.imgur_client import ImgurClient
 from datetime import datetime
 import base64
+from app.models import ProductIdea
 
 load_dotenv()
 
@@ -198,4 +199,61 @@ class ImageGenerator:
             return imgur_url, local_path
             
         except Exception as e:
-            raise ImageGenerationError(f"Failed to process or store image: {str(e)}") from e 
+            raise ImageGenerationError(f"Failed to process or store image: {str(e)}") from e
+
+    async def generate_images_batch(self, product_ideas: List[ProductIdea]) -> List[object]:
+        """
+        Generate images for a batch of product ideas.
+        
+        Args:
+            product_ideas: List of ProductIdea objects
+            
+        Returns:
+            List of ProductInfo objects (or error dicts if generation fails)
+            
+        Raises:
+            ImageGenerationError: If image generation fails for any product idea
+        """
+        results = []
+        for idea in product_ideas:
+            try:
+                prompt = idea.image_description
+                template_id = idea.design_instructions.get('template_id') if idea.design_instructions else None
+
+                if not prompt:
+                    logger.warning("Skipping product idea with no image description")
+                    continue
+
+                # Generate image (mocked in tests)
+                img_result = await self._generate_image(prompt, idea.model)
+                imgur_url = img_result['url']
+                local_path = img_result['local_path']
+
+                # Create ProductInfo object
+                from app.models import ProductInfo  # Local import to avoid circular import
+                product_info = ProductInfo(
+                    product_id=f"generated_{idea.theme}_{idea.model}",
+                    name=f"Generated Product for {idea.theme}",
+                    product_type=idea.design_instructions.get('product_type', 'sticker') if idea.design_instructions else 'sticker',
+                    image_url=imgur_url,
+                    product_url=imgur_url,  # Placeholder, update as needed
+                    zazzle_template_id=template_id or '',
+                    zazzle_tracking_code='',
+                    theme=idea.theme,
+                    model=idea.model,
+                    prompt_version=idea.prompt_version,
+                    reddit_context=idea.reddit_context,
+                    design_instructions=idea.design_instructions,
+                    image_local_path=local_path
+                )
+                results.append(product_info)
+
+            except Exception as e:
+                logger.error(f"Failed to generate image for product idea: {str(e)}")
+                results.append({
+                    'error': str(e),
+                    'prompt': prompt if 'prompt' in locals() else None,
+                    'template_id': template_id if 'template_id' in locals() else None
+                })
+
+        return results 
