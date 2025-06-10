@@ -1,3 +1,11 @@
+"""
+Image generation module for the Zazzle Agent application.
+
+This module provides functionality for generating images using DALL-E models
+and storing them locally and on Imgur. It supports batch generation, prompt
+versioning, and error handling for image generation workflows.
+"""
+
 import os
 import logging
 from typing import Optional, Tuple, Dict, Any, List
@@ -31,7 +39,17 @@ class ImageGenerationError(Exception):
     pass
 
 class ImageGenerator:
-    """Handles image generation using DALL-E and storage using Imgur."""
+    """
+    Handles image generation using DALL-E and storage using Imgur.
+    
+    This class provides methods to generate images from prompts using DALL-E models,
+    save them locally, upload to Imgur, and handle batch generation for multiple product ideas.
+    
+    Attributes:
+        VALID_SIZES: Allowed image sizes for each model
+        DEFAULT_SIZE: Default image size for each model
+        VALID_MODELS: Supported DALL-E models
+    """
     
     VALID_SIZES = {
         "dall-e-2": {"256x256", "512x512", "1024x1024"},
@@ -247,13 +265,7 @@ class ImageGenerator:
                     image_local_path=local_path
                 )
                 results.append(product_info)
-
             except Exception as e:
-                logger.error(f"Failed to generate image for product idea: {str(e)}")
-                results.append({
-                    'error': str(e),
-                    'prompt': prompt if 'prompt' in locals() else None,
-                    'template_id': template_id if 'template_id' in locals() else None
-                })
-
+                logger.error(f"Failed to generate image for idea '{idea.theme}': {str(e)}")
+                results.append({"error": str(e), "theme": idea.theme})
         return results 

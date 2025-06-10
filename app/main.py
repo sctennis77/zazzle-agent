@@ -3,7 +3,7 @@ import logging
 import json
 import glob
 import argparse
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 import pandas as pd
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -12,7 +12,7 @@ import asyncio
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
-from app.models import Product, ContentType
+from app.models import ProductInfo, PipelineConfig
 from app.agents.reddit_agent import RedditAgent
 from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
 from app.image_generator import ImageGenerator
@@ -35,83 +35,78 @@ if openai_api_key_loaded:
 else:
     logger.warning("OPENAI_API_KEY not loaded.")
 
-def ensure_output_dir():
+def ensure_output_dir(output_dir: str = 'outputs'):
     """Ensure the output directory exists."""
-    output_dir = os.getenv('OUTPUT_DIR', 'outputs')
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'screenshots'), exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'images'), exist_ok=True)
     logger.info("Ensured outputs directory exists")
 
-def save_to_csv(product_info: Dict[str, Any]):
-    """Save product information to CSV file."""
-    csv_file = "processed_products.csv"
-    file_exists = os.path.isfile(csv_file)
+def save_to_csv(products, output_file='processed_products.csv'):
+    """Save product information to a CSV file."""
+    if not isinstance(products, list):
+        products = [products]
+
+    # Convert products to dictionaries
+    product_dicts = [product.to_dict() for product in products]
     
-    # Ensure all required fields are present
-    required_fields = ['theme', 'text', 'color', 'quantity', 'post_title', 'post_url', 
-                      'product_url', 'image_url', 'model', 'prompt_version', 'product_type', 'zazzle_template_id', 'zazzle_tracking_code', 'design_instructions']
+    # Determine output directory
+    output_dir = os.getenv('OUTPUT_DIR', None)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, output_file)
+
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.exists(output_file)
     
-    for field in required_fields:
-        if field not in product_info:
-            product_info[field] = ''
+    mode = 'a' if file_exists else 'w'
     
-    # Filter out extra fields not in required_fields
-    filtered_product_info = {k: product_info[k] for k in required_fields if k in product_info}
-    
-    with open(csv_file, 'a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=required_fields)
+    with open(output_file, mode, newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=product_dicts[0].keys())
         if not file_exists:
             writer.writeheader()
-        writer.writerow(filtered_product_info)
-    
-    logger.info(f"Saved {len(filtered_product_info)} products to {csv_file}")
+        writer.writerows(product_dicts)
 
-def log_product_info(product_info: Dict[str, Any]):
+def log_product_info(product_info: ProductInfo):
     """Log product information in a readable format."""
     logger.info("\nGenerated Product Info:")
-    logger.info(f"Theme: {product_info.get('theme', '')}")
-    logger.info(f"Text: {product_info.get('text', '')}")
-    logger.info(f"Color: {product_info.get('color', '')}")
-    logger.info(f"Quantity: {product_info.get('quantity', '')}")
-    logger.info(f"Model: {product_info.get('model', '')}")
-    logger.info(f"Prompt Version: {product_info.get('prompt_version', '')}")
+    logger.info(f"Theme: {product_info.theme}")
+    logger.info(f"Model: {product_info.model}")
+    logger.info(f"Prompt Version: {product_info.prompt_version}")
     
     logger.info("\nReddit Context:")
-    logger.info(f"Post Title: {product_info.get('post_title', '')}")
-    logger.info(f"Post URL: {product_info.get('post_url', '')}")
+    logger.info(f"Post Title: {product_info.reddit_context.post_title}")
+    logger.info(f"Post URL: {product_info.reddit_context.post_url}")
     
     logger.info("\nProduct URL:")
     logger.info("To view and customize the product, open this URL in your browser:")
-    logger.info(f"{product_info.get('product_url', '')}")
+    logger.info(f"{product_info.product_url}")
     
     logger.info("\nGenerated Image URL:")
-    logger.info(f"{product_info.get('image_url', '')}")
+    logger.info(f"{product_info.image_url}")
 
-async def run_full_pipeline(model: str = "dall-e-2"):
+async def run_full_pipeline(config: PipelineConfig = None):
     """Run the full pipeline: find post, generate image, create product."""
     try:
-        # Initialize RedditAgent with the specified model
-        reddit_agent = RedditAgent(model=model)
+        # Initialize RedditAgent with the config
+        if config is None:
+            config = PipelineConfig(
+                model="dall-e-3",
+                zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
+                zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
+                prompt_version="1.0.0"
+            )
+        reddit_agent = RedditAgent(config_or_model=config.model)
         
         # Find a post and create a product
         product_info = await reddit_agent.find_and_create_product()
         
         if product_info:
-            # Get prompt info from the image generator
-            prompt_info = reddit_agent.image_generator.get_prompt_info()
-            
-            # Add model and version info to the product info
-            product_info.update({
-                'model': model,
-                'prompt_version': prompt_info['version']
-            })
-            
             # Save to CSV
             save_to_csv(product_info)
             
-            # Log the results
-            log_product_info(product_info)
+            # Log the results using the new logging function
+            product_info.log()
             
             return product_info
         else:
@@ -315,34 +310,53 @@ async def test_reddit_comment_marketing_reply():
     else:
         logger.info("No trending post found in r/golf.")
 
+async def test_reddit_agent_find_and_create_product():
+    """Test only the RedditAgent.find_and_create_product part of the pipeline."""
+    try:
+        reddit_agent = RedditAgent()
+        product_info = await reddit_agent.find_and_create_product()
+        if product_info:
+            logger.info("Product created successfully:")
+            logger.info(product_info)
+        else:
+            logger.warning("No product created.")
+    except Exception as e:
+        logger.error(f"Error in test_reddit_agent_find_and_create_product: {str(e)}")
+
 async def main():
-    parser = argparse.ArgumentParser(description='Run the Reddit-to-Zazzle dynamic product flow.')
-    parser.add_argument('--mode', type=str, default='full',
-                      choices=['full', 'image', 'test-vote', 'test-comment', 'test-engaging', 'test-marketing'],
-                      help='Operation mode')
-    parser.add_argument('--prompt', type=str, help='Image generation prompt (required for image mode)')
-    parser.add_argument('--model', type=str, default='dall-e-2',
-                      choices=['dall-e-2', 'dall-e-3'],
-                      help='DALL-E model to use for image generation')
-    args = parser.parse_args()
+    """Main entry point for the application."""
+    try:
+        # Ensure outputs directory exists
+        os.makedirs("outputs/generated_products", exist_ok=True)
+        logger.info("Ensured outputs directory exists")
 
-    if args.mode == 'image' and not args.prompt:
-        parser.error("--prompt is required for image mode")
+        # Parse command line arguments
+        parser = argparse.ArgumentParser(description='Run the Zazzle agent pipeline.')
+        parser.add_argument('--mode', choices=['full', 'image', 'test-vote', 'test-comment', 'test-engaging', 'test-marketing', 'test-reddit-agent'], default='full', help='Pipeline mode to run')
+        parser.add_argument('--prompt', type=str, help='Custom prompt for image generation')
+        parser.add_argument('--model', choices=['dall-e-2', 'dall-e-3'], default='dall-e-3', help='DALL-E model to use')
+        args = parser.parse_args()
 
-    ensure_output_dir()
+        if args.mode == 'full':
+            await run_full_pipeline()
+        elif args.mode == 'image':
+            await run_generate_image_pipeline(args.prompt, args.model)
+        elif args.mode == 'test-vote':
+            await test_reddit_voting()
+        elif args.mode == 'test-comment':
+            await test_reddit_post_comment()
+        elif args.mode == 'test-engaging':
+            await test_reddit_engaging_comment()
+        elif args.mode == 'test-marketing':
+            await test_reddit_marketing_comment()
+        elif args.mode == 'test-reddit-agent':
+            await test_reddit_agent_find_and_create_product()
+        else:
+            logger.error(f"Unknown mode: {args.mode}")
 
-    if args.mode == 'full':
-        await run_full_pipeline(model=args.model)
-    elif args.mode == 'image':
-        await run_generate_image_pipeline(args.prompt, args.model)
-    elif args.mode == 'test-vote':
-        await test_reddit_voting()
-    elif args.mode == 'test-comment':
-        await test_reddit_post_comment()
-    elif args.mode == 'test-engaging':
-        await test_reddit_engaging_comment()
-    elif args.mode == 'test-marketing':
-        await test_reddit_marketing_comment()
+    except Exception as e:
+        logger.error(f"Error in main: {str(e)}")
+        raise
 
 if __name__ == '__main__':
     asyncio.run(main()) 
