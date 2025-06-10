@@ -5,10 +5,17 @@ This module defines the core data structures used throughout the application,
 including product information, Reddit context, distribution metadata, and more.
 Each class is designed to be serializable and includes utility methods for
 conversion between different formats (dict, JSON, CSV).
+
+The module provides:
+- Data models for product information and metadata
+- Reddit context and content models
+- Distribution tracking and status models
+- Serialization utilities for various formats
+- Logging and debugging support
 """
 
 from dataclasses import dataclass, asdict, is_dataclass
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from datetime import datetime, timezone
 from enum import Enum
 import csv
@@ -51,12 +58,12 @@ class DistributionMetadata:
     across different channels (e.g., social media platforms).
     
     Attributes:
-        channel: The distribution channel name
-        status: Current distribution status
-        published_at: Timestamp when content was published
-        channel_id: Platform-specific identifier (e.g., tweet ID)
-        channel_url: URL to the published content
-        error_message: Error details if distribution failed
+        channel (str): The distribution channel name
+        status (DistributionStatus): Current distribution status
+        published_at (Optional[datetime]): Timestamp when content was published
+        channel_id (Optional[str]): Platform-specific identifier (e.g., tweet ID)
+        channel_url (Optional[str]): URL to the published content
+        error_message (Optional[str]): Error details if distribution failed
     """
     channel: str
     status: DistributionStatus
@@ -70,8 +77,8 @@ class DistributionMetadata:
         Convert metadata to dictionary format.
         
         Returns:
-            Dictionary representation of the metadata with datetime
-            objects converted to ISO format strings.
+            Dict[str, Any]: Dictionary representation of the metadata with datetime
+                objects converted to ISO format strings.
         """
         data = {
             'channel': self.channel,
@@ -89,10 +96,10 @@ class DistributionMetadata:
         Create metadata instance from dictionary.
         
         Args:
-            data: Dictionary containing metadata fields
+            data (Dict[str, Any]): Dictionary containing metadata fields
             
         Returns:
-            DistributionMetadata instance
+            DistributionMetadata: Instance with data from dictionary
             
         Note:
             Handles conversion of ISO format datetime strings back to datetime objects
@@ -123,18 +130,26 @@ class PipelineConfig:
     of the product creation pipeline.
     
     Attributes:
-        model: The AI model to use (e.g. "dall-e-3")
-        zazzle_template_id: The Zazzle template ID for product creation
-        zazzle_tracking_code: The tracking code for Zazzle affiliate links
-        prompt_version: Version of the prompt being used
+        model (str): The AI model to use (e.g. "dall-e-3")
+        zazzle_template_id (str): The Zazzle template ID for product creation
+        zazzle_tracking_code (str): The tracking code for Zazzle affiliate links
+        prompt_version (str): Version of the prompt being used. Defaults to "1.0.0"
     """
     model: str
     zazzle_template_id: str
     zazzle_tracking_code: str
     prompt_version: str = "1.0.0"
 
-    def log(self):
-        """Log the configuration details to the application logger."""
+    def log(self) -> None:
+        """
+        Log the configuration details to the application logger.
+        
+        Logs:
+            - Model name
+            - Template ID
+            - Tracking code
+            - Prompt version
+        """
         logger.info("Pipeline Configuration:")
         logger.info(f"Model: {self.model}")
         logger.info(f"Template ID: {self.zazzle_template_id}")
@@ -151,12 +166,12 @@ class RedditContext:
     that is being used as source material for product creation.
     
     Attributes:
-        post_id: The Reddit post ID
-        post_title: The title of the Reddit post
-        post_url: The full URL to the Reddit post
-        subreddit: The subreddit name
-        post_content: Optional content/body of the post
-        comments: Optional list of comments on the post
+        post_id (str): The Reddit post ID
+        post_title (str): The title of the Reddit post
+        post_url (str): The full URL to the Reddit post
+        subreddit (str): The subreddit name
+        post_content (Optional[str]): Optional content/body of the post
+        comments (Optional[List[Dict[str, Any]]]): Optional list of comments on the post
     """
     post_id: str
     post_title: str
@@ -165,8 +180,16 @@ class RedditContext:
     post_content: Optional[str] = None
     comments: Optional[List[Dict[str, Any]]] = None
 
-    def log(self):
-        """Log the Reddit context details to the application logger."""
+    def log(self) -> None:
+        """
+        Log the Reddit context details to the application logger.
+        
+        Logs:
+            - Post ID and title
+            - Post URL and subreddit
+            - First 100 characters of content (if available)
+            - Number of comments (if available)
+        """
         logger.info("Reddit Context:")
         logger.info(f"Post ID: {self.post_id}")
         logger.info(f"Title: {self.post_title}")
@@ -187,12 +210,12 @@ class ProductIdea:
     for creating a product, including the source Reddit content.
     
     Attributes:
-        theme: The main theme/idea for the product
-        image_description: Description for image generation
-        design_instructions: Instructions for product design
-        reddit_context: The Reddit context this idea came from
-        model: The AI model used
-        prompt_version: Version of the prompt used
+        theme (str): The main theme/idea for the product
+        image_description (str): Description for image generation
+        design_instructions (Dict[str, Any]): Instructions for product design
+        reddit_context (RedditContext): The Reddit context this idea came from
+        model (str): The AI model used
+        prompt_version (str): Version of the prompt used
     """
     theme: str
     image_description: str
@@ -201,8 +224,16 @@ class ProductIdea:
     model: str
     prompt_version: str
 
-    def log(self):
-        """Log the product idea details to the application logger."""
+    def log(self) -> None:
+        """
+        Log the product idea details to the application logger.
+        
+        Logs:
+            - Theme and image description
+            - Model and prompt version
+            - Design instructions
+            - Reddit context details
+        """
         logger.info("Product Idea:")
         logger.info(f"Theme: {self.theme}")
         logger.info(f"Image Description: {self.image_description}")
@@ -223,20 +254,20 @@ class ProductInfo:
     metadata, including design details, source information, and URLs.
     
     Attributes:
-        product_id: Unique identifier for the product
-        name: Product name
-        product_type: Type of product (e.g. "sticker")
-        image_url: URL to the product image
-        product_url: URL to the Zazzle product page
-        zazzle_template_id: The Zazzle template ID used
-        zazzle_tracking_code: The tracking code used
-        theme: The product theme
-        model: The AI model used
-        prompt_version: Version of the prompt used
-        reddit_context: The Reddit context this product came from
-        design_instructions: The design instructions used
-        image_local_path: Optional path to local image file
-        affiliate_link: Optional Zazzle affiliate link
+        product_id (str): Unique identifier for the product
+        name (str): Product name
+        product_type (str): Type of product (e.g. "sticker")
+        image_url (str): URL to the product image
+        product_url (str): URL to the Zazzle product page
+        zazzle_template_id (str): The Zazzle template ID used
+        zazzle_tracking_code (str): The tracking code used
+        theme (str): The product theme
+        model (str): The AI model used
+        prompt_version (str): Version of the prompt used
+        reddit_context (RedditContext): The Reddit context this product came from
+        design_instructions (Dict[str, Any]): The design instructions used
+        image_local_path (Optional[str]): Optional path to local image file
+        affiliate_link (Optional[str]): Optional Zazzle affiliate link
     """
     product_id: str
     name: str
@@ -253,8 +284,19 @@ class ProductInfo:
     image_local_path: Optional[str] = None
     affiliate_link: Optional[str] = None
 
-    def log(self):
-        """Log the product information to the application logger."""
+    def log(self) -> None:
+        """
+        Log the product information to the application logger.
+        
+        Logs:
+            - Product ID and name
+            - Type and URLs
+            - Template ID and theme
+            - Model and prompt version
+            - Local image path (if available)
+            - Affiliate link (if available)
+            - Reddit context details
+        """
         logger.info("Product Information:")
         logger.info(f"ID: {self.product_id}")
         logger.info(f"Name: {self.name}")
@@ -276,7 +318,7 @@ class ProductInfo:
         Save product data to CSV file.
         
         Args:
-            filename: Path to the CSV file
+            filename (str): Path to the CSV file
             
         Note:
             If the file doesn't exist, it will be created with headers.
@@ -298,10 +340,10 @@ class ProductInfo:
         Convert product to dictionary format.
         
         Returns:
-            Dictionary representation of the product with:
-            - RedditContext converted to dict
-            - datetime objects converted to ISO format strings
-            - design_instructions serialized as JSON string
+            Dict[str, Any]: Dictionary representation of the product with:
+                - RedditContext converted to dict
+                - datetime objects converted to ISO format strings
+                - design_instructions serialized as JSON string
         """
         data = asdict(self)
         # Convert RedditContext to dict only if it's a dataclass instance
@@ -321,7 +363,7 @@ class ProductInfo:
         Convert product to JSON string.
         
         Returns:
-            JSON string representation of the product
+            str: JSON string representation of the product
         """
         return json.dumps(self.to_dict())
 
@@ -331,10 +373,10 @@ class ProductInfo:
         Create product instance from dictionary.
         
         Args:
-            data: Dictionary containing product fields
+            data (Dict[str, Any]): Dictionary containing product fields
             
         Returns:
-            ProductInfo instance
+            ProductInfo: Instance with data from dictionary
             
         Note:
             Handles conversion of RedditContext from dict back to object
@@ -355,10 +397,10 @@ class ProductInfo:
         Generate a unique identifier for a product.
         
         Args:
-            product_id: Base product ID
+            product_id (str): Base product ID
             
         Returns:
-            Unique identifier combining product ID and timestamp
+            str: Unique identifier combining product ID and timestamp
         """
         return f"{product_id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
@@ -372,15 +414,15 @@ class DesignInstructions:
     design, including image, theme, text, and other customization options.
     
     Attributes:
-        image: URL of the image to use
-        theme: Optional theme for the product
-        text: Optional text to include
-        color: Optional color specification
-        quantity: Optional quantity
-        product_type: Type of product (e.g. "sticker")
-        template_id: Optional template ID to use
-        model: Optional AI model used
-        prompt_version: Optional version of the prompt used
+        image (str): URL of the image to use
+        theme (Optional[str]): Optional theme for the product
+        text (Optional[str]): Optional text to include
+        color (Optional[str]): Optional color specification
+        quantity (Optional[int]): Optional quantity
+        product_type (str): Type of product (e.g. "sticker"). Defaults to "sticker"
+        template_id (Optional[str]): Optional template ID to use
+        model (Optional[str]): Optional AI model used
+        prompt_version (Optional[str]): Optional version of the prompt used
     """
     image: str
     theme: Optional[str] = None

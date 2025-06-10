@@ -4,11 +4,19 @@ Image generation module for the Zazzle Agent application.
 This module provides functionality for generating images using DALL-E models
 and storing them locally and on Imgur. It supports batch generation, prompt
 versioning, and error handling for image generation workflows.
+
+The module handles:
+- Single image generation using DALL-E models
+- Batch processing of multiple product ideas
+- Local image storage and organization
+- Imgur integration for image hosting
+- Prompt versioning and management
+- Error handling and logging
 """
 
 import os
 import logging
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any, List, Union
 import httpx
 from openai import OpenAI
 from openai.types.images_response import ImagesResponse
@@ -16,11 +24,12 @@ from dotenv import load_dotenv
 from app.clients.imgur_client import ImgurClient
 from datetime import datetime
 import base64
-from app.models import ProductIdea
+from app.models import ProductIdea, ProductInfo
+from app.utils.logging_config import get_logger
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Base prompts for image generation with versioning
 IMAGE_GENERATION_BASE_PROMPTS = {
@@ -45,10 +54,18 @@ class ImageGenerator:
     This class provides methods to generate images from prompts using DALL-E models,
     save them locally, upload to Imgur, and handle batch generation for multiple product ideas.
     
+    The class supports:
+    - Multiple DALL-E model versions (dall-e-2, dall-e-3)
+    - Various image sizes per model
+    - Local image storage with organized naming
+    - Imgur integration for image hosting
+    - Batch processing of product ideas
+    - Error handling and logging
+    
     Attributes:
-        VALID_SIZES: Allowed image sizes for each model
-        DEFAULT_SIZE: Default image size for each model
-        VALID_MODELS: Supported DALL-E models
+        VALID_SIZES (Dict[str, set]): Allowed image sizes for each model
+        DEFAULT_SIZE (Dict[str, str]): Default image size for each model
+        VALID_MODELS (set): Supported DALL-E models
     """
     
     VALID_SIZES = {
@@ -66,7 +83,8 @@ class ImageGenerator:
         Initialize the image generator with OpenAI and Imgur clients.
         
         Args:
-            model: The DALL-E model to use (default: "dall-e-2")
+            model (str): The DALL-E model to use. Must be one of VALID_MODELS.
+                Defaults to "dall-e-2".
             
         Raises:
             ValueError: If OPENAI_API_KEY is not set or if model is invalid
@@ -81,32 +99,34 @@ class ImageGenerator:
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
         self.model = model
+        logger.info(f"Initialized ImageGenerator with model: {model}")
         
     def get_prompt_info(self) -> Dict[str, str]:
         """
         Get the current prompt information for the model.
         
         Returns:
-            Dict containing the prompt and version for the current model.
+            Dict[str, str]: Dictionary containing the prompt and version for the current model.
         """
         return IMAGE_GENERATION_BASE_PROMPTS[self.model]
         
     async def generate_image(
         self, 
         prompt: str, 
-        size: str = None, 
+        size: Optional[str] = None, 
         template_id: Optional[str] = None
     ) -> Tuple[str, str]:
         """
         Generate an image using DALL-E and store it both locally and on Imgur.
         
         Args:
-            prompt: The text prompt for image generation
-            size: The size of the image to generate (default: None, which uses the model's default size)
-            template_id: Optional Zazzle template ID for naming the image file
+            prompt (str): The text prompt for image generation
+            size (str, optional): The size of the image to generate. If None, uses the
+                model's default size.
+            template_id (str, optional): Zazzle template ID for naming the image file
             
         Returns:
-            Tuple containing (imgur_url, local_path)
+            Tuple[str, str]: Tuple containing (imgur_url, local_path)
             
         Raises:
             ImageGenerationError: If image generation or upload fails
@@ -118,7 +138,7 @@ class ImageGenerator:
             raise ValueError(f"Invalid size '{size}' for model '{self.model}'. Allowed: {', '.join(self.VALID_SIZES[self.model])}")
             
         try:
-            logger.info(f"Generating image for prompt: '{prompt}' with size: {size} with model: {self.model} ")
+            logger.info(f"Generating image for prompt: '{prompt}' with size: {size} with model: {self.model}")
             
             # Get the base prompt for the model
             base_prompt = IMAGE_GENERATION_BASE_PROMPTS[self.model]["prompt"]
@@ -149,11 +169,11 @@ class ImageGenerator:
         Generate an image using DALL-E.
         
         Args:
-            prompt: The text prompt for image generation
-            size: The size of the image to generate
+            prompt (str): The text prompt for image generation
+            size (str): The size of the image to generate
             
         Returns:
-            ImagesResponse from DALL-E
+            ImagesResponse: Response from DALL-E API containing generated image data
             
         Raises:
             ImageGenerationError: If DALL-E API call fails
@@ -179,12 +199,12 @@ class ImageGenerator:
         Process DALL-E response and store image locally and on Imgur.
         
         Args:
-            response: DALL-E API response
-            template_id: Optional template ID for file naming
-            size: Image size for file naming
+            response (ImagesResponse): DALL-E API response containing image data
+            template_id (str, optional): Template ID for file naming
+            size (str): Image size for file naming
             
         Returns:
-            Tuple containing (imgur_url, local_path)
+            Tuple[str, str]: Tuple containing (imgur_url, local_path)
             
         Raises:
             ImageGenerationError: If image processing or storage fails
@@ -219,15 +239,16 @@ class ImageGenerator:
         except Exception as e:
             raise ImageGenerationError(f"Failed to process or store image: {str(e)}") from e
 
-    async def generate_images_batch(self, product_ideas: List[ProductIdea]) -> List[object]:
+    async def generate_images_batch(self, product_ideas: List[ProductIdea]) -> List[Union[ProductInfo, Dict[str, Any]]]:
         """
         Generate images for a batch of product ideas.
         
         Args:
-            product_ideas: List of ProductIdea objects
+            product_ideas (List[ProductIdea]): List of ProductIdea objects to process
             
         Returns:
-            List of ProductInfo objects (or error dicts if generation fails)
+            List[Union[ProductInfo, Dict[str, Any]]]: List of ProductInfo objects for successful
+                generations, or error dictionaries for failed generations
             
         Raises:
             ImageGenerationError: If image generation fails for any product idea
@@ -248,15 +269,14 @@ class ImageGenerator:
                 local_path = img_result['local_path']
 
                 # Create ProductInfo object
-                from app.models import ProductInfo  # Local import to avoid circular import
                 product_info = ProductInfo(
-                    product_id=f"generated_{idea.theme}_{idea.model}",
-                    name=f"Generated Product for {idea.theme}",
-                    product_type=idea.design_instructions.get('product_type', 'sticker') if idea.design_instructions else 'sticker',
+                    product_id=f"product_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    name=idea.theme,
+                    product_type="sticker",
+                    zazzle_template_id=template_id,
+                    zazzle_tracking_code="",
                     image_url=imgur_url,
-                    product_url=imgur_url,  # Placeholder, update as needed
-                    zazzle_template_id=template_id or '',
-                    zazzle_tracking_code='',
+                    product_url="",
                     theme=idea.theme,
                     model=idea.model,
                     prompt_version=idea.prompt_version,
@@ -265,7 +285,12 @@ class ImageGenerator:
                     image_local_path=local_path
                 )
                 results.append(product_info)
+                
             except Exception as e:
-                logger.error(f"Failed to generate image for idea '{idea.theme}': {str(e)}")
-                results.append({"error": str(e), "theme": idea.theme})
+                logger.error(f"Error generating image for product idea: {str(e)}")
+                results.append({
+                    "error": str(e),
+                    "product_idea": idea
+                })
+                
         return results 

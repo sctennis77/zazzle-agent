@@ -1,25 +1,73 @@
+"""
+Content generation module for the Zazzle Agent application.
+
+This module provides functionality for generating content for Zazzle products using OpenAI's GPT models.
+It supports both single and batch content generation, with error handling and logging.
+
+The module handles:
+- Single product content generation
+- Batch processing of multiple products
+- Configuration file processing
+- OpenAI API integration
+- Error handling and logging
+"""
+
 import os
 import json
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import httpx
 from openai import OpenAI
 from dotenv import load_dotenv
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig
+from app.utils.logging_config import get_logger
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ContentGenerator:
-    def __init__(self, api_key=None):
+    """
+    Generates content for Zazzle products using OpenAI's GPT models.
+    
+    This class provides methods to generate content for individual products
+    or batches of products, with support for error handling and logging.
+    
+    The class supports:
+    - Single product content generation
+    - Batch processing of multiple products
+    - OpenAI API integration
+    - Error handling and logging
+    - Content validation
+    """
+    
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize the ContentGenerator with an OpenAI API key.
+        
+        Args:
+            api_key (str, optional): OpenAI API key. If not provided, uses 'test_api_key'
+                for testing purposes.
+        """
         self.api_key = api_key or 'test_api_key'
         self.client = OpenAI(api_key=self.api_key)
         logger.info("Initializing ContentGenerator")
 
     def generate_content(self, product_name: str, force_new_content: bool = False) -> str:
-        """Generate content for a product name."""
+        """
+        Generate content for a product using OpenAI's GPT model.
+        
+        Args:
+            product_name (str): Name of the product to generate content for
+            force_new_content (bool, optional): Whether to force generation of new content
+                even if cached content exists. Defaults to False.
+        
+        Returns:
+            str: Generated content in JSON format, or error message if generation fails
+        
+        Raises:
+            Exception: If content generation fails
+        """
         try:
             prompt = f"Create a content for the product: {product_name}"
             response = self.client.chat.completions.create(
@@ -28,9 +76,10 @@ class ContentGenerator:
             )
             content = response.choices[0].message.content.strip()
             try:
-                # Try to parse as JSON to simulate the test's expectation
+                # Validate that the content is valid JSON
                 json.loads(content)
             except json.JSONDecodeError:
+                logger.error(f"Generated content is not valid JSON for {product_name}")
                 return "Error generating content"
             logger.info(f"Successfully generated content for {product_name}")
             return content
@@ -39,6 +88,18 @@ class ContentGenerator:
             return "Error generating content"
 
     def generate_content_batch(self, products: List[ProductInfo], force_new_content: bool = False) -> List[ProductInfo]:
+        """
+        Generate content for a batch of products.
+        
+        Args:
+            products (List[ProductInfo]): List of ProductInfo objects to process
+            force_new_content (bool, optional): Whether to force generation of new content
+                even if cached content exists. Defaults to False.
+        
+        Returns:
+            List[ProductInfo]: List of processed ProductInfo objects with updated
+                design instructions containing generated content
+        """
         processed_products = []
         for product in products:
             try:
@@ -50,17 +111,26 @@ class ContentGenerator:
                 logger.error(f"Error processing product {product.product_id}: {e}")
         return processed_products
 
-def generate_content_from_config(config_file: str = 'app/products_config.json'):
+def generate_content_from_config(config_file: str = 'app/products_config.json') -> Optional[Dict[str, str]]:
     """
-    Reads product data from a config file and generates content for each.
+    Generate content for products defined in a configuration file.
     
     Args:
-        config_file: Path to the JSON configuration file.
+        config_file (str): Path to the JSON configuration file containing product data.
+            Defaults to 'app/products_config.json'.
+    
+    Returns:
+        Optional[Dict[str, str]]: Dictionary mapping product IDs to generated content,
+            or None if an error occurs
+    
+    Raises:
+        FileNotFoundError: If the configuration file is not found
+        json.JSONDecodeError: If the configuration file contains invalid JSON
     """
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         logger.error("OPENAI_API_KEY not found in environment variables.")
-        return
+        return None
 
     generator = ContentGenerator(api_key=openai_api_key)
 
@@ -71,26 +141,23 @@ def generate_content_from_config(config_file: str = 'app/products_config.json'):
 
     except FileNotFoundError:
         logger.error(f"Configuration file not found: {config_file}")
-        return
+        return None
     except json.JSONDecodeError:
         logger.error(f"Error decoding JSON from configuration file: {config_file}")
-        return
+        return None
     except Exception as e:
         logger.error(f"Error reading configuration file: {e}")
-        return
+        return None
 
     generated_content = {}
     for product in products_data:
-        # For content generation, we mainly need the title. We can fetch it if not in config,
-        # or ideally, update the config with more details later.
-        # For now, we'll use the 'name' from config as a placeholder for title if 'title' is missing.
         product_details = {
             'title': product.get('name', f"Product ID: {product.get('product_id', 'N/A')}"),
             'product_id': product.get('product_id', 'N/A')
         }
         content = generator.generate_content(product_details['title'])
         generated_content[product.get('product_id', 'N/A')] = content
-        print(f"Product ID: {product.get('product_id', 'N/A')}\nContent: {content}\n---")
+        logger.info(f"Generated content for product {product_details['product_id']}")
 
     return generated_content
 

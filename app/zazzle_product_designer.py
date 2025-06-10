@@ -5,12 +5,16 @@ This module provides functionality to create products on Zazzle using their API,
 including handling product templates, affiliate links, and design instructions.
 It supports various product customization options and error handling.
 
-The module integrates with Zazzle's API to create products with custom designs,
-templates, and affiliate tracking. It handles URL generation, parameter validation,
-and error handling for the product creation process.
+The module provides:
+- Product creation and management through Zazzle's API
+- Template configuration and validation
+- Affiliate link generation and tracking
+- URL parameter handling and validation
+- Error handling and logging
+- Integration with Reddit context for product ideas
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DesignInstructions
 from app.utils.logging_config import get_logger
 import os
@@ -34,20 +38,23 @@ class ZazzleProductDesigner:
     2. URL generation for Zazzle product creation
     3. Parameter validation and error handling
     4. Integration with Zazzle's affiliate program
+    5. Product information management and tracking
     """
 
-    def __init__(self, affiliate_id: str = None, session = None, headers: Dict[str, str] = None):
+    def __init__(self, affiliate_id: Optional[str] = None, session: Any = None, headers: Optional[Dict[str, str]] = None):
         """
         Initialize the Product Designer with configuration.
         
         Args:
-            affiliate_id: Optional Zazzle affiliate ID. If not provided, will be loaded from environment.
-            session: Optional HTTP session for making requests.
-            headers: Optional HTTP headers for requests.
+            affiliate_id (Optional[str]): Optional Zazzle affiliate ID. If not provided,
+                will be loaded from environment.
+            session (Any): Optional HTTP session for making requests.
+            headers (Optional[Dict[str, str]]): Optional HTTP headers for requests.
             
         Note:
             The affiliate_id is required for generating valid Zazzle product URLs.
             If not provided, it will be loaded from the ZAZZLE_AFFILIATE_ID environment variable.
+            A warning will be logged if the affiliate ID is not set.
         """
         self.affiliate_id = affiliate_id or os.getenv('ZAZZLE_AFFILIATE_ID')
         if not self.affiliate_id:
@@ -58,17 +65,23 @@ class ZazzleProductDesigner:
         self.session = session
         self.headers = headers or {}
 
-    def _get_template_config(self, design_instructions: DesignInstructions) -> tuple[str, str]:
+    def _get_template_config(self, design_instructions: DesignInstructions) -> Tuple[str, str]:
         """
         Extract template ID and tracking code from design instructions or fall back to default template.
         
         Args:
-            design_instructions: The design instructions containing template configuration.
+            design_instructions (DesignInstructions): The design instructions containing
+                template configuration.
             
         Returns:
-            A tuple of (template_id, tracking_code) where:
-            - template_id: The Zazzle template ID to use for product creation
-            - tracking_code: The tracking code for affiliate link generation
+            Tuple[str, str]: A tuple containing:
+                - template_id (str): The Zazzle template ID to use for product creation
+                - tracking_code (str): The tracking code for affiliate link generation
+                
+        Note:
+            If no template ID is specified in the design instructions, falls back to
+            the default sticker template. The tracking code is always taken from the
+            template configuration.
         """
         template_id = design_instructions.template_id or ZAZZLE_STICKER_TEMPLATE.zazzle_template_id
         tracking_code = ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code  # Always use template tracking code for now
@@ -79,10 +92,11 @@ class ZazzleProductDesigner:
         Validate if a string is a valid URL.
         
         Args:
-            url: The URL string to validate.
+            url (str): The URL string to validate.
             
         Returns:
-            True if the URL is valid (has http/https scheme and valid netloc), False otherwise.
+            bool: True if the URL is valid (has http/https scheme and valid netloc),
+                False otherwise.
             
         Note:
             This method performs basic URL validation to ensure the URL has:
@@ -111,17 +125,18 @@ class ZazzleProductDesigner:
         3. Creates a ProductInfo object with all necessary details
         
         Args:
-            design_instructions: The design instructions for the product.
-            reddit_context: Optional Reddit context for the product.
+            design_instructions (DesignInstructions): The design instructions for the product.
+            reddit_context (Optional[RedditContext]): Optional Reddit context for the product.
             
         Returns:
-            ProductInfo object if successful, None if creation fails.
+            Optional[ProductInfo]: ProductInfo object if successful, None if creation fails.
             
         Note:
             The method performs several validations:
             - Checks for required template and affiliate ID
             - Validates the presence of an image URL
             - Ensures the image URL is properly formatted
+            - Handles URL parameter encoding and ordering
         """
         # Get template configuration
         template_id, tracking_code = self._get_template_config(design_instructions)
@@ -192,20 +207,21 @@ class ZazzleProductDesigner:
         in the correct order for proper API integration.
         
         Args:
-            params: Dictionary of URL parameters containing:
-                - ax: Action type (linkover)
-                - pd: Product template ID
-                - fwd: Forward destination
-                - ed: Edit flag
-                - t_image1_url: Image URL
-                - tc: Tracking code
+            params (Dict[str, Any]): Dictionary of URL parameters containing:
+                - ax (str): Action type (linkover)
+                - pd (str): Product template ID
+                - fwd (str): Forward destination
+                - ed (str): Edit flag
+                - t_image1_url (str): Image URL
+                - tc (str): Tracking code
             
         Returns:
-            Generated product URL if successful, None if generation fails.
+            Optional[str]: Generated product URL if successful, None if generation fails.
             
         Note:
             The URL parameters are ordered to match Zazzle's API expectations.
             The tracking code is always added last to maintain consistent URL structure.
+            The URL must start with 'https://www.zazzle.com/api/create/at-' to be valid.
         """
         try:
             if not params.get('pd') or not self.affiliate_id:

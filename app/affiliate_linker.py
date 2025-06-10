@@ -3,6 +3,12 @@ Affiliate link generation module for the Zazzle Agent application.
 
 This module provides functionality for generating Zazzle affiliate links for products.
 It supports both single and batch link generation, with error handling for invalid data.
+
+The module handles:
+- Validation of product data
+- Construction of affiliate links with proper formatting
+- Batch processing of multiple products
+- Error handling and logging
 """
 
 import logging
@@ -26,6 +32,13 @@ class ZazzleAffiliateLinker:
     
     This class provides methods to generate affiliate links for individual products
     or batches of products, ensuring required data is present and handling errors.
+    
+    The class supports:
+    - Single product link generation
+    - Batch processing of multiple products
+    - Validation of required product data
+    - Error handling and logging
+    - Custom affiliate ID configuration
     """
     
     def __init__(self, affiliate_id=None):
@@ -33,7 +46,8 @@ class ZazzleAffiliateLinker:
         Initialize the ZazzleAffiliateLinker.
         
         Args:
-            affiliate_id: The Zazzle affiliate ID to use in generated links.
+            affiliate_id (str, optional): The Zazzle affiliate ID to use in generated links.
+                If not provided, defaults to 'test_affiliate_id'.
             
         Raises:
             ValueError: If affiliate_id is empty or None.
@@ -46,11 +60,11 @@ class ZazzleAffiliateLinker:
         Validate that product data contains required fields.
         
         Args:
-            product_id: The product's unique identifier
-            name: The product's name
+            product_id (str): The product's unique identifier from Zazzle
+            name (str): The product's display name
         
         Raises:
-            InvalidProductDataError: If required fields are missing
+            InvalidProductDataError: If product_id or name is empty or None
         """
         if not product_id:
             raise InvalidProductDataError("Product ID is required")
@@ -62,14 +76,17 @@ class ZazzleAffiliateLinker:
         Construct the affiliate link URL for direct product links.
         
         Args:
-            product_id: Zazzle product ID
-            name: Product name
+            product_id (str): Zazzle product ID
+            name (str): Product name (used for logging purposes)
         
         Returns:
-            Complete affiliate link URL.
+            str: Complete affiliate link URL in format:
+                https://www.zazzle.com/product/{product_id}?rf={affiliate_id}
+        
+        Raises:
+            ZazzleAffiliateLinkerError: If link construction fails
         """
         try:
-            # Format: https://www.zazzle.com/product/{product_id}?rf={affiliate_id}
             return f"https://www.zazzle.com/product/{product_id}?rf={self.affiliate_id}"
         except Exception as e:
             logger.error(f"Error constructing affiliate link: {e}")
@@ -80,13 +97,13 @@ class ZazzleAffiliateLinker:
         Generate a Zazzle affiliate link for a product.
         
         Args:
-            product: ProductInfo object containing product details
+            product (ProductInfo): ProductInfo object containing product details
         
         Returns:
-            str: Complete affiliate link
+            str: Complete affiliate link URL
         
         Raises:
-            InvalidProductDataError: If product data is invalid
+            InvalidProductDataError: If product data is invalid or missing required fields
             ZazzleAffiliateLinkerError: For other errors during link generation
         """
         self._validate_product_data(product.product_id, product.name)
@@ -103,13 +120,14 @@ class ZazzleAffiliateLinker:
         Generate affiliate links for a batch of products.
         
         Args:
-            products: List of ProductInfo objects
+            products (List[ProductInfo]): List of ProductInfo objects to process
         
         Returns:
-            list: List of ProductInfo objects with affiliate links added
+            List[ProductInfo]: List of ProductInfo objects with affiliate links added.
+                Products that fail to process will have affiliate_link set to None.
         
         Raises:
-            ZazzleAffiliateLinkerError: If batch processing fails
+            ZazzleAffiliateLinkerError: If batch processing fails completely
         """
         processed_products = []
         for product in products:

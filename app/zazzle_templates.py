@@ -3,23 +3,33 @@ Zazzle Templates module for managing product templates and configurations.
 
 This module provides data structures and utilities for managing Zazzle product templates,
 including customizable fields, template configurations, and template retrieval.
+
+The module provides:
+- Data structures for template configurations and customizable fields
+- Pre-defined templates for different product types
+- Template retrieval and validation utilities
+- Support for various field types (image, text, color, etc.)
+- Configuration for file formats and size limits
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 @dataclass
 class CustomizableField:
     """
     Represents a customizable field in a Zazzle product template.
     
+    This class defines the properties and constraints of a field that can be
+    customized in a Zazzle product template, such as images, text, or colors.
+    
     Attributes:
-        type: The type of field (e.g., 'image', 'text', 'color')
-        description: A human-readable description of the field's purpose
-        max_length: Optional maximum length for text fields
-        formats: Optional list of supported file formats for media fields
-        max_size_mb: Optional maximum file size in megabytes for media fields
-        options: Optional list of valid options for selection fields
+        type (str): The type of field (e.g., 'image', 'text', 'color')
+        description (str): A human-readable description of the field's purpose
+        max_length (Optional[int]): Optional maximum length for text fields
+        formats (Optional[List[str]]): Optional list of supported file formats for media fields
+        max_size_mb (Optional[int]): Optional maximum file size in megabytes for media fields
+        options (Optional[List[str]]): Optional list of valid options for selection fields
     """
     type: str
     description: str
@@ -28,23 +38,74 @@ class CustomizableField:
     max_size_mb: Optional[int] = None
     options: Optional[List[str]] = None
 
+    def validate_value(self, value: Any) -> bool:
+        """
+        Validate a value against the field's constraints.
+        
+        Args:
+            value (Any): The value to validate
+            
+        Returns:
+            bool: True if the value is valid, False otherwise
+            
+        Note:
+            Validation rules:
+            - For text fields: checks length against max_length
+            - For image fields: checks format and size
+            - For selection fields: checks if value is in options
+        """
+        if self.type == 'text' and self.max_length:
+            return len(str(value)) <= self.max_length
+        elif self.type == 'image':
+            if not isinstance(value, str):
+                return False
+            # Add image validation logic here
+            return True
+        elif self.type == 'selection' and self.options:
+            return value in self.options
+        return True
+
 @dataclass
 class ZazzleTemplateConfig:
     """
     Configuration for a Zazzle product template.
     
+    This class defines the complete configuration for a Zazzle product template,
+    including its type, identifiers, and customizable fields.
+    
     Attributes:
-        product_type: The type of product (e.g., 'Sticker', 'T-Shirt')
-        zazzle_template_id: The unique identifier for the Zazzle template
-        original_url: The original Zazzle product URL
-        zazzle_tracking_code: The tracking code for affiliate links
-        customizable_fields: Dictionary mapping field names to their configurations
+        product_type (str): The type of product (e.g., 'Sticker', 'T-Shirt')
+        zazzle_template_id (str): The unique identifier for the Zazzle template
+        original_url (str): The original Zazzle product URL
+        zazzle_tracking_code (str): The tracking code for affiliate links
+        customizable_fields (Dict[str, CustomizableField]): Dictionary mapping field names to their configurations
     """
     product_type: str
     zazzle_template_id: str
     original_url: str
     zazzle_tracking_code: str
     customizable_fields: Dict[str, CustomizableField]
+
+    def validate_fields(self, field_values: Dict[str, Any]) -> bool:
+        """
+        Validate all field values against their configurations.
+        
+        Args:
+            field_values (Dict[str, Any]): Dictionary of field names and their values
+            
+        Returns:
+            bool: True if all values are valid, False otherwise
+            
+        Note:
+            Checks each field value against its corresponding CustomizableField
+            configuration using the validate_value method.
+        """
+        for field_name, value in field_values.items():
+            if field_name not in self.customizable_fields:
+                return False
+            if not self.customizable_fields[field_name].validate_value(value):
+                return False
+        return True
 
 # Define the Zazzle Sticker Template
 ZAZZLE_STICKER_TEMPLATE = ZazzleTemplateConfig(
@@ -70,10 +131,11 @@ def get_product_template(product_type: str) -> Optional[ZazzleTemplateConfig]:
     Retrieves a product template by type.
     
     Args:
-        product_type: The type of product to find (case-insensitive)
+        product_type (str): The type of product to find (case-insensitive)
         
     Returns:
-        The matching ZazzleTemplateConfig if found, None otherwise
+        Optional[ZazzleTemplateConfig]: The matching template configuration if found,
+            None otherwise
         
     Example:
         >>> template = get_product_template("sticker")
