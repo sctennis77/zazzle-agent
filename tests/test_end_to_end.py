@@ -325,25 +325,26 @@ async def test_create_product_success(mock_zazzle_response):
     session.post.side_effect = post
 
     designer = ZazzleProductDesigner(
-        base_url="https://api.zazzle.com",
         affiliate_id="test123",
-        template="template123",
         session=session,
         headers={}
     )
+
+    # Create design instructions with template ID
     design_instructions = DesignInstructions(
         image="https://example.com/image.jpg",
-        theme="test",
-        product_type="sticker",
-        model="dall-e-2",
-        prompt_version="1.0"
+        theme="test_theme",
+        template_id="template123"
     )
-    product = await designer.create_product(design_instructions)
-    assert product is not None
-    assert product.product_id is not None
-    assert product.product_id == "test123"
-    assert product.product_url == "https://zazzle.com/test123"
-    assert product.zazzle_tracking_code == "track123"
+
+    result = await designer.create_product(design_instructions)
+    assert result is not None
+    assert isinstance(result.product_id, str)
+    assert result.product_id.startswith('prod_')
+    assert result.product_url.startswith('https://www.zazzle.com/api/create/at-test123?')
+    assert 'pd=template123' in result.product_url
+    assert 't_image1_url=https%3A//example.com/image.jpg' in result.product_url
+    assert 'tc=RedditStickerz_0' in result.product_url
 
 @pytest.mark.asyncio
 async def test_create_product_failure():
@@ -365,36 +366,36 @@ async def test_create_product_failure():
     session.post.side_effect = post
 
     designer = ZazzleProductDesigner(
-        base_url="https://api.zazzle.com",
         affiliate_id="test123",
-        template="template123",
         session=session,
         headers={}
     )
+
+    # Create design instructions with template ID
     design_instructions = DesignInstructions(
-        image="",  # Missing image should cause failure
-        theme="test",
-        product_type="sticker"
+        image=None,
+        theme="test_theme",
+        template_id="template123"
     )
-    product = await designer.create_product(design_instructions)
-    assert product is None
+
+    result = await designer.create_product(design_instructions)
+    assert result is None
 
 @pytest.mark.asyncio
 async def test_create_product_missing_required():
     """Test product creation with missing required fields."""
     designer = ZazzleProductDesigner(
-        base_url="https://api.zazzle.com",
         affiliate_id="test123",
-        template="template123",
         session=Mock(),
         headers={}
     )
 
-    # Test missing image_url
+    # Create design instructions with missing required fields
     design_instructions = DesignInstructions(
-        image="",
-        theme="test",
-        product_type="sticker"
+        image=None,
+        theme="test_theme",
+        template_id="template123"
     )
-    product = await designer.create_product(design_instructions)
-    assert product is None 
+
+    result = await designer.create_product(design_instructions)
+    assert result is None 
