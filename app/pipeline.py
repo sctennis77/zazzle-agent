@@ -98,16 +98,42 @@ class Pipeline:
         self.session = session
         self.reddit_post_id = reddit_post_id
 
-    def log_error(self, error_message: str):
-        """Log an error to the database if session is available."""
+    def log_error(self, error_message: str, error_type: str = 'SYSTEM_ERROR', component: str = 'PIPELINE', 
+                 stack_trace: str = None, context_data: dict = None, severity: str = 'ERROR'):
+        """
+        Log an error to the database if session is available.
+        
+        Args:
+            error_message: The error message to log
+            error_type: Type of error (e.g., 'API_ERROR', 'VALIDATION_ERROR', 'SYSTEM_ERROR')
+            component: Component where error occurred (e.g., 'REDDIT_AGENT', 'IMAGE_GENERATOR')
+            stack_trace: Full stack trace if available
+            context_data: Additional context data as dictionary
+            severity: Error severity ('ERROR', 'WARNING', 'INFO')
+        """
         if self.session and self.pipeline_run_id:
             error_log = ErrorLog(
                 pipeline_run_id=self.pipeline_run_id,
-                error_message=error_message
+                error_message=error_message,
+                error_type=error_type,
+                component=component,
+                stack_trace=stack_trace,
+                context_data=context_data,
+                severity=severity
             )
             self.session.add(error_log)
+            
+            # Update pipeline run with last error
+            pipeline_run = self.session.query(PipelineRun).get(self.pipeline_run_id)
+            if pipeline_run:
+                pipeline_run.last_error = error_message
+                pipeline_run.status = 'failed'
+                pipeline_run.end_time = datetime.utcnow()
+                if pipeline_run.start_time:
+                    pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
+            
             self.session.commit()
-            logger.error(f"Logged error to database: {error_message}")
+            logger.error(f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})")
 
     async def process_product_idea(self, product_idea: ProductIdea) -> Optional[ProductInfo]:
         """
@@ -191,6 +217,12 @@ class Pipeline:
                 pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
                 if pipeline_run:
                     pipeline_run.status = 'running'
+                    pipeline_run.start_time = datetime.utcnow()
+                    pipeline_run.config = {
+                        'model': self.config.model,
+                        'template_id': self.config.zazzle_template_id,
+                        'prompt_version': self.config.prompt_version
+                    }
                     session.commit()
 
             # Use the injected RedditAgent (self.reddit_agent) instead of creating a new one
@@ -213,33 +245,39 @@ class Pipeline:
                     if pipeline_run:
                         pipeline_run.status = 'success'
                         pipeline_run.end_time = datetime.utcnow()
+                        if pipeline_run.start_time:
+                            pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
+                        pipeline_run.metrics = {
+                            'products_generated': 1,
+                            'reddit_posts_processed': 1
+                        }
                         session.commit()
 
                 return [product_info]
+            else:
+                # Update pipeline run status to 'failed' if no product was generated
+                if session:
+                    pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
+                    if pipeline_run:
+                        pipeline_run.status = 'failed'
+                        pipeline_run.end_time = datetime.utcnow()
+                        if pipeline_run.start_time:
+                            pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
+                        pipeline_run.last_error = "No product was generated"
+                        session.commit()
+                return []
 
-            # Update pipeline run status to 'no_products'
-            if session:
-                pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
-                if pipeline_run:
-                    pipeline_run.status = 'no_products'
-                    pipeline_run.end_time = datetime.utcnow()
-                    session.commit()
-
-            return []
         except Exception as e:
-            error_msg = f"Error in pipeline run: {str(e)}"
-            self.log_error(error_msg)
-            logger.error(error_msg)
-
-            # Update pipeline run status to 'error'
-            if session:
-                pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
-                if pipeline_run:
-                    pipeline_run.status = 'error'
-                    pipeline_run.end_time = datetime.utcnow()
-                    session.commit()
-
-            raise  # Re-raise the exception
+            # Log the error with enhanced error information
+            import traceback
+            self.log_error(
+                error_message=str(e),
+                error_type='PIPELINE_ERROR',
+                component='PIPELINE',
+                stack_trace=traceback.format_exc(),
+                context_data={'pipeline_run_id': pipeline_run_id}
+            )
+            return []
 
     async def run_pipeline(self) -> List[ProductInfo]:
         """
