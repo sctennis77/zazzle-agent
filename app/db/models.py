@@ -25,6 +25,7 @@ class RedditPost(Base):
     content = Column(Text)
     subreddit = Column(String(64))
     url = Column(Text)
+    permalink = Column(Text)
 
     pipeline_run = relationship('PipelineRun', back_populates='reddit_posts')
     comments = relationship('CommentSummary', back_populates='reddit_post', cascade='all, delete-orphan')

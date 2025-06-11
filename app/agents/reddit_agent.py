@@ -154,7 +154,6 @@ class RedditAgent(ChannelAgent):
         """
         Find a trending post and create a product from it.
         Persists RedditContext as RedditPost in the DB if session and pipeline_run_id are provided.
-        
         Returns:
             ProductInfo object if successful, None otherwise
         """
@@ -184,29 +183,14 @@ class RedditAgent(ChannelAgent):
                 comments=[{'text': getattr(trending_post, 'comment_summary', 'No comment summary')}]
             )
 
-            # Persist RedditContext as RedditPost in the DB if session and pipeline_run_id are provided
-            reddit_post_id = None
-            if self.session and self.pipeline_run_id:
-                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
-                self.session.add(orm_post)
-                self.session.commit()
-                reddit_post_id = orm_post.id
-                logger.info(f"Persisted RedditPost with id {reddit_post_id}")
-
             # Determine product idea from post (synchronous call)
             product_idea = self._determine_product_idea(reddit_context)
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
                 return None
-
-            # Validate that theme is available and relevant to the context
             if not product_idea.theme or product_idea.theme.lower() == 'default theme':
                 raise ValueError("No valid theme was generated from the Reddit context")
-
-            # Log the product idea for debugging
             logger.info(f"Product Idea: {product_idea}")
-
-            # Generate image for the product
             if not product_idea.image_description or not product_idea.image_description.strip():
                 logger.error("Image prompt (image_description) is empty. Aborting image generation.")
                 raise ValueError("Image prompt (image_description) cannot be empty.")
@@ -218,8 +202,6 @@ class RedditAgent(ChannelAgent):
             except Exception as e:
                 logger.error(f"Failed to generate image: {str(e)}")
                 return None
-
-            # Create design instructions
             design_instructions = DesignInstructions(
                 image=imgur_url,
                 theme=product_idea.theme,
@@ -229,10 +211,7 @@ class RedditAgent(ChannelAgent):
                 model=self.config.model,
                 prompt_version=self.config.prompt_version
             )
-            # Log the design instructions for debugging
             logger.info(f"Design Instructions: {design_instructions}")
-
-            # Create product using product designer
             product_info = await self.product_designer.create_product(
                 design_instructions=design_instructions,
                 reddit_context=reddit_context
@@ -240,15 +219,26 @@ class RedditAgent(ChannelAgent):
             if not product_info:
                 logger.warning("Failed to create product")
                 return None
-            # If product_info is a dict, convert to ProductInfo dataclass
             if isinstance(product_info, dict):
                 product_info = ProductInfo.from_dict(product_info)
-            # Optionally, you could attach reddit_post_id to product_info for downstream use
             return product_info
-
         except Exception as e:
             logger.error(f"Error in find_and_create_product: {str(e)}")
             return None
+
+    def save_reddit_context_to_db(self, reddit_context) -> int:
+        """
+        Persist a RedditContext as RedditPost in the DB and return the DB ID.
+        """
+        from app.db.mappers import reddit_context_to_db
+        reddit_post_id = None
+        if self.session and self.pipeline_run_id:
+            orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
+            self.session.add(orm_post)
+            self.session.commit()
+            reddit_post_id = orm_post.id
+            logger.info(f"Persisted RedditPost with id {reddit_post_id}")
+        return reddit_post_id
 
     def _reset_daily_stats_if_needed(self):
         """

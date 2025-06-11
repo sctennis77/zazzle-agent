@@ -2,8 +2,22 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 from app.pipeline import Pipeline
 from app.models import ProductIdea, RedditContext, ProductInfo, PipelineConfig
+from app.agents.reddit_agent import RedditAgent
+from app.db.models import PipelineRun
+from app.db.database import SessionLocal
 import os
 import json
+
+# Add DB setup/teardown fixture
+from app.db.database import Base, engine
+
+@pytest.fixture(autouse=True)
+def setup_and_teardown_db():
+    # Drop and recreate all tables before each test
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture
 def pipeline():
@@ -132,4 +146,56 @@ async def test_run_pipeline_empty(pipeline):
     """Test processing an empty batch of product ideas."""
     pipeline.reddit_agent.get_product_info.return_value = []
     results = await pipeline.run_pipeline()
-    assert len(results) == 0 
+    assert len(results) == 0
+
+@pytest.mark.asyncio
+async def test_run_pipeline(pipeline):
+    """Test the pipeline run method."""
+    # Create a session and pipeline_run_id
+    session = SessionLocal()
+    pipeline_run = PipelineRun(status="running")
+    session.add(pipeline_run)
+    session.commit()
+    pipeline_run_id = pipeline_run.id
+
+    # Mock RedditAgent's find_and_create_product and save_reddit_context_to_db
+    reddit_context = RedditContext(
+        post_id='test_post_id',
+        post_title='Test Post Title',
+        post_url='https://reddit.com/test',
+        subreddit='test_subreddit'
+    )
+    product_info = ProductInfo(
+        product_id='test_id',
+        name='Test Product',
+        product_type='sticker',
+        zazzle_template_id='template123',
+        zazzle_tracking_code='tracking456',
+        image_url='https://example.com/generated_image.jpg',
+        product_url='https://example.com/product',
+        theme='theme1',
+        model='dall-e-3',
+        prompt_version='1.0.0',
+        reddit_context=reddit_context,
+        design_instructions={'image': 'https://example.com/image1.jpg', 'content': 'Generated content'},
+        image_local_path='/path/to/generated_image.jpg'
+    )
+    # Add image_description attribute for DB mapping compatibility
+    product_info.image_description = 'Test image description'
+    pipeline.reddit_agent.find_and_create_product = AsyncMock(return_value=product_info)
+    pipeline.reddit_agent.save_reddit_context_to_db = RedditAgent.save_reddit_context_to_db.__get__(pipeline.reddit_agent)
+
+    # Run the pipeline
+    products = await pipeline.run(pipeline_run_id, session)
+    assert len(products) > 0
+    # Verify that the ProductInfo is persisted in the database
+    from app.db.models import ProductInfo as ProductInfoDB, RedditPost as RedditPostDB
+    db_product = session.query(ProductInfoDB).filter(ProductInfoDB.pipeline_run_id == pipeline_run_id).first()
+    assert db_product is not None
+    assert db_product.theme == products[0].theme
+    assert db_product.model == products[0].model
+    assert db_product.prompt_version == products[0].prompt_version
+    # Get the RedditPost id for the test post
+    db_reddit_post = session.query(RedditPostDB).filter_by(post_id='test_post_id').first()
+    assert db_product.reddit_post_id == db_reddit_post.id
+    session.close() 

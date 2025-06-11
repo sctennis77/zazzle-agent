@@ -172,6 +172,7 @@ class RedditContext:
         subreddit (str): The subreddit name
         post_content (Optional[str]): Optional content/body of the post
         comments (Optional[List[Dict[str, Any]]]): Optional list of comments on the post
+        permalink (Optional[str]): The Reddit post's permalink
     """
     post_id: str
     post_title: str
@@ -179,6 +180,7 @@ class RedditContext:
     subreddit: str
     post_content: Optional[str] = None
     comments: Optional[List[Dict[str, Any]]] = None
+    permalink: Optional[str] = None
 
     def log(self) -> None:
         """

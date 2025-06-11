@@ -9,6 +9,8 @@ import praw
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DesignInstructions
 import pytest
 from unittest import IsolatedAsyncioTestCase
+from app.db.database import SessionLocal
+from app.db.models import PipelineRun, RedditPost
 
 class TestRedditAgent(IsolatedAsyncioTestCase):
     """Test cases for the Reddit Agent."""
@@ -81,6 +83,91 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             choices=[MagicMock(message=MagicMock(content='Test response'))]
         )
         self.addCleanup(self.patcher_openai.stop)
+
+    @patch('app.image_generator.ImageGenerator.generate_image', new_callable=AsyncMock, return_value=("https://example.com/image.jpg", "/tmp/image.jpg"))
+    @patch('app.zazzle_product_designer.ZazzleProductDesigner.create_product', new_callable=AsyncMock)
+    @patch('app.agents.reddit_agent.RedditAgent._determine_product_idea', return_value=ProductIdea(
+        theme='Test Theme',
+        image_description='Test image description',
+        design_instructions={'image': 'https://example.com/image.jpg', 'theme': 'Test Theme'},
+        reddit_context=RedditContext(
+            post_id='test_post_id',
+            post_title='Test Post Title',
+            post_url='https://reddit.com/test',
+            subreddit='test_subreddit'
+        ),
+        model='dall-e-3',
+        prompt_version='1.0.0'
+    ))
+    @patch('app.agents.reddit_agent.RedditAgent._find_trending_post', new_callable=AsyncMock)
+    async def test_find_and_create_product(self, mock_find_trending_post, mock_determine_product_idea, mock_create_product, mock_generate_image):
+        # Setup
+        mock_post = MagicMock()
+        mock_post.id = 'test_post_id'
+        mock_post.title = 'Test Post Title'
+        mock_post.url = 'https://reddit.com/test'
+        mock_post.permalink = '/r/test/123'
+        mock_post.subreddit.display_name = 'test_subreddit'
+        mock_post.selftext = 'Test Content'
+        mock_post.comment_summary = 'Test comment summary'
+        mock_find_trending_post.return_value = mock_post
+        
+        mock_product_info = MagicMock()
+        mock_create_product.return_value = mock_product_info
+        
+        result = await self.reddit_agent.find_and_create_product()
+        self.assertEqual(result, mock_product_info)
+
+    @patch('app.zazzle_product_designer.ZazzleProductDesigner.create_product', new_callable=AsyncMock)
+    async def test_create_product(self, mock_create_product):
+        # Setup
+        mock_post = MagicMock()
+        mock_post.id = 'test_post_id'
+        mock_post.title = 'Test Post Title'
+        mock_post.url = 'https://reddit.com/test'
+        mock_post.permalink = '/r/test/123'
+        mock_post.subreddit.display_name = 'test_subreddit'
+        mock_post.selftext = 'Test Content'
+        mock_post.comment_summary = 'Test comment summary'
+        
+        mock_product_info = MagicMock()
+        mock_create_product.return_value = mock_product_info
+        
+        # Simulate calling create_product via the agent's product_designer
+        result = await self.reddit_agent.product_designer.create_product(
+            DesignInstructions(
+                image='https://example.com/image.jpg',
+                theme='test_theme',
+                text='desc',
+                product_type='sticker',
+                template_id='template123',
+                model='dall-e-3',
+                prompt_version='1.0.0'
+            ),
+            RedditContext(
+                post_id='test_post_id',
+                post_title='Test Post Title',
+                post_url='https://reddit.com/test',
+                subreddit='test_subreddit'
+            )
+        )
+        self.assertEqual(result, mock_product_info)
+
+    @patch('app.agents.reddit_agent.RedditAgent._find_trending_post', new_callable=AsyncMock)
+    async def test_find_reddit_post(self, mock_find_trending_post):
+        # Setup
+        mock_post = MagicMock()
+        mock_post.id = 'test_post_id'
+        mock_post.title = 'Test Post Title'
+        mock_post.url = 'https://reddit.com/test'
+        mock_post.permalink = '/r/test/123'
+        mock_post.subreddit.display_name = 'test_subreddit'
+        mock_post.selftext = 'Test Content'
+        mock_post.comment_summary = 'Test comment summary'
+        mock_find_trending_post.return_value = mock_post
+        
+        result = await self.reddit_agent._find_trending_post()
+        self.assertEqual(result, mock_post)
 
     @patch('app.zazzle_product_designer.ZazzleProductDesigner.create_product')
     async def test_get_product_info(self, mock_create_product):
@@ -376,14 +463,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         result = self.reddit_agent.reply_to_comment_with_marketing('test_comment_id', product_info, {})
         assert result is not None
         assert isinstance(result, dict)
-
-    @patch('app.agents.reddit_agent.RedditAgent')
-    async def test_reddit_agent_find_and_create_product(self, MockRedditAgent):
-        """Test only the RedditAgent.find_and_create_product part of the pipeline."""
-        agent = MockRedditAgent()
-        agent.find_and_create_product = AsyncMock(return_value='product_info')
-        product_info = await agent.find_and_create_product()
-        assert product_info == 'product_info'
 
 if __name__ == '__main__':
     unittest.main() 

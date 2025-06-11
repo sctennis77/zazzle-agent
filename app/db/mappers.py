@@ -37,7 +37,8 @@ def reddit_context_to_db(reddit_context: RedditContext, pipeline_run_id: int) ->
         title=reddit_context.post_title,
         content=getattr(reddit_context, 'post_content', None),
         subreddit=reddit_context.subreddit,
-        url=reddit_context.post_url
+        url=reddit_context.post_url,
+        permalink=getattr(reddit_context, 'permalink', None)
     )
 
 def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:
@@ -48,4 +49,27 @@ def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:
         subreddit=orm_reddit_post.subreddit,
         post_content=orm_reddit_post.content,
         comments=[]  # Comments can be loaded separately if needed
+    )
+
+def product_info_to_db(product_info, pipeline_run_id, reddit_post_id):
+    """
+    Convert a ProductInfo object to a ProductInfo ORM model.
+    """
+    from app.db.models import ProductInfo as ProductInfoModel
+    return ProductInfoModel(
+        pipeline_run_id=pipeline_run_id,
+        reddit_post_id=reddit_post_id,
+        theme=getattr(product_info, 'theme', None),
+        image_url=getattr(product_info, 'image_url', None),
+        product_url=getattr(product_info, 'product_url', None),
+        affiliate_link=getattr(product_info, 'affiliate_link', None),
+        template_id=getattr(product_info, 'zazzle_template_id', None),
+        model=getattr(product_info, 'model', None),
+        prompt_version=getattr(product_info, 'prompt_version', None),
+        product_type=getattr(product_info, 'product_type', None),
+        design_description=(
+            product_info.design_instructions.get('text')
+            if hasattr(product_info, 'design_instructions') and isinstance(product_info.design_instructions, dict)
+            else str(getattr(product_info, 'design_instructions', ''))
+        )
     ) 
