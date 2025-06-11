@@ -608,59 +608,54 @@ class RedditAgent(ChannelAgent):
         except Exception as e:
             logger.error(f"Error interacting with subreddit: {str(e)}")
 
-    async def _find_trending_post(self):
-        """Find a trending post from Reddit."""
+    async def _find_trending_post(self, tries: int = 3, limit: int = 20):
+        """Find a trending post from Reddit, retrying up to `tries` times and using up to `limit` posts per attempt."""
+        logger.info(f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}")
         try:
-            # Get subreddit
-            subreddit = self.reddit.subreddit(self.subreddit_name)
-            
-            # Get trending posts
-            for submission in subreddit.hot(limit=20):  # Increased limit to find more posts
-                # Skip stickied posts
-                if submission.stickied:
-                    continue
-                    
-                # Skip posts that are too old (increased to 2 days)
-                if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
-                    continue
-                    
-                # Skip posts with too few upvotes (reduced threshold)
-                if submission.score < 5:
-                    continue
-
-                # Skip image/video posts
-                if not submission.is_self:
-                    continue
-
-                # Skip posts with no content
-                if not submission.selftext:
-                    continue
-
-                # Get top comments and generate summary
-                submission.comments.replace_more(limit=0)  # Load top-level comments only
-                top_comments = submission.comments.list()[:5]  # Get top 5 comments
-                comment_texts = [comment.body for comment in top_comments if hasattr(comment, 'body')]
-                
-                if comment_texts:
-                    # Use GPT to summarize comments
-                    response = self.openai.chat.completions.create(
-                        model="gpt-4",
-                        messages=[
-                            {"role": "system", "content": "Summarize the key points from these Reddit comments in 1-2 sentences."},
-                            {"role": "user", "content": f"Comments:\n{chr(10).join(comment_texts)}"}
-                        ]
-                    )
-                    comment_summary = response.choices[0].message.content.strip()
-                else:
-                    comment_summary = "No comments available."
-
-                # Add comment summary to submission
-                submission.comment_summary = comment_summary
-                    
-                return submission
-                
+            for attempt in range(tries):
+                # Get subreddit
+                subreddit = self.reddit.subreddit(self.subreddit_name)
+                found = False
+                # Get trending posts
+                for submission in subreddit.hot(limit=limit):
+                    logger.info(f"Processing submission: {submission.title}")
+                    # Skip stickied posts
+                    if submission.stickied:
+                        continue
+                    # Skip posts that are too old (increased to 2 days)
+                    if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
+                        continue
+                    # Skip posts with too few upvotes (reduced threshold)
+                    # if submission.score < 5:
+                    #     continue
+                    # # Skip image/video posts
+                    # if not submission.is_self:
+                    #     continue
+                    # Skip posts with no content
+                    if not submission.selftext:
+                        continue
+                    # Get top comments and generate summary
+                    submission.comments.replace_more(limit=0)  # Load top-level comments only
+                    top_comments = submission.comments.list()[:5]  # Get top 5 comments
+                    comment_texts = [comment.body for comment in top_comments if hasattr(comment, 'body')]
+                    if comment_texts:
+                        # Use GPT to summarize comments
+                        response = self.openai.chat.completions.create(
+                            model="gpt-4",
+                            messages=[
+                                {"role": "system", "content": "Summarize the key points from these Reddit comments in 1-2 sentences."},
+                                {"role": "user", "content": f"Comments:\n{chr(10).join(comment_texts)}"}
+                            ]
+                        )
+                        comment_summary = response.choices[0].message.content.strip()
+                    else:
+                        comment_summary = "No comments available."
+                    # Add comment summary to submission
+                    submission.comment_summary = comment_summary
+                    return submission
+                # If we reach here, no suitable post was found in this attempt
+                logger.info(f"No suitable trending post found on attempt {attempt + 1}/{tries}")
             return None
-            
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
             return None 
