@@ -4,21 +4,28 @@ This project automates the process of dynamically generating products on Zazzle 
 
 ## System Components
 
-### 1. Reddit Agent
+### 1. Pipeline
+- Orchestrates the complete product generation process
+- Manages concurrent operations and error handling
+- Implements retry logic with exponential backoff
+- Coordinates between all system components
+- Provides a unified interface for end-to-end product generation
+
+### 2. Reddit Agent
 - Monitors and interacts with r/golf subreddit
 - Uses LLM to analyze posts and comments for product opportunities
 - Generates engaging and marketing-focused comments
 - Makes voting decisions based on content relevance
 - Operates in test mode for safe development
 
-### 2. Product Designer
+### 3. Product Designer
 - Receives design instructions from Reddit Agent
 - Uses DTOs (Data Transfer Objects) for product configuration
 - Integrates with Zazzle Create-a-Product API
 - Manages product creation and listing
 - Handles URL encoding for product parameters
 
-### 3. Integration Layer
+### 4. Integration Layer
 - Coordinates between Reddit Agent and Product Designer
 - Manages API authentication and rate limiting
 - Handles error recovery and retry logic
@@ -28,15 +35,22 @@ This project automates the process of dynamically generating products on Zazzle 
 
 ```mermaid
 graph TD
+    subgraph "Pipeline Orchestration"
+        PL[Pipeline] --> |orchestrates| RA[RedditAgent]
+        PL --> |manages| IG[ImageGenerator]
+        PL --> |coordinates| ZPD[ZazzleProductDesigner]
+        PL --> |handles| AL[AffiliateLinker]
+    end
+
     subgraph "Content Discovery"
         RC[RedditContext] --> |post_id, title, content| PI[ProductIdea]
-        RC --> |subreddit, comments| RA[RedditAgent]
+        RC --> |subreddit, comments| RA
     end
 
     subgraph "Product Generation"
-        PI --> |theme, image_description| IG[ImageGenerator]
+        PI --> |theme, image_description| IG
         IG --> |imgur_url, local_path| DI[DesignInstructions]
-        DI --> |image, theme, text| ZPD[ZazzleProductDesigner]
+        DI --> |image, theme, text| ZPD
         ZPD --> |product_id, name, urls| PF[ProductInfo]
     end
 
@@ -49,6 +63,7 @@ graph TD
     subgraph "Configuration"
         PC[PipelineConfig] --> |model, template_id| IG
         PC --> |tracking_code| ZPD
+        PC --> |settings| PL
     end
 
     subgraph "Data Flow"
@@ -61,14 +76,26 @@ graph TD
     classDef agent fill:#bbf,stroke:#333,stroke-width:2px
     classDef storage fill:#bfb,stroke:#333,stroke-width:2px
     classDef config fill:#fbb,stroke:#333,stroke-width:2px
+    classDef pipeline fill:#fbf,stroke:#333,stroke-width:2px
 
     class RC,PI,PF,DM model
     class RA,ZPD,IG,DC agent
     class JSON,CSV,DB storage
     class PC config
+    class PL pipeline
 ```
 
 ## Component Details
+
+### Pipeline Orchestration
+- **Pipeline**: Central orchestrator for the product generation process:
+  - Manages the complete product generation workflow
+  - Handles concurrent operations and error recovery
+  - Implements retry logic with exponential backoff
+  - Coordinates between all system components
+  - Provides a unified interface for end-to-end product generation
+  - Supports both single and batch product generation
+  - Maintains comprehensive logging and error tracking
 
 ### Content Discovery
 - **RedditContext**: Captures all relevant information from a Reddit post, including:
@@ -157,17 +184,23 @@ graph TD
 
 The system implements comprehensive error handling at each stage:
 
-1. **Content Discovery**:
+1. **Pipeline Orchestration**:
+   - Manages concurrent operations safely
+   - Implements retry logic with exponential backoff
+   - Handles component failures gracefully
+   - Maintains system state during errors
+
+2. **Content Discovery**:
    - Validates Reddit API responses
    - Handles rate limiting
    - Manages API timeouts
 
-2. **Product Generation**:
+3. **Product Generation**:
    - Retries failed image generation
    - Validates design instructions
    - Handles Zazzle API errors
 
-3. **Distribution**:
+4. **Distribution**:
    - Tracks failed distributions
    - Implements retry logic
    - Maintains error logs
@@ -182,6 +215,7 @@ Each component includes detailed logging:
 
 ## Features
 
+- **Pipeline Orchestration**: Centralized management of the product generation process
 - **Reddit Integration**: Automated monitoring and interaction with r/golf
 - **LLM-Powered Analysis**: Dynamic product idea generation using OpenAI GPT
 - **Product Generation**: Dynamic sticker design creation with configurable image generation models (DALL-E 2 and DALL-E 3)
