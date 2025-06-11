@@ -21,6 +21,7 @@ from app.image_generator import ImageGenerator
 from app.utils.logging_config import get_logger
 from dataclasses import asdict
 from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
+from app.db.mappers import reddit_context_to_db
 
 logger = get_logger(__name__)
 
@@ -36,13 +37,16 @@ class RedditAgent(ChannelAgent):
     - Track daily engagement statistics
     """
 
-    def __init__(self, config_or_model: Any = None, subreddit_name=None):
+    def __init__(self, config_or_model: Any = None, subreddit_name='golf', pipeline_run_id=None, session=None):
         """
         Initialize the Reddit agent with configuration or model string.
+        Optionally accepts pipeline_run_id and session for DB persistence.
         
         Args:
             config_or_model: PipelineConfig dict or model string (for backward compatibility)
-            subreddit_name: Optional subreddit to target
+            subreddit_name: Optional subreddit to target, defaults to 'golf'
+            pipeline_run_id: Optional pipeline run ID for DB persistence
+            session: Optional SQLAlchemy session for DB persistence
         """
         super().__init__()
         # Support both config dict and model string for backward compatibility in tests
@@ -88,8 +92,11 @@ class RedditAgent(ChannelAgent):
             username=os.getenv('REDDIT_USERNAME'),
             password=os.getenv('REDDIT_PASSWORD')
         )
-        self.subreddit_name = subreddit_name or os.getenv('REDDIT_SUBREDDIT', 'all')
+        self.subreddit_name = subreddit_name
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
+        # New: store pipeline_run_id and session for DB persistence
+        self.pipeline_run_id = pipeline_run_id
+        self.session = session
 
     def _determine_product_idea(self, reddit_context: RedditContext) -> Optional[ProductIdea]:
         """
@@ -106,8 +113,8 @@ class RedditAgent(ChannelAgent):
             response = self.openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a creative product idea generator for stickers and similar products to sell on Zazzle or other platforms. Generate unique, innovative, and marketable product ideas based on Reddit posts. Keep image descriptions simple and focused on the key visual elements. Avoid complex details or multiple elements. Focus on one main subject or scene."},
-                    {"role": "user", "content": f"Based on this Reddit post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\n\nGenerate a product idea with the following format:\nTheme: [Your creative theme here]\nImage Description: [A simple, focused description of the main image element]"}
+                    {"role": "system", "content": "You are a creative product idea generator for Zazzle or other platforms. Generate unique, innovative, marketable, and artistic product designs based Reddit posts. Keep image descriptions simple and focused on the key visual elements. Avoid complex details or too many elements. Focus on one main subject and the natural scenery (when applicable)."},
+                    {"role": "user", "content": f"Based on this Reddit post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\n\nGenerate a product idea with the following format:\nTheme: [Your creative theme here]\nImage Description: [A simple, clear description of the desired image content]"}
                 ]
             )
 
@@ -116,7 +123,9 @@ class RedditAgent(ChannelAgent):
 
             # Parse response to get theme and image description
             content = response.choices[0].message.content
+            
             lines = content.split('\n')
+            logger.info(f"OpenAI Response: {lines}")
             theme = lines[0].strip() if lines else "Default Theme"
             image_description = lines[1].strip() if len(lines) > 1 else "Default Description"
             # Adjust parsing logic to handle the expected format
@@ -144,6 +153,7 @@ class RedditAgent(ChannelAgent):
     async def find_and_create_product(self) -> Optional[ProductInfo]:
         """
         Find a trending post and create a product from it.
+        Persists RedditContext as RedditPost in the DB if session and pipeline_run_id are provided.
         
         Returns:
             ProductInfo object if successful, None otherwise
@@ -155,20 +165,44 @@ class RedditAgent(ChannelAgent):
                 logger.warning("No suitable trending post found")
                 return None
 
+            # Log trending post details
+            logger.info("Found trending post:")
+            logger.info(f"Post ID: {trending_post.id}")
+            logger.info(f"Title: {trending_post.title}")
+            logger.info(f"URL: {trending_post.url}")
+            logger.info(f"Subreddit: {trending_post.subreddit.display_name}")
+            logger.info(f"Content: {trending_post.selftext if hasattr(trending_post, 'selftext') else 'No content'}")
+            logger.info(f"Comment Summary: {getattr(trending_post, 'comment_summary', 'No comment summary')}")
+
             # Create RedditContext from the post
             reddit_context = RedditContext(
                 post_id=trending_post.id,
                 post_title=trending_post.title,
                 post_url=f"https://reddit.com{trending_post.permalink}",
                 subreddit=trending_post.subreddit.display_name,
-                post_content=trending_post.selftext if hasattr(trending_post, 'selftext') else None
+                post_content=trending_post.selftext if hasattr(trending_post, 'selftext') else None,
+                comments=[{'text': getattr(trending_post, 'comment_summary', 'No comment summary')}]
             )
+
+            # Persist RedditContext as RedditPost in the DB if session and pipeline_run_id are provided
+            reddit_post_id = None
+            if self.session and self.pipeline_run_id:
+                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
+                self.session.add(orm_post)
+                self.session.commit()
+                reddit_post_id = orm_post.id
+                logger.info(f"Persisted RedditPost with id {reddit_post_id}")
 
             # Determine product idea from post (synchronous call)
             product_idea = self._determine_product_idea(reddit_context)
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
                 return None
+
+            # Validate that theme is available and relevant to the context
+            if not product_idea.theme or product_idea.theme.lower() == 'default theme':
+                raise ValueError("No valid theme was generated from the Reddit context")
+
             # Log the product idea for debugging
             logger.info(f"Product Idea: {product_idea}")
 
@@ -209,6 +243,7 @@ class RedditAgent(ChannelAgent):
             # If product_info is a dict, convert to ProductInfo dataclass
             if isinstance(product_info, dict):
                 product_info = ProductInfo.from_dict(product_info)
+            # Optionally, you could attach reddit_post_id to product_info for downstream use
             return product_info
 
         except Exception as e:
@@ -587,21 +622,50 @@ class RedditAgent(ChannelAgent):
         """Find a trending post from Reddit."""
         try:
             # Get subreddit
-            subreddit = self.reddit.subreddit("golf")
+            subreddit = self.reddit.subreddit(self.subreddit_name)
             
             # Get trending posts
-            for submission in subreddit.hot(limit=10):
+            for submission in subreddit.hot(limit=20):  # Increased limit to find more posts
                 # Skip stickied posts
                 if submission.stickied:
                     continue
                     
-                # Skip posts that are too old
-                if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 1:
+                # Skip posts that are too old (increased to 2 days)
+                if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
                     continue
                     
-                # Skip posts with too few upvotes
-                if submission.score < 10:
+                # Skip posts with too few upvotes (reduced threshold)
+                if submission.score < 5:
                     continue
+
+                # Skip image/video posts
+                if not submission.is_self:
+                    continue
+
+                # Skip posts with no content
+                if not submission.selftext:
+                    continue
+
+                # Get top comments and generate summary
+                submission.comments.replace_more(limit=0)  # Load top-level comments only
+                top_comments = submission.comments.list()[:5]  # Get top 5 comments
+                comment_texts = [comment.body for comment in top_comments if hasattr(comment, 'body')]
+                
+                if comment_texts:
+                    # Use GPT to summarize comments
+                    response = self.openai.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "Summarize the key points from these Reddit comments in 1-2 sentences."},
+                            {"role": "user", "content": f"Comments:\n{chr(10).join(comment_texts)}"}
+                        ]
+                    )
+                    comment_summary = response.choices[0].message.content.strip()
+                else:
+                    comment_summary = "No comments available."
+
+                # Add comment summary to submission
+                submission.comment_summary = comment_summary
                     
                 return submission
                 
