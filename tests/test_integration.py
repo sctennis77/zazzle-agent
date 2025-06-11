@@ -170,29 +170,63 @@ class TestIntegrationAsync:
     @patch('app.main.RedditAgent')
     async def test_full_pipeline(self, mock_reddit_agent, mock_save_to_csv):
         # Configure mock_reddit_agent
-        mock_reddit_agent_instance = MagicMock()
+        mock_reddit_agent_instance = AsyncMock(spec=RedditAgent)
         mock_reddit_agent.return_value = mock_reddit_agent_instance
-        
+
         # Mock a trending post
         mock_post = MagicMock()
         mock_post.title = "Test Post"
         mock_post.permalink = "/r/golf/comments/test123"
         mock_post.id = "test123"
-        # Return an iterator for subreddit.hot()
-        mock_reddit_agent_instance.reddit.subreddit.return_value.hot.return_value = iter([mock_post])
-        
-        # Mock the product creation with AsyncMock
-        mock_product_info = MagicMock()
-        mock_reddit_agent_instance.find_and_create_product = AsyncMock(return_value=mock_product_info)
-        
-        # Run the full pipeline
-        await run_full_pipeline()
-        
-        # Verify the mocks were called correctly
-        mock_reddit_agent.assert_called_once()
-        mock_reddit_agent_instance.find_and_create_product.assert_called_once()
-        mock_save_to_csv.assert_called_once_with(mock_product_info)
-        
+
+        # Create mock subreddit and hot iterator
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = iter([mock_post])
+        mock_reddit = MagicMock()
+        mock_reddit.subreddit.return_value = mock_subreddit
+        mock_reddit_agent_instance.reddit = mock_reddit
+
+        # Mock product info
+        mock_product_info = ProductInfo(
+            product_id="test_product_id",
+            name="Test Product",
+            product_type="sticker",
+            image_url="https://example.com/test.jpg",
+            product_url="https://zazzle.com/test_product",
+            zazzle_template_id="test_template_id",
+            zazzle_tracking_code="test_tracking_code",
+            theme="test theme",
+            model="test_model",
+            prompt_version="1.0.0",
+            reddit_context=RedditContext(
+                post_id="test_post_id",
+                post_title="Test Post",
+                post_url="https://reddit.com/r/test/comments/test_post_id",
+                subreddit="test",
+                post_content="Test content"
+            ),
+            design_instructions={
+                "content": "Test content",
+                "image": "https://example.com/test.jpg"
+            },
+            image_local_path="/tmp/test.jpg"
+        )
+        mock_reddit_agent_instance.get_product_info.return_value = [mock_product_info]
+
+        # Run the pipeline
+        config = PipelineConfig(
+            model="dall-e-3",
+            zazzle_template_id="test_template_id",
+            zazzle_tracking_code="test_tracking_code",
+            prompt_version="1.0.0"
+        )
+        result = await run_full_pipeline(config)
+
+        # Verify the results
+        assert result == [mock_product_info]
+        mock_reddit_agent_instance.get_product_info.assert_called_once()
+        mock_save_to_csv.assert_called_once_with([mock_product_info])
+
     @patch('app.main.save_to_csv')
     @patch('app.main.RedditAgent')
     async def test_image_generation_pipeline(self, mock_reddit_agent, mock_save_to_csv):
@@ -214,17 +248,17 @@ class TestIntegrationAsync:
     @patch('app.main.RedditAgent')
     async def test_pipeline_with_error(self, mock_reddit_agent, mock_save_to_csv):
         # Configure mock_reddit_agent to raise an exception
-        mock_reddit_agent_instance = MagicMock()
+        mock_reddit_agent_instance = AsyncMock(spec=RedditAgent)
         mock_reddit_agent.return_value = mock_reddit_agent_instance
-        mock_reddit_agent_instance.find_and_create_product = AsyncMock(side_effect=Exception("Test error"))
-        
+        mock_reddit_agent_instance.get_product_info = AsyncMock(side_effect=Exception("Test error"))
+
         # Run the pipeline and expect an exception
         with pytest.raises(Exception):
             await run_full_pipeline()
-            
+
         # Verify the mocks were called correctly
         mock_reddit_agent.assert_called_once()
-        mock_reddit_agent_instance.find_and_create_product.assert_called_once()
+        mock_reddit_agent_instance.get_product_info.assert_called_once()
         mock_save_to_csv.assert_not_called()
 
 if __name__ == '__main__':

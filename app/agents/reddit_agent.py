@@ -20,6 +20,7 @@ import json
 from app.image_generator import ImageGenerator
 from app.utils.logging_config import get_logger
 from dataclasses import asdict
+from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -62,8 +63,8 @@ class RedditAgent(ChannelAgent):
             model = 'dall-e-3'
         self.config = PipelineConfig(
             model=model,
-            zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
-            zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
+            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
             prompt_version="1.0.0"
         )
         self.image_generator = ImageGenerator(model=model)
@@ -544,9 +545,22 @@ class RedditAgent(ChannelAgent):
         except Exception as e:
             logger.error(f"Error interacting with users: {str(e)}")
 
-    def get_product_info(self, design_instructions: Dict[str, Any]) -> Dict[str, Any]:
-        """Get product information from design instructions."""
-        return self.product_designer.create_product(design_instructions)
+    async def get_product_info(self) -> List[ProductInfo]:
+        """
+        Get product information from Reddit content.
+        
+        Returns:
+            List[ProductInfo]: List of product information objects
+        """
+        try:
+            # Find a trending post and create a product
+            product_info = await self.find_and_create_product()
+            if product_info:
+                return [product_info]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting product info: {str(e)}")
+            return []
 
     def interact_with_subreddit(self, product_info: ProductInfo):
         """Interact with a subreddit using product information."""

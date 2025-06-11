@@ -1,0 +1,52 @@
+{
+  "products": [
+    {
+      "product_id": "test_product_1",
+      "name": "Test Product 1",
+      "product_type": "sticker",
+      "zazzle_template_id": "template1",
+      "zazzle_tracking_code": "tracking1",
+      "image_url": "https://example.com/image1.jpg",
+      "product_url": "https://zazzle.com/product1",
+      "theme": "test_theme_1",
+      "model": "dall-e-3",
+      "prompt_version": "1.0.0",
+      "reddit_context": {
+        "post_id": "test_post_1",
+        "post_title": "Test Post 1",
+        "post_url": "https://reddit.com/test1",
+        "subreddit": "test_subreddit"
+      },
+      "design_instructions": {
+        "image": "https://example.com/image1.jpg",
+        "content": "Test content 1"
+      },
+      "affiliate_link": "https://zazzle.com/product1?ref=123",
+      "image_local_path": "/tmp/test1.jpg"
+    },
+    {
+      "product_id": "test_product_2",
+      "name": "Test Product 2",
+      "product_type": "sticker",
+      "zazzle_template_id": "template2",
+      "zazzle_tracking_code": "tracking2",
+      "image_url": "https://example.com/image2.jpg",
+      "product_url": "https://zazzle.com/product2",
+      "theme": "test_theme_2",
+      "model": "dall-e-3",
+      "prompt_version": "1.0.0",
+      "reddit_context": {
+        "post_id": "test_post_2",
+        "post_title": "Test Post 2",
+        "post_url": "https://reddit.com/test2",
+        "subreddit": "test_subreddit"
+      },
+      "design_instructions": {
+        "image": "https://example.com/image2.jpg",
+        "content": "Test content 2"
+      },
+      "affiliate_link": "https://zazzle.com/product2?ref=123",
+      "image_local_path": "/tmp/test2.jpg"
+    }
+  ]
+} 

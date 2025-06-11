@@ -244,6 +244,8 @@ REDDIT_PASSWORD=your_reddit_password
 OPENAI_API_KEY=your_openai_api_key
 ```
 
+Note: The Zazzle template ID and tracking code are now managed through the `ZAZZLE_STICKER_TEMPLATE` configuration in `app/zazzle_templates.py`. This provides a centralized way to manage product templates and ensures consistency across the application.
+
 ## Development
 
 This project uses a Makefile to simplify common development tasks:
@@ -389,3 +391,18 @@ The Reddit agent can interact with posts and comments in several ways:
 
 - **Marketing Commenting**: Reply to comments with marketing content (test mode only)
   - `test-marketing-comment-reply`: Simulates replying to a top-level comment in a trending post with a marketing message, printing the proposed reply text, product information, and action for manual verification. 
+
+## Pipeline Behavior
+
+- The pipeline now expects `RedditAgent.get_product_info()` to return a list of `ProductInfo` objects, not `ProductIdea` objects. This means the pipeline processes fully-formed product information directly, rather than generating ideas and then transforming them.
+- Error handling: If a downstream error occurs (such as affiliate link generation failure), the pipeline will raise an exception. Tests should expect exceptions in these cases.
+
+## Running Tests
+
+To run all tests and check coverage, use:
+
+```
+make test
+```
+
+This will run the full suite and report coverage for the `app/` directory. 

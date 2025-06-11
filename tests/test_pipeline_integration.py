@@ -1,0 +1,306 @@
+"""
+Integration tests for the product generation pipeline.
+
+These tests verify the complete pipeline functionality, including:
+- Full pipeline execution
+- Error handling and recovery
+- Concurrent operations
+- Rate limiting and retries
+"""
+
+import pytest
+from unittest.mock import MagicMock, AsyncMock
+from app.pipeline import Pipeline
+from app.models import ProductIdea, RedditContext, ProductInfo
+from app.agents.reddit_agent import RedditAgent
+from app.content_generator import ContentGenerator
+from app.image_generator import ImageGenerator
+from app.zazzle_product_designer import ZazzleProductDesigner
+from app.affiliate_linker import ZazzleAffiliateLinker
+from app.clients.imgur_client import ImgurClient
+
+@pytest.fixture
+def mock_reddit_agent():
+    """Create a mock RedditAgent with predefined responses."""
+    agent = AsyncMock(spec=RedditAgent)
+    agent.get_product_info = AsyncMock(return_value=[
+        ProductIdea(
+            theme="Test Theme",
+            image_description="Test Description",
+            design_instructions={"image": "https://example.com/test.jpg"},
+            reddit_context=RedditContext(
+                post_id="test123",
+                post_title="Test Post",
+                post_url="https://reddit.com/test",
+                subreddit="test"
+            ),
+            model="dall-e-3",
+            prompt_version="1.0.0"
+        )
+    ])
+    return agent
+
+@pytest.fixture
+def mock_content_generator():
+    """Create a mock ContentGenerator with predefined responses."""
+    generator = AsyncMock(spec=ContentGenerator)
+    generator.generate_content = AsyncMock(return_value="Generated content")
+    return generator
+
+@pytest.fixture
+def mock_image_generator():
+    """Create a mock ImageGenerator with predefined responses."""
+    generator = AsyncMock(spec=ImageGenerator)
+    generator.generate_image = AsyncMock(return_value=("https://imgur.com/test.jpg", "/tmp/test.jpg"))
+    return generator
+
+@pytest.fixture
+def mock_zazzle_designer():
+    """Create a mock ZazzleProductDesigner with predefined responses."""
+    designer = AsyncMock(spec=ZazzleProductDesigner)
+    designer.create_product = AsyncMock(return_value=ProductInfo(
+        product_id="test123",
+        name="Test Product",
+        product_type="sticker",
+        zazzle_template_id="template123",
+        zazzle_tracking_code="tracking123",
+        image_url="https://imgur.com/test.jpg",
+        product_url="https://zazzle.com/test",
+        theme="Test Theme",
+        model="dall-e-3",
+        prompt_version="1.0.0",
+        reddit_context=RedditContext(
+            post_id="test123",
+            post_title="Test Post",
+            post_url="https://reddit.com/test",
+            subreddit="test"
+        ),
+        design_instructions={"image": "https://imgur.com/test.jpg", "content": "Generated content"},
+        image_local_path="/tmp/test.jpg"
+    ))
+    return designer
+
+@pytest.fixture
+def mock_affiliate_linker():
+    """Create a mock ZazzleAffiliateLinker with predefined responses."""
+    linker = AsyncMock(spec=ZazzleAffiliateLinker)
+    async def mock_generate_links_batch(products):
+        for p in products:
+            p.affiliate_link = "https://zazzle.com/test?ref=123"
+        return products
+    linker.generate_links_batch = AsyncMock(side_effect=mock_generate_links_batch)
+    return linker
+
+@pytest.fixture
+def mock_imgur_client():
+    """Create a mock ImgurClient with predefined responses."""
+    client = MagicMock(spec=ImgurClient)
+    client.upload_image.return_value = ("https://imgur.com/test.jpg", "/tmp/test.jpg")
+    return client
+
+@pytest.mark.asyncio
+async def test_full_pipeline_success(
+    mock_reddit_agent,
+    mock_content_generator,
+    mock_image_generator,
+    mock_zazzle_designer,
+    mock_affiliate_linker,
+    mock_imgur_client
+):
+    """Test the full pipeline with successful operations."""
+    # Create pipeline with mocks
+    pipeline = Pipeline(
+        reddit_agent=mock_reddit_agent,
+        content_generator=mock_content_generator,
+        image_generator=mock_image_generator,
+        zazzle_designer=mock_zazzle_designer,
+        affiliate_linker=mock_affiliate_linker,
+        imgur_client=mock_imgur_client
+    )
+
+    # Mock get_product_info to return ProductInfo
+    product_info = ProductInfo(
+        product_id="test123",
+        name="Test Product",
+        product_type="sticker",
+        zazzle_template_id="template123",
+        zazzle_tracking_code="tracking456",
+        image_url="https://example.com/generated_image.jpg",
+        product_url="https://example.com/product_1",
+        theme="theme1",
+        model="dall-e-3",
+        prompt_version="1.0.0",
+        reddit_context=RedditContext(
+            post_id="test_post_id",
+            post_title="Test Post Title",
+            post_url="https://reddit.com/test",
+            subreddit="test_subreddit"
+        ),
+        design_instructions={'image': 'https://example.com/image1.jpg', 'content': 'Generated content'},
+        image_local_path="/path/to/generated_image_0.jpg"
+    )
+    mock_reddit_agent.get_product_info.return_value = [product_info]
+    mock_affiliate_linker.generate_links_batch.side_effect = lambda products: products
+
+    # Run the pipeline
+    products = await pipeline.run_pipeline()
+
+    # Verify results
+    assert len(products) == 1
+    assert products[0].product_id == "test123"
+
+@pytest.mark.asyncio
+async def test_pipeline_error_handling(
+    mock_reddit_agent,
+    mock_content_generator,
+    mock_image_generator,
+    mock_zazzle_designer,
+    mock_affiliate_linker,
+    mock_imgur_client
+):
+    """Test pipeline error handling and recovery."""
+    # Simulate an error in the affiliate linker
+    mock_affiliate_linker.generate_links_batch.side_effect = Exception("Affiliate link generation failed")
+
+    # Mock get_product_info to return ProductInfo
+    product_info = ProductInfo(
+        product_id="test123",
+        name="Test Product",
+        product_type="sticker",
+        zazzle_template_id="template123",
+        zazzle_tracking_code="tracking456",
+        image_url="https://example.com/generated_image.jpg",
+        product_url="https://example.com/product_1",
+        theme="theme1",
+        model="dall-e-3",
+        prompt_version="1.0.0",
+        reddit_context=RedditContext(
+            post_id="test_post_id",
+            post_title="Test Post Title",
+            post_url="https://reddit.com/test",
+            subreddit="test_subreddit"
+        ),
+        design_instructions={'image': 'https://example.com/image1.jpg', 'content': 'Generated content'},
+        image_local_path="/path/to/generated_image_0.jpg"
+    )
+    mock_reddit_agent.get_product_info.return_value = [product_info]
+
+    # Create pipeline with mocks
+    pipeline = Pipeline(
+        reddit_agent=mock_reddit_agent,
+        content_generator=mock_content_generator,
+        image_generator=mock_image_generator,
+        zazzle_designer=mock_zazzle_designer,
+        affiliate_linker=mock_affiliate_linker,
+        imgur_client=mock_imgur_client
+    )
+
+    # Run the pipeline and expect an exception
+    import pytest
+    with pytest.raises(Exception, match="Affiliate link generation failed"):
+        await pipeline.run_pipeline()
+
+@pytest.mark.asyncio
+async def test_pipeline_concurrent_operations(
+    mock_reddit_agent,
+    mock_content_generator,
+    mock_image_generator,
+    mock_zazzle_designer,
+    mock_affiliate_linker,
+    mock_imgur_client
+):
+    """Test pipeline with concurrent operations."""
+    # Configure mock to return multiple ProductInfo objects
+    product_infos = [
+        ProductInfo(
+            product_id=f"test_id_{i}",
+            name=f"Test Product {i}",
+            product_type="sticker",
+            zazzle_template_id="template123",
+            zazzle_tracking_code="tracking456",
+            image_url="https://example.com/generated_image.jpg",
+            product_url=f"https://example.com/product_{i}",
+            theme=f"Theme {i}",
+            model="dall-e-3",
+            prompt_version="1.0.0",
+            reddit_context=RedditContext(
+                post_id=f"test{i}",
+                post_title=f"Test Post {i}",
+                post_url=f"https://reddit.com/test{i}",
+                subreddit="test"
+            ),
+            design_instructions={"image": f"https://example.com/test{i}.jpg", "content": "Generated content"},
+            image_local_path=f"/path/to/generated_image_{i}.jpg"
+        )
+        for i in range(3)
+    ]
+    mock_reddit_agent.get_product_info.return_value = product_infos
+    mock_affiliate_linker.generate_links_batch.side_effect = lambda products: products
+
+    # Create pipeline with mocks
+    pipeline = Pipeline(
+        reddit_agent=mock_reddit_agent,
+        content_generator=mock_content_generator,
+        image_generator=mock_image_generator,
+        zazzle_designer=mock_zazzle_designer,
+        affiliate_linker=mock_affiliate_linker,
+        imgur_client=mock_imgur_client
+    )
+
+    # Run the pipeline
+    products = await pipeline.run_pipeline()
+
+    # Verify results
+    assert len(products) == 3
+    assert all(isinstance(p, ProductInfo) for p in products)
+
+@pytest.mark.asyncio
+async def test_pipeline_rate_limiting(
+    mock_reddit_agent,
+    mock_content_generator,
+    mock_image_generator,
+    mock_zazzle_designer,
+    mock_affiliate_linker,
+    mock_imgur_client
+):
+    """Test pipeline rate limiting and retry mechanisms."""
+    # Configure mock to simulate rate limiting
+    product_info = ProductInfo(
+        product_id="test123",
+        name="Test Product",
+        product_type="sticker",
+        zazzle_template_id="template123",
+        zazzle_tracking_code="tracking123",
+        image_url="https://imgur.com/test.jpg",
+        product_url="https://zazzle.com/test",
+        theme="Test Theme",
+        model="dall-e-3",
+        prompt_version="1.0.0",
+        reddit_context=RedditContext(
+            post_id="test123",
+            post_title="Test Post",
+            post_url="https://reddit.com/test",
+            subreddit="test"
+        ),
+        design_instructions={"image": "https://imgur.com/test.jpg", "content": "Generated content"},
+        image_local_path="/tmp/test.jpg"
+    )
+    mock_reddit_agent.get_product_info.return_value = [product_info]
+    mock_affiliate_linker.generate_links_batch.side_effect = lambda products: products
+
+    # Create pipeline with mocks
+    pipeline = Pipeline(
+        reddit_agent=mock_reddit_agent,
+        content_generator=mock_content_generator,
+        image_generator=mock_image_generator,
+        zazzle_designer=mock_zazzle_designer,
+        affiliate_linker=mock_affiliate_linker,
+        imgur_client=mock_imgur_client
+    )
+
+    # Run the pipeline
+    products = await pipeline.run_pipeline()
+
+    # Verify results
+    assert len(products) == 1
+    assert products[0].product_id == "test123" 

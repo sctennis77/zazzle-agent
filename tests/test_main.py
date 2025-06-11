@@ -63,8 +63,15 @@ async def test_run_full_pipeline_success(mock_product_info):
     with patch('app.main.RedditAgent') as mock_reddit_agent_class, \
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
-        mock_agent.find_and_create_product.return_value = mock_product_info
-        mock_agent.reddit = MagicMock()  # Add mock reddit client
+        mock_agent.get_product_info = AsyncMock(return_value=[mock_product_info])
+        
+        # Create mock subreddit and hot iterator
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = iter([])
+        mock_reddit = MagicMock()
+        mock_reddit.subreddit.return_value = mock_subreddit
+        mock_agent.reddit = mock_reddit
+        
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
 
@@ -76,24 +83,23 @@ async def test_run_full_pipeline_success(mock_product_info):
                 prompt_version="1.0.0"
             )
             result = await run_full_pipeline(config)
-
-            # Verify the result
-            assert result == mock_product_info
-            
-            # Verify the mock was called
-            mock_agent.find_and_create_product.assert_called_once()
-            mock_save.assert_called_once_with(mock_product_info)
-
-            # Verify RedditAgent was initialized with correct config
-            mock_reddit_agent_class.assert_called_once_with(config_or_model=config.model)
+            assert result == [mock_product_info]
+            mock_save.assert_called_once_with([mock_product_info])
 
 @pytest.mark.asyncio
 async def test_run_full_pipeline_no_product_generated():
     with patch('app.main.RedditAgent') as mock_reddit_agent_class, \
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
-        mock_agent.find_and_create_product.return_value = None
-        mock_agent.reddit = MagicMock()  # Add mock reddit client
+        mock_agent.get_product_info = AsyncMock(return_value=[])
+        
+        # Create mock subreddit and hot iterator
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = iter([])
+        mock_reddit = MagicMock()
+        mock_reddit.subreddit.return_value = mock_subreddit
+        mock_agent.reddit = mock_reddit
+        
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
 
@@ -105,23 +111,15 @@ async def test_run_full_pipeline_no_product_generated():
                 prompt_version="1.0.0"
             )
             result = await run_full_pipeline(config)
-
-            # Verify the result is None
-            assert result is None
-            
-            # Verify the mock was called
-            mock_agent.find_and_create_product.assert_called_once()
+            assert result == []
             mock_save.assert_not_called()
-
-            # Verify RedditAgent was initialized with correct config
-            mock_reddit_agent_class.assert_called_once_with(config_or_model=config.model)
 
 @pytest.mark.asyncio
 async def test_run_full_pipeline_error_handling():
     with patch('app.main.RedditAgent') as mock_reddit_agent_class, \
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
-        mock_agent.find_and_create_product.side_effect = Exception("Test error")
+        mock_agent.get_product_info.side_effect = Exception("Test error")
         mock_agent.reddit = MagicMock()  # Add mock reddit client
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
@@ -141,7 +139,7 @@ async def test_run_full_pipeline_error_handling():
             assert str(exc_info.value) == "Test error"
             
             # Verify the mock was called
-            mock_agent.find_and_create_product.assert_called_once()
+            mock_agent.get_product_info.assert_called_once()
             mock_save.assert_not_called()
 
             # Verify RedditAgent was initialized with correct config

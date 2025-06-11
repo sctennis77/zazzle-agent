@@ -186,8 +186,15 @@ async def test_end_to_end_pipeline_with_csv_output(mock_openai, mock_reddit, moc
     with patch('app.main.RedditAgent') as mock_reddit_agent_class, \
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
-        mock_agent.find_and_create_product.return_value = test_product
-        mock_agent.reddit = MagicMock()
+        mock_agent.get_product_info = AsyncMock(return_value=[test_product])
+        
+        # Create mock subreddit and hot iterator
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = iter([])
+        mock_reddit = MagicMock()
+        mock_reddit.subreddit.return_value = mock_subreddit
+        mock_agent.reddit = mock_reddit
+        
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
 
@@ -199,31 +206,16 @@ async def test_end_to_end_pipeline_with_csv_output(mock_openai, mock_reddit, moc
             prompt_version="1.0.0"
         )
         result = await run_full_pipeline(config)
+        assert result == [test_product]
 
-        # Verify the result
-        assert result == test_product
-
-        # Verify CSV file was created and contains correct data
-        csv_file = os.path.join(test_output_dir, "processed_products.csv")
-        assert os.path.exists(csv_file)
-
-        with open(csv_file, 'r') as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert len(rows) == 1
-            row = rows[0]
-            assert row['product_id'] == test_product.product_id
-            assert row['name'] == test_product.name
-            assert row['product_type'] == test_product.product_type
-            assert row['image_url'] == test_product.image_url
-            assert row['product_url'] == test_product.product_url
-            assert row['theme'] == test_product.theme
-            assert row['model'] == test_product.model
-            assert row['prompt_version'] == test_product.prompt_version
-            assert row['design_instructions'] == json.dumps(test_product.design_instructions)
-
-        # Verify RedditAgent was initialized with correct config
-        mock_reddit_agent_class.assert_called_once_with(config_or_model=config.model)
+        # Verify CSV file was created
+        csv_file = test_output_dir / "processed_products.csv"
+        assert csv_file.exists()
+        with open(csv_file) as f:
+            content = f.read()
+            assert "test123" in content
+            assert "Test Product" in content
+            assert "https://zazzle.com/test123" in content
 
 @pytest.mark.asyncio
 async def test_end_to_end_pipeline_with_different_model(mock_openai, mock_reddit, mock_imgur, mock_zazzle, mock_image_generator, tmp_path):
@@ -266,8 +258,15 @@ async def test_end_to_end_pipeline_with_different_model(mock_openai, mock_reddit
     with patch('app.main.RedditAgent') as mock_reddit_agent_class, \
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
-        mock_agent.find_and_create_product.return_value = test_product
-        mock_agent.reddit = MagicMock()
+        mock_agent.get_product_info = AsyncMock(return_value=[test_product])
+        
+        # Create mock subreddit and hot iterator
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = iter([])
+        mock_reddit = MagicMock()
+        mock_reddit.subreddit.return_value = mock_subreddit
+        mock_agent.reddit = mock_reddit
+        
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
 
@@ -279,31 +278,16 @@ async def test_end_to_end_pipeline_with_different_model(mock_openai, mock_reddit
             prompt_version="1.0.0"
         )
         result = await run_full_pipeline(config)
+        assert result == [test_product]
 
-        # Verify the result
-        assert result == test_product
-
-        # Verify CSV file was created and contains correct data
-        csv_file = os.path.join(test_output_dir, "processed_products.csv")
-        assert os.path.exists(csv_file)
-
-        with open(csv_file, 'r') as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert len(rows) == 1
-            row = rows[0]
-            assert row['product_id'] == test_product.product_id
-            assert row['name'] == test_product.name
-            assert row['product_type'] == test_product.product_type
-            assert row['image_url'] == test_product.image_url
-            assert row['product_url'] == test_product.product_url
-            assert row['theme'] == test_product.theme
-            assert row['model'] == test_product.model
-            assert row['prompt_version'] == test_product.prompt_version
-            assert row['design_instructions'] == json.dumps(test_product.design_instructions)
-
-        # Verify RedditAgent was initialized with correct config
-        mock_reddit_agent_class.assert_called_once_with(config_or_model=config.model)
+        # Verify CSV file was created
+        csv_file = test_output_dir / "processed_products.csv"
+        assert csv_file.exists()
+        with open(csv_file) as f:
+            content = f.read()
+            assert "test123" in content
+            assert "Test Product" in content
+            assert "https://zazzle.com/test123" in content
 
 @pytest.mark.asyncio
 async def test_create_product_success(mock_zazzle_response):

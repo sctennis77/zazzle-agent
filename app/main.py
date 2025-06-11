@@ -17,6 +17,9 @@ from app.agents.reddit_agent import RedditAgent
 from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
 from app.image_generator import ImageGenerator
 from app.utils.logging_config import setup_logging
+from app.zazzle_product_designer import ZazzleProductDesigner
+from app.clients.imgur_client import ImgurClient
+from app.pipeline import Pipeline
 
 # Configure logging
 logging.basicConfig(
@@ -88,30 +91,48 @@ def log_product_info(product_info: ProductInfo):
 async def run_full_pipeline(config: PipelineConfig = None, model: str = "dall-e-3"):
     """Run the full pipeline: find post, generate image, create product."""
     try:
-        # Initialize RedditAgent with the config
+        # Initialize configuration
         if config is None:
             config = PipelineConfig(
                 model=model,
-                zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
-                zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
+                zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
+                zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
                 prompt_version="1.0.0"
             )
+
+        # Initialize components
         reddit_agent = RedditAgent(config_or_model=config.model)
+        content_generator = ContentGenerator()
+        image_generator = ImageGenerator(model=config.model)
+        zazzle_designer = ZazzleProductDesigner()
+        affiliate_linker = ZazzleAffiliateLinker()
+        imgur_client = ImgurClient()
+
+        # Create and run pipeline
+        pipeline = Pipeline(
+            reddit_agent=reddit_agent,
+            content_generator=content_generator,
+            image_generator=image_generator,
+            zazzle_designer=zazzle_designer,
+            affiliate_linker=affiliate_linker,
+            imgur_client=imgur_client,
+            config=config
+        )
+
+        products = await pipeline.run_pipeline()
         
-        # Find a post and create a product
-        product_info = await reddit_agent.find_and_create_product()
-        
-        if product_info:
+        if products:
             # Save to CSV
-            save_to_csv(product_info)
+            save_to_csv(products)
             
-            # Log the results using the new logging function
-            product_info.log()
+            # Log the results
+            for product in products:
+                product.log()
             
-            return product_info
+            return products
         else:
-            logger.warning("No suitable post found for product creation")
-            return None
+            logger.warning("No products were generated")
+            return []
             
     except Exception as e:
         logger.error(f"Error in full pipeline: {str(e)}")

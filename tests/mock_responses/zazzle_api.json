@@ -1,0 +1,30 @@
+{
+  "responses": [
+    {
+      "success": true,
+      "data": {
+        "product_id": "test_product_1",
+        "product_url": "https://zazzle.com/product1",
+        "template_id": "template1",
+        "tracking_code": "tracking1",
+        "status": "created"
+      }
+    },
+    {
+      "success": false,
+      "error": {
+        "code": "RATE_LIMIT_EXCEEDED",
+        "message": "Rate limit exceeded. Please try again later.",
+        "retry_after": 60
+      }
+    },
+    {
+      "success": false,
+      "error": {
+        "code": "INVALID_TEMPLATE",
+        "message": "Invalid template ID provided.",
+        "details": "Template ID 'invalid_template' does not exist."
+      }
+    }
+  ]
+} 
