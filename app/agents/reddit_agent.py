@@ -107,6 +107,9 @@ class RedditAgent(ChannelAgent):
         
         Returns:
             ProductIdea object or None if generation fails
+            
+        Raises:
+            ValueError: If theme is 'default theme' or image description is empty
         """
         try:
             # Use OpenAI to analyze post and generate product idea
@@ -122,30 +125,49 @@ class RedditAgent(ChannelAgent):
             logger.info(f"Raw OpenAI Response: {response.choices[0].message.content}")
 
             # Parse response to get theme and image description
-            content = response.choices[0].message.content
-            
+            content = response.choices[0].message.content or ""
             lines = content.split('\n')
             logger.info(f"OpenAI Response: {lines}")
-            theme = lines[0].strip() if lines else "Default Theme"
-            image_description = lines[1].strip() if len(lines) > 1 else "Default Description"
-            # Adjust parsing logic to handle the expected format
-            if 'Theme:' in theme:
-                theme = theme.split('Theme:', 1)[1].strip()
-            if 'Image Description:' in image_description:
-                image_description = image_description.split('Image Description:', 1)[1].strip()
+            theme = None
+            image_description = None
+            for line in lines:
+                if line.startswith('Theme:'):
+                    theme = line.replace('Theme:', '').strip().strip('"')
+                elif line.startswith('Image Description:'):
+                    image_description = line.replace('Image Description:', '').strip()
 
-            return ProductIdea(
+            # Treat empty strings as missing
+            if not theme or not theme.strip():
+                error_msg = "No theme found in OpenAI response"
+                logger.error(error_msg)
+                return None
+            if not image_description or not image_description.strip():
+                error_msg = "No image description found in OpenAI response"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            if theme.lower() == 'default theme':
+                error_msg = "Invalid theme: 'default theme' is not allowed"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            # Create product idea
+            product_idea = ProductIdea(
                 theme=theme,
                 image_description=image_description,
                 design_instructions={
-                    'image': None,  # Will be set after image generation
-                    'theme': theme
+                    "image": None,
+                    "theme": theme
                 },
                 reddit_context=reddit_context,
                 model=self.config.model,
                 prompt_version=self.config.prompt_version
             )
 
+            return product_idea
+
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"Error determining product idea: {str(e)}")
             return None
@@ -226,18 +248,27 @@ class RedditAgent(ChannelAgent):
             logger.error(f"Error in find_and_create_product: {str(e)}")
             return None
 
-    def save_reddit_context_to_db(self, reddit_context) -> int:
+    def save_reddit_context_to_db(self, reddit_context) -> Optional[int]:
         """
         Persist a RedditContext as RedditPost in the DB and return the DB ID.
+        
+        Returns:
+            int: The ID of the persisted RedditPost if successful
+            None: If persistence fails or no session/pipeline_run_id is provided
         """
         from app.db.mappers import reddit_context_to_db
         reddit_post_id = None
         if self.session and self.pipeline_run_id:
-            orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
-            self.session.add(orm_post)
-            self.session.commit()
-            reddit_post_id = orm_post.id
-            logger.info(f"Persisted RedditPost with id {reddit_post_id}")
+            try:
+                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
+                self.session.add(orm_post)
+                self.session.commit()
+                reddit_post_id = orm_post.id
+                logger.info(f"Persisted RedditPost with id {reddit_post_id}")
+            except Exception as e:
+                logger.error(f"Failed to persist RedditPost: {str(e)}")
+                self.session.rollback()
+                return None
         return reddit_post_id
 
     def _reset_daily_stats_if_needed(self):
@@ -618,21 +649,18 @@ class RedditAgent(ChannelAgent):
                 found = False
                 # Get trending posts
                 for submission in subreddit.hot(limit=limit):
-                    logger.info(f"Processing submission: {submission.title}")
+                    logger.info(f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)")
                     # Skip stickied posts
                     if submission.stickied:
+                        print('Skipping: stickied')
                         continue
                     # Skip posts that are too old (increased to 2 days)
                     if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
+                        print('Skipping: too old')
                         continue
-                    # Skip posts with too few upvotes (reduced threshold)
-                    # if submission.score < 5:
-                    #     continue
-                    # # Skip image/video posts
-                    # if not submission.is_self:
-                    #     continue
                     # Skip posts with no content
                     if not submission.selftext:
+                        print('Skipping: no selftext')
                         continue
                     # Get top comments and generate summary
                     submission.comments.replace_more(limit=0)  # Load top-level comments only
@@ -652,10 +680,12 @@ class RedditAgent(ChannelAgent):
                         comment_summary = "No comments available."
                     # Add comment summary to submission
                     submission.comment_summary = comment_summary
+                    print('Returning submission:', submission.title)
                     return submission
                 # If we reach here, no suitable post was found in this attempt
                 logger.info(f"No suitable trending post found on attempt {attempt + 1}/{tries}")
             return None
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
+            print(f"Exception in _find_trending_post: {e}")
             return None 
