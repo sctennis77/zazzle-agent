@@ -133,11 +133,13 @@ class PipelineConfig:
         model (str): The AI model to use (e.g. "dall-e-3")
         zazzle_template_id (str): The Zazzle template ID for product creation
         zazzle_tracking_code (str): The tracking code for Zazzle affiliate links
+        zazzle_affiliate_id (str): The Zazzle affiliate ID for link generation
         prompt_version (str): Version of the prompt being used. Defaults to "1.0.0"
     """
     model: str
     zazzle_template_id: str
     zazzle_tracking_code: str
+    zazzle_affiliate_id: str = os.getenv('ZAZZLE_AFFILIATE_ID', '')
     prompt_version: str = "1.0.0"
 
     def log(self) -> None:
@@ -148,12 +150,14 @@ class PipelineConfig:
             - Model name
             - Template ID
             - Tracking code
+            - Affiliate ID
             - Prompt version
         """
         logger.info("Pipeline Configuration:")
         logger.info(f"Model: {self.model}")
         logger.info(f"Template ID: {self.zazzle_template_id}")
         logger.info(f"Tracking Code: {self.zazzle_tracking_code}")
+        logger.info(f"Affiliate ID: {self.zazzle_affiliate_id}")
         logger.info(f"Prompt Version: {self.prompt_version}")
 
 

@@ -29,6 +29,7 @@ from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
 from app.db.mappers import product_idea_to_db, product_info_to_db
 from app.db.models import PipelineRun, ErrorLog
 from sqlalchemy.orm import Session
+import os
 
 logger = get_logger(__name__)
 
@@ -90,6 +91,7 @@ class Pipeline:
             model="dall-e-3",
             zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
             prompt_version="1.0.0"
         )
         self.max_retries = 3

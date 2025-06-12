@@ -91,32 +91,40 @@ def log_product_info(product_info: ProductInfo):
     logger.info("\nGenerated Image URL:")
     logger.info(f"{product_info.image_url}")
 
-async def run_full_pipeline(config: PipelineConfig = None, model: str = "dall-e-3"):
-    """Run the full pipeline: find post, generate image, create product."""
-    session = SessionLocal()
-    # Create a PipelineRun record at the start of the pipeline run
-    pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
-    session.add(pipeline_run)
-    session.commit()  # Commit to assign an ID to pipeline_run
+async def run_full_pipeline(model: str = "dall-e-3"):
+    """
+    Run the complete product generation pipeline.
+    
+    Args:
+        model: The AI model to use for image generation
+    """
     try:
-        # Initialize configuration if not provided
-        if config is None:
-            config = PipelineConfig(
-                model=model,
-                zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
-                zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
-                prompt_version="1.0.0"
-            )
+        # Create a new pipeline run
+        session = SessionLocal()
+        pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+        session.add(pipeline_run)
+        session.commit()
+        pipeline_run_id = pipeline_run.id
 
-        # Initialize all pipeline components (session and pipeline_run_id can be passed as needed)
-        reddit_agent = RedditAgent(config_or_model=config.model)
+        # Initialize components
+        reddit_agent = RedditAgent()
         content_generator = ContentGenerator()
-        image_generator = ImageGenerator(model=config.model)
+        image_generator = ImageGenerator(model=model)
         zazzle_designer = ZazzleProductDesigner()
-        affiliate_linker = ZazzleAffiliateLinker()
+        affiliate_linker = ZazzleAffiliateLinker(
+            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
+            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code
+        )
         imgur_client = ImgurClient()
 
-        # Create and run the pipeline (session and pipeline_run_id can be passed to components)
+        # Create pipeline with config
+        config = PipelineConfig(
+            model=model,
+            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
+            prompt_version="1.0.0"
+        )
         pipeline = Pipeline(
             reddit_agent=reddit_agent,
             content_generator=content_generator,
@@ -127,35 +135,21 @@ async def run_full_pipeline(config: PipelineConfig = None, model: str = "dall-e-
             config=config
         )
 
-        products = await pipeline.run_pipeline()
-        
-        if products:
-            # Save products to CSV and log results
-            save_to_csv(products)
-            for product in products:
-                product.log()
-            # Mark pipeline run as successful
-            pipeline_run.status = 'success'
-        else:
-            logger.warning("No products were generated")
-            # Mark pipeline run as completed but with no products
-            pipeline_run.status = 'no_products'
-        # Set end time and commit status update
-        pipeline_run.end_time = datetime.utcnow()
-        session.commit()
-        return products if products else []
-        
+        # Run pipeline
+        products = await pipeline.run(pipeline_run_id, session)
+        logger.info(f"Pipeline completed successfully. Generated {len(products)} products.")
+        return products
+
     except Exception as e:
         logger.error(f"Error in full pipeline: {str(e)}")
-        # Mark pipeline run as failed and log the error
-        pipeline_run.status = 'error'
-        pipeline_run.end_time = datetime.utcnow()
-        session.add(ErrorLog(pipeline_run_id=pipeline_run.id, error_message=str(e)))
-        session.commit()
+        if 'pipeline_run' in locals():
+            pipeline_run.status = 'failed'
+            pipeline_run.end_time = datetime.utcnow()
+            session.commit()
         raise
     finally:
-        # Always close the session to avoid connection leaks
-        session.close()
+        if 'session' in locals():
+            session.close()
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):
     """Run the image generation pipeline with a given prompt."""

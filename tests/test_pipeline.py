@@ -26,6 +26,7 @@ def pipeline():
         model='dall-e-3',
         zazzle_template_id='template123',
         zazzle_tracking_code='tracking456',
+        zazzle_affiliate_id='test_affiliate_id',
         prompt_version='1.0.0'
     )
     reddit_agent = MagicMock()

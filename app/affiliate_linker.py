@@ -12,8 +12,8 @@ The module handles:
 """
 
 import logging
-from typing import List
-from app.models import ProductInfo
+from typing import List, Optional
+from app.models import ProductInfo, AffiliateLinker
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -41,19 +41,19 @@ class ZazzleAffiliateLinker:
     - Custom affiliate ID configuration
     """
     
-    def __init__(self, affiliate_id=None):
+    def __init__(self, zazzle_affiliate_id: str, zazzle_tracking_code: str):
         """
         Initialize the ZazzleAffiliateLinker.
         
         Args:
-            affiliate_id (str, optional): The Zazzle affiliate ID to use in generated links.
-                If not provided, defaults to 'test_affiliate_id'.
-            
-        Raises:
-            ValueError: If affiliate_id is empty or None.
+            zazzle_affiliate_id: The Zazzle affiliate ID
+            zazzle_tracking_code: The tracking code for affiliate links
         """
-        self.affiliate_id = affiliate_id or 'test_affiliate_id'
-        logger.info("Initializing ZazzleAffiliateLinker")
+        self.affiliate_linker = AffiliateLinker(
+            zazzle_affiliate_id=zazzle_affiliate_id,
+            zazzle_tracking_code=zazzle_tracking_code
+        )
+        logger.info(f"Initialized ZazzleAffiliateLinker with affiliate ID: {zazzle_affiliate_id}")
 
     def _validate_product_data(self, product_id: str, name: str) -> None:
         """
@@ -87,7 +87,7 @@ class ZazzleAffiliateLinker:
             ZazzleAffiliateLinkerError: If link construction fails
         """
         try:
-            return f"https://www.zazzle.com/product/{product_id}?rf={self.affiliate_id}"
+            return f"https://www.zazzle.com/product/{product_id}?rf={self.affiliate_linker.zazzle_affiliate_id}"
         except Exception as e:
             logger.error(f"Error constructing affiliate link: {e}")
             raise ZazzleAffiliateLinkerError(f"Failed to construct affiliate link: {e}")
@@ -120,22 +120,17 @@ class ZazzleAffiliateLinker:
         Generate affiliate links for a batch of products.
         
         Args:
-            products (List[ProductInfo]): List of ProductInfo objects to process
-        
+            products: List of ProductInfo objects to generate links for
+            
         Returns:
-            List[ProductInfo]: List of ProductInfo objects with affiliate links added.
-                Products that fail to process will have affiliate_link set to None.
-        
-        Raises:
-            ZazzleAffiliateLinkerError: If batch processing fails completely
+            List[ProductInfo]: List of products with affiliate links added
         """
-        processed_products = []
         for product in products:
             try:
-                affiliate_link = await self._generate_affiliate_link(product)
+                affiliate_link = self.affiliate_linker.compose_affiliate_link(product.product_url)
                 product.affiliate_link = affiliate_link
+                logger.info(f"Generated affiliate link for {product.name} ({product.product_id})")
             except Exception as e:
-                logger.error(f"Error processing product {product.product_id}: {e}")
-                product.affiliate_link = None
-            processed_products.append(product)
-        return processed_products 
+                logger.error(f"Failed to generate affiliate link for {product.name}: {str(e)}")
+                raise
+        return products 
