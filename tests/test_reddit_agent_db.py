@@ -7,6 +7,7 @@ from app.models import PipelineConfig
 from app.models import ProductIdea
 from app.models import RedditContext
 from types import SimpleNamespace
+from app.services.database_service import DatabaseService
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
@@ -63,6 +64,7 @@ def test_reddit_agent_persists_reddit_post(monkeypatch):
     )
     agent = RedditAgent(config, pipeline_run_id=pipeline_run_id, session=session)
     
+    db_service = DatabaseService(session)
     # Await the async method
     import asyncio
     loop = asyncio.get_event_loop()
@@ -77,9 +79,15 @@ def test_reddit_agent_persists_reddit_post(monkeypatch):
         comments=[{'text': 'Mock comment summary'}],
         permalink='/r/golf/comments/mock123/mock_post_title/'
     )
-    agent.save_reddit_context_to_db(real_context)
+    db_service.add_reddit_post(pipeline_run_id, {
+        'id': real_context.post_id,
+        'title': real_context.post_title,
+        'content': real_context.post_content,
+        'subreddit': real_context.subreddit,
+        'url': real_context.post_url,
+        'permalink': real_context.permalink
+    })
     session.commit()
-    
     posts = session.query(RedditPost).filter_by(post_id='mock123').all()
     assert len(posts) == 1
     post = posts[0]

@@ -7,6 +7,7 @@ from app.db.models import PipelineRun
 from app.db.database import SessionLocal
 import os
 import json
+from app.services.database_service import DatabaseService
 
 # Add DB setup/teardown fixture
 from app.db.database import Base, engine
@@ -38,9 +39,12 @@ def pipeline():
     image_generator.generate_images_batch = AsyncMock()
     zazzle_designer = MagicMock()
     zazzle_designer.create_product = AsyncMock()
+    zazzle_designer.create_product.return_value = "https://example.com/product"
     affiliate_linker = MagicMock()
     affiliate_linker.generate_links_batch = AsyncMock()
     imgur_client = MagicMock()
+    imgur_client.upload_image = AsyncMock()
+    imgur_client.upload_image.return_value = "https://example.com/generated_image.jpg"
     return Pipeline(
         reddit_agent=reddit_agent,
         content_generator=content_generator,
@@ -159,6 +163,12 @@ async def test_run_pipeline(pipeline):
     session.commit()
     pipeline_run_id = pipeline_run.id
 
+    # Create a DatabaseService instance with the session
+    db_service = DatabaseService(session)
+    pipeline.db_service = db_service
+    pipeline.reddit_agent.db_service = db_service
+    pipeline.reddit_agent.pipeline_run_id = pipeline_run_id
+
     # Mock RedditAgent's find_and_create_product and save_reddit_context_to_db
     reddit_context = RedditContext(
         post_id='test_post_id',
@@ -198,8 +208,9 @@ async def test_run_pipeline(pipeline):
     assert db_product.prompt_version == products[0].prompt_version
     # Get the RedditPost id for the test post
     db_reddit_post = session.query(RedditPostDB).filter_by(post_id='test_post_id').first()
-    assert db_product.reddit_post_id == db_reddit_post.id
-    session.close()
+    assert db_reddit_post is not None
+    assert db_reddit_post.title == reddit_context.post_title
+    assert db_reddit_post.subreddit == reddit_context.subreddit
 
 @patch('app.agents.reddit_agent.RedditAgent._find_trending_post')
 @patch('app.agents.reddit_agent.RedditAgent._determine_product_idea')

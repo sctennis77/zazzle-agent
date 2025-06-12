@@ -37,7 +37,7 @@ class RedditAgent(ChannelAgent):
     - Track daily engagement statistics
     """
 
-    def __init__(self, config_or_model: Any = None, subreddit_name='golf', pipeline_run_id=None, session=None):
+    def __init__(self, config_or_model: Any = None, subreddit_name='golf', pipeline_run_id=None, session=None, db_service=None):
         """
         Initialize the Reddit agent with configuration or model string.
         Optionally accepts pipeline_run_id and session for DB persistence.
@@ -47,6 +47,7 @@ class RedditAgent(ChannelAgent):
             subreddit_name: Optional subreddit to target, defaults to 'golf'
             pipeline_run_id: Optional pipeline run ID for DB persistence
             session: Optional SQLAlchemy session for DB persistence
+            db_service: Optional DatabaseService for DB persistence
         """
         super().__init__()
         # Support both config dict and model string for backward compatibility in tests
@@ -97,6 +98,7 @@ class RedditAgent(ChannelAgent):
         # New: store pipeline_run_id and session for DB persistence
         self.pipeline_run_id = pipeline_run_id
         self.session = session
+        self.db_service = db_service
 
     def _determine_product_idea(self, reddit_context: RedditContext) -> Optional[ProductIdea]:
         """
@@ -258,7 +260,19 @@ class RedditAgent(ChannelAgent):
         """
         from app.db.mappers import reddit_context_to_db
         reddit_post_id = None
-        if self.session and self.pipeline_run_id:
+        if self.db_service and self.pipeline_run_id:
+            post_data = {
+                'id': reddit_context.post_id,
+                'title': reddit_context.post_title,
+                'content': reddit_context.post_content,
+                'subreddit': reddit_context.subreddit,
+                'url': reddit_context.post_url,
+                'permalink': reddit_context.permalink
+            }
+            orm_post = self.db_service.add_reddit_post(self.pipeline_run_id, post_data)
+            reddit_post_id = orm_post.id
+            logger.info(f"Persisted RedditPost with id {reddit_post_id}")
+        elif self.session and self.pipeline_run_id:
             try:
                 orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
                 self.session.add(orm_post)

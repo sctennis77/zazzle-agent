@@ -30,6 +30,7 @@ from app.db.mappers import product_idea_to_db, product_info_to_db
 from app.db.models import PipelineRun, ErrorLog
 from sqlalchemy.orm import Session
 import os
+from app.services.database_service import DatabaseService
 
 logger = get_logger(__name__)
 
@@ -99,6 +100,7 @@ class Pipeline:
         self.pipeline_run_id = pipeline_run_id
         self.session = session
         self.reddit_post_id = reddit_post_id
+        self.db_service = DatabaseService(session) if session else None
 
     def log_error(self, error_message: str, error_type: str = 'SYSTEM_ERROR', component: str = 'PIPELINE', 
                  stack_trace: str = None, context_data: dict = None, severity: str = 'ERROR'):
@@ -114,28 +116,33 @@ class Pipeline:
             severity: Error severity ('ERROR', 'WARNING', 'INFO')
         """
         if self.session and self.pipeline_run_id:
-            error_log = ErrorLog(
-                pipeline_run_id=self.pipeline_run_id,
-                error_message=error_message,
-                error_type=error_type,
-                component=component,
-                stack_trace=stack_trace,
-                context_data=context_data,
-                severity=severity
-            )
-            self.session.add(error_log)
-            
-            # Update pipeline run with last error
-            pipeline_run = self.session.query(PipelineRun).get(self.pipeline_run_id)
-            if pipeline_run:
-                pipeline_run.last_error = error_message
-                pipeline_run.status = 'failed'
-                pipeline_run.end_time = datetime.utcnow()
-                if pipeline_run.start_time:
-                    pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
-            
-            self.session.commit()
-            logger.error(f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})")
+            try:
+                error_log = ErrorLog(
+                    pipeline_run_id=self.pipeline_run_id,
+                    error_message=error_message,
+                    error_type=error_type,
+                    component=component,
+                    stack_trace=stack_trace,
+                    context_data=context_data,
+                    severity=severity,
+                    timestamp=datetime.utcnow()
+                )
+                self.session.add(error_log)
+                
+                # Update pipeline run with last error
+                pipeline_run = self.session.query(PipelineRun).get(self.pipeline_run_id)
+                if pipeline_run:
+                    pipeline_run.last_error = error_message
+                    pipeline_run.status = 'failed'
+                    pipeline_run.end_time = datetime.utcnow()
+                    if pipeline_run.start_time:
+                        pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
+                self.session.commit()
+                logger.error(f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})")
+            except Exception as e:
+                logger.error(f"Failed to log error to database: {str(e)}")
+                self.session.rollback()
+                raise
 
     async def process_product_idea(self, product_idea: ProductIdea) -> Optional[ProductInfo]:
         """
@@ -162,10 +169,19 @@ class Pipeline:
 
             # Persist ProductIdea as ProductInfo in the DB if session and pipeline_run_id are provided
             product_info_db_id = None
-            if self.session and self.pipeline_run_id and self.reddit_post_id:
-                orm_product = product_idea_to_db(product_idea, self.pipeline_run_id, self.reddit_post_id)
-                self.session.add(orm_product)
-                self.session.commit()
+            if self.db_service and self.pipeline_run_id and self.reddit_post_id:
+                product_data = {
+                    'theme': product_idea.theme,
+                    'image_url': product_idea.design_instructions.get('image'),
+                    'product_url': None,
+                    'affiliate_link': None,
+                    'template_id': product_idea.design_instructions.get('template_id'),
+                    'model': self.config.model,
+                    'prompt_version': self.config.prompt_version,
+                    'product_type': 'sticker',
+                    'design_description': product_idea.image_description
+                }
+                orm_product = self.db_service.add_product_info(self.pipeline_run_id, self.reddit_post_id, product_data)
                 product_info_db_id = orm_product.id
                 logger.info(f"Persisted ProductInfo with id {product_info_db_id}")
 
@@ -209,77 +225,90 @@ class Pipeline:
             raise  # Re-raise the exception
 
     async def run(self, pipeline_run_id: int, session: Session) -> List[ProductInfo]:
-        """
-        Run the pipeline to generate products from Reddit content.
-        Updates pipeline run status in the database.
-        """
+        """Run the pipeline."""
         try:
-            # Update pipeline run status to 'running'
-            if session:
-                pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
-                if pipeline_run:
-                    pipeline_run.status = 'running'
-                    pipeline_run.start_time = datetime.utcnow()
-                    pipeline_run.config = {
-                        'model': self.config.model,
-                        'template_id': self.config.zazzle_template_id,
-                        'prompt_version': self.config.prompt_version
-                    }
-                    session.commit()
+            # Get the pipeline run
+            pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
+            if not pipeline_run:
+                raise ValueError(f"Pipeline run {pipeline_run_id} not found")
+            pipeline_run.start_time = datetime.utcnow()
+            session.commit()
 
-            # Use the injected RedditAgent (self.reddit_agent) instead of creating a new one
-            self.reddit_agent.session = session
-            self.reddit_agent.pipeline_run_id = pipeline_run_id
-            # Find a trending post and create a product
-            product_info = await self.reddit_agent.find_and_create_product()
-            if product_info:
-                # Persist RedditContext to get reddit_post_id
-                reddit_post_id = self.reddit_agent.save_reddit_context_to_db(product_info.reddit_context)
-                # Persist ProductInfo with the reddit_post_id
-                orm_product = product_info_to_db(product_info, pipeline_run_id, reddit_post_id)
-                session.add(orm_product)
+            # Find trending post and create product
+            try:
+                product_info = await self.reddit_agent.find_and_create_product(
+                    pipeline_run_id=pipeline_run_id,
+                    session=session
+                )
+                if not product_info:
+                    raise ValueError("No product info returned from RedditAgent")
+            except Exception as e:
+                error_msg = f"Pipeline execution failed: {str(e)}"
+                self.log_error(error_msg)
+                pipeline_run.status = 'failed'
+                pipeline_run.end_time = datetime.utcnow()
+                if pipeline_run.start_time:
+                    pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
                 session.commit()
-                logger.info(f"Persisted ProductInfo with id {orm_product.id}")
-
-                # Update pipeline run status to 'success'
-                if session:
-                    pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
-                    if pipeline_run:
-                        pipeline_run.status = 'success'
-                        pipeline_run.end_time = datetime.utcnow()
-                        if pipeline_run.start_time:
-                            pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
-                        pipeline_run.metrics = {
-                            'products_generated': 1,
-                            'reddit_posts_processed': 1
-                        }
-                        session.commit()
-
-                return [product_info]
-            else:
-                # Update pipeline run status to 'failed' if no product was generated
-                if session:
-                    pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
-                    if pipeline_run:
-                        pipeline_run.status = 'failed'
-                        pipeline_run.end_time = datetime.utcnow()
-                        if pipeline_run.start_time:
-                            pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
-                        pipeline_run.last_error = "No product was generated"
-                        session.commit()
                 return []
 
+            # Persist RedditContext and get reddit_post_id
+            reddit_post_id = None
+            if self.db_service and hasattr(product_info, 'reddit_context'):
+                reddit_post_id = self.reddit_agent.save_reddit_context_to_db(product_info.reddit_context)
+
+            # Generate content
+            content = await self.content_generator.generate_content(product_info)
+            product_info.design_instructions['content'] = content
+
+            # Generate image
+            image_path = await self.image_generator.generate_image(product_info)
+            product_info.image_local_path = image_path
+
+            # Upload image to Imgur
+            image_url = await self.imgur_client.upload_image(image_path)
+            product_info.image_url = image_url
+
+            # Create Zazzle product
+            product_url = await self.zazzle_designer.create_product(product_info)
+            product_info.product_url = product_url
+
+            # Generate affiliate links
+            affiliate_links = await self.affiliate_linker.generate_links_batch([product_info])
+            if affiliate_links:
+                product_info.affiliate_links = affiliate_links[0]
+
+            # Persist ProductInfo to DB
+            if self.db_service and reddit_post_id is not None:
+                product_data = {
+                    'theme': product_info.theme,
+                    'image_url': product_info.image_url,
+                    'product_url': product_info.product_url,
+                    'affiliate_link': getattr(product_info, 'affiliate_link', None),
+                    'template_id': getattr(product_info, 'zazzle_template_id', None),
+                    'model': product_info.model,
+                    'prompt_version': product_info.prompt_version,
+                    'product_type': product_info.product_type,
+                    'design_description': getattr(product_info, 'image_description', None)
+                }
+                self.db_service.add_product_info(pipeline_run_id, reddit_post_id, product_data)
+
+            # Update pipeline run status
+            pipeline_run.status = "completed"
+            pipeline_run.end_time = datetime.utcnow()
+            session.commit()
+
+            return [product_info]
+
         except Exception as e:
-            # Log the error with enhanced error information
-            import traceback
-            self.log_error(
-                error_message=str(e),
-                error_type='PIPELINE_ERROR',
-                component='PIPELINE',
-                stack_trace=traceback.format_exc(),
-                context_data={'pipeline_run_id': pipeline_run_id}
-            )
-            return []
+            # Log error and update pipeline run status
+            self.log_error(pipeline_run_id, str(e), session)
+            pipeline_run = session.query(PipelineRun).get(pipeline_run_id)
+            if pipeline_run:
+                pipeline_run.status = "failed"
+                pipeline_run.end_time = datetime.utcnow()
+                session.commit()
+            raise
 
     async def run_pipeline(self) -> List[ProductInfo]:
         """
