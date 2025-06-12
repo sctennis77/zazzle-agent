@@ -91,40 +91,42 @@ def log_product_info(product_info: ProductInfo):
     logger.info("\nGenerated Image URL:")
     logger.info(f"{product_info.image_url}")
 
-async def run_full_pipeline(model: str = "dall-e-3"):
+async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
     """
     Run the complete product generation pipeline.
-    
+
     Args:
-        model: The AI model to use for image generation
+        config (PipelineConfig): The pipeline configuration object. Defaults to a config with model 'dall-e-3'.
+
+    Returns:
+        List[ProductInfo]: List of generated product information.
     """
+    if config is None:
+        config = PipelineConfig(
+            model="dall-e-3",
+            zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
+            zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
+            prompt_version="1.0.0"
+        )
     try:
-        # Create a new pipeline run
-        session = SessionLocal()
+        # Create pipeline run
         pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+        session = SessionLocal()
         session.add(pipeline_run)
         session.commit()
-        pipeline_run_id = pipeline_run.id
 
         # Initialize components
-        reddit_agent = RedditAgent(config_or_model=model)
+        reddit_agent = RedditAgent()
         content_generator = ContentGenerator()
-        image_generator = ImageGenerator(model=model)
+        image_generator = ImageGenerator(model=config.model)
         zazzle_designer = ZazzleProductDesigner()
         affiliate_linker = ZazzleAffiliateLinker(
             zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
-            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code
+            zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', '')
         )
         imgur_client = ImgurClient()
 
-        # Create pipeline with config
-        config = PipelineConfig(
-            model=model,
-            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
-            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
-            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
-            prompt_version="1.0.0"
-        )
+        # Create and run pipeline
         pipeline = Pipeline(
             reddit_agent=reddit_agent,
             content_generator=content_generator,
@@ -135,21 +137,30 @@ async def run_full_pipeline(model: str = "dall-e-3"):
             config=config
         )
 
-        # Run pipeline
-        products = await pipeline.run(pipeline_run_id, session)
-        logger.info(f"Pipeline completed successfully. Generated {len(products)} products.")
-        return products
+        # Run pipeline and get results
+        results = await pipeline.run_pipeline()
+
+        # Update pipeline run status
+        pipeline_run.status = 'success' if results else 'no_products'
+        pipeline_run.end_time = datetime.utcnow()
+        session.commit()
+
+        # Save results to CSV if any products were generated
+        if results:
+            output_dir = os.getenv('OUTPUT_DIR', 'outputs')
+            os.makedirs(output_dir, exist_ok=True)
+            output_file = os.path.join(output_dir, 'processed_products.csv')
+            save_to_csv(results, output_file)
+
+        return results
 
     except Exception as e:
         logger.error(f"Error in full pipeline: {str(e)}")
         if 'pipeline_run' in locals():
-            pipeline_run.status = 'failed'
+            pipeline_run.status = 'error'
             pipeline_run.end_time = datetime.utcnow()
             session.commit()
         raise
-    finally:
-        if 'session' in locals():
-            session.close()
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):
     """Run the image generation pipeline with a given prompt."""
@@ -184,7 +195,7 @@ async def main():
                 sys.exit(2)
             await run_generate_image_pipeline(args.prompt, args.model)
         else:  # full mode
-            await run_full_pipeline(model=args.model)
+            await run_full_pipeline()
     except Exception as e:
         logger.error(f"Error in main: {e}")
         raise

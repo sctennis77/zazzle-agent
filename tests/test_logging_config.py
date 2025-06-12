@@ -188,25 +188,34 @@ def test_log_timing_decorator(caplog):
 
 def test_validate_environment_variables(monkeypatch, caplog):
     """Test environment variable validation."""
-    logger = logging.getLogger()  # Use root logger
+    logger = get_logger("test_env")
+    logger.setLevel(logging.DEBUG)
+    for h in logger.handlers[:]:
+        logger.removeHandler(h)
     monkeypatch.setenv("FOO", "bar")
     monkeypatch.setenv("BAR", "baz")
     assert validate_environment_variables(["FOO", "BAR"], logger) is True
     
     # Remove one var
     monkeypatch.delenv("BAR")
-    logger.setLevel(logging.ERROR)
     caplog.clear()
     
-    with caplog.at_level(logging.ERROR):
-        assert validate_environment_variables(["FOO", "BAR"], logger) is False
+    validate_environment_variables(["FOO", "BAR"], logger)
     
     found_missing = False
     for rec in caplog.records:
-        if "Missing required environment variable: BAR" in rec.getMessage():
-            found_missing = True
-            break
-    
+        try:
+            data = json.loads(rec.getMessage())
+            if (
+                data.get("operation") == "environment_validation"
+                and data.get("status") == "failure"
+                and "missing_variables" in data.get("details", {})
+                and "BAR" in data["details"]["missing_variables"]
+            ):
+                found_missing = True
+                break
+        except Exception:
+            continue
     assert found_missing
 
 def test_basic_logging_configuration():

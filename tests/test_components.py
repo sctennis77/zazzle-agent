@@ -65,7 +65,10 @@ def mock_product_idea(reddit_context):
 class TestComponents:
     @pytest.fixture
     def affiliate_linker(self):
-        return ZazzleAffiliateLinker()
+        return ZazzleAffiliateLinker(
+            zazzle_affiliate_id='test_affiliate_id',
+            zazzle_tracking_code='test_tracking_code'
+        )
 
     @pytest.fixture
     def content_generator(self):

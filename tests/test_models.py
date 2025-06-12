@@ -124,5 +124,5 @@ def test_product_idea():
 def test_affiliate_linker():
     linker = AffiliateLinker(zazzle_affiliate_id="test_affiliate_id", zazzle_tracking_code="test_tracking_code")
     product_url = "https://example.com/product"
-    expected_link = f"{product_url}&rf=test_affiliate_id"
+    expected_link = f"{product_url}?rf=test_affiliate_id&tc=test_tracking_code"
     assert linker.compose_affiliate_link(product_url) == expected_link 

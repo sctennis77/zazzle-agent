@@ -71,27 +71,6 @@ class ZazzleAffiliateLinker:
         if not name:
             raise InvalidProductDataError("Product name is required")
 
-    def _construct_affiliate_link(self, product_id: str, name: str) -> str:
-        """
-        Construct the affiliate link URL for direct product links.
-        
-        Args:
-            product_id (str): Zazzle product ID
-            name (str): Product name (used for logging purposes)
-        
-        Returns:
-            str: Complete affiliate link URL in format:
-                https://www.zazzle.com/product/{product_id}?rf={affiliate_id}
-        
-        Raises:
-            ZazzleAffiliateLinkerError: If link construction fails
-        """
-        try:
-            return f"https://www.zazzle.com/product/{product_id}?rf={self.affiliate_linker.zazzle_affiliate_id}"
-        except Exception as e:
-            logger.error(f"Error constructing affiliate link: {e}")
-            raise ZazzleAffiliateLinkerError(f"Failed to construct affiliate link: {e}")
-
     async def _generate_affiliate_link(self, product: ProductInfo) -> str:
         """
         Generate a Zazzle affiliate link for a product.
@@ -108,7 +87,7 @@ class ZazzleAffiliateLinker:
         """
         self._validate_product_data(product.product_id, product.name)
         try:
-            affiliate_link = self._construct_affiliate_link(product.product_id, product.name)
+            affiliate_link = self.affiliate_linker.compose_affiliate_link(product.product_url)
             logger.info(f"Generated affiliate link for {product.name} ({product.product_id})")
             return affiliate_link
         except Exception as e:
@@ -127,10 +106,9 @@ class ZazzleAffiliateLinker:
         """
         for product in products:
             try:
-                affiliate_link = self.affiliate_linker.compose_affiliate_link(product.product_url)
+                affiliate_link = await self._generate_affiliate_link(product)
                 product.affiliate_link = affiliate_link
-                logger.info(f"Generated affiliate link for {product.name} ({product.product_id})")
             except Exception as e:
                 logger.error(f"Failed to generate affiliate link for {product.name}: {str(e)}")
-                raise
+                product.affiliate_link = None
         return products 

@@ -25,6 +25,22 @@ from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# SQLAlchemy Enums
+class RedditPostStatus(Enum):
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+
+class RedditCommentStatus(Enum):
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+
+class ZazzleProductStatus(Enum):
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+
 class ContentType(Enum):
     """
     Types of content that can be generated for a product.
@@ -447,4 +463,20 @@ class AffiliateLinker:
     zazzle_tracking_code: str
 
     def compose_affiliate_link(self, product_url: str) -> str:
-        return f"{product_url}&rf={self.zazzle_affiliate_id}" 
+        """
+        Compose a Zazzle affiliate link with tracking code.
+        
+        Args:
+            product_url (str): The base product URL
+            
+        Returns:
+            str: Complete affiliate link with tracking code and affiliate ID
+        """
+        # Add tracking code if not present
+        if '?' not in product_url:
+            product_url += '?'
+        elif not product_url.endswith('&'):
+            product_url += '&'
+            
+        # Add tracking code and affiliate ID
+        return f"{product_url}rf={self.zazzle_affiliate_id}&tc={self.zazzle_tracking_code}" 

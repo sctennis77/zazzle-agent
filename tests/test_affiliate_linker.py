@@ -61,7 +61,10 @@ def mock_product_idea():
 class TestZazzleAffiliateLinker:
     @pytest.fixture
     def affiliate_linker(self):
-        return ZazzleAffiliateLinker()
+        return ZazzleAffiliateLinker(
+            zazzle_affiliate_id='test_affiliate_id',
+            zazzle_tracking_code='test_tracking_code'
+        )
 
     async def test_generate_links_batch_success(self, affiliate_linker, mock_product_info):
         # Mock the _generate_affiliate_link method
@@ -120,11 +123,9 @@ class TestZazzleAffiliateLinker:
     async def test_generate_affiliate_link(self, affiliate_linker, mock_product_info):
         # Test generating a single affiliate link
         result = await affiliate_linker._generate_affiliate_link(mock_product_info)
-        
         # Verify the result
-        assert result.startswith("https://www.zazzle.com/")
-        assert "rf=test_affiliate_id" in result
-        assert mock_product_info.product_id in result
+        expected_url = f"{mock_product_info.product_url}?rf=test_affiliate_id&tc=test_tracking_code"
+        assert result == expected_url
 
     async def test_generate_affiliate_link_error(self, affiliate_linker, mock_product_info):
         # Mock the _generate_affiliate_link method to raise an error
@@ -132,4 +133,34 @@ class TestZazzleAffiliateLinker:
         
         # Test error handling
         with pytest.raises(ZazzleAffiliateLinkerError):
-            await affiliate_linker._generate_affiliate_link(mock_product_info) 
+            await affiliate_linker._generate_affiliate_link(mock_product_info)
+
+def test_generate_affiliate_link():
+    """Test generating a single affiliate link."""
+    linker = ZazzleAffiliateLinker(
+        zazzle_affiliate_id="test_affiliate_id",
+        zazzle_tracking_code="test_tracking_code"
+    )
+    product = ProductInfo(
+        product_id="test123",
+        name="Test Product",
+        product_type="sticker",
+        image_url="https://example.com/image.jpg",
+        product_url="https://example.com/product/test123",
+        zazzle_template_id="test_template",
+        zazzle_tracking_code="test_tracking_code",
+        theme="test_theme",
+        model="dall-e-2",
+        prompt_version="1.0.0",
+        reddit_context=RedditContext(
+            post_id="test_post",
+            post_title="Test Post",
+            post_url="https://reddit.com/test_post",
+            subreddit="test_subreddit"
+        ),
+        design_instructions={"image": "https://example.com/image.jpg"}
+    )
+    expected_link = f"{product.product_url}?rf=test_affiliate_id&tc=test_tracking_code"
+    import asyncio
+    result = asyncio.run(linker._generate_affiliate_link(product))
+    assert result == expected_link 

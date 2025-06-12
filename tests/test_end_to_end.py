@@ -8,6 +8,15 @@ from app.image_generator import ImageGenerator
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.agents.reddit_agent import RedditAgent
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DesignInstructions
+from app.db.database import SessionLocal, Base, engine
+
+@pytest.fixture(autouse=True)
+def setup_and_teardown_db():
+    # Drop and recreate all tables before each test
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(autouse=True)
 def patch_openai():
