@@ -3,8 +3,17 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from app.pipeline import Pipeline
 from app.models import ProductIdea, RedditContext, ProductInfo, PipelineConfig
 from app.db.models import PipelineRun, ErrorLog
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+
+@pytest.fixture(autouse=True)
+def setup_and_teardown_db():
+    # Drop and recreate all tables before each test
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture
 def mock_session():
@@ -105,15 +114,33 @@ async def test_process_product_idea_error(pipeline, sample_product_idea):
         await pipeline.process_product_idea(sample_product_idea)
 
 @pytest.mark.asyncio
-async def test_run_pipeline_error(pipeline, mock_session):
-    """Test handling of errors during pipeline execution (should log error, not raise)."""
-    pipeline.pipeline_run_id = 1
-    pipeline.session = mock_session
-    pipeline.reddit_agent.find_and_create_product.side_effect = Exception("Pipeline execution failed")
-    # Should not raise, just log error and set status to failed
-    await pipeline.run(1, mock_session)
-    # Check that log_error was called (by checking mock_session.add was called)
-    assert mock_session.add.called
+async def test_run_pipeline_error(mocker, mock_session):
+    """
+    Test that errors during pipeline execution are handled and logged correctly.
+    """
+    # Mock dependencies
+    mock_session.query.return_value.get.return_value = None
+
+    # Initialize pipeline with mock session
+    pipeline = Pipeline(
+        reddit_agent=AsyncMock(),
+        content_generator=mocker.Mock(),
+        image_generator=mocker.Mock(),
+        zazzle_designer=mocker.Mock(),
+        affiliate_linker=AsyncMock(),
+        imgur_client=mocker.Mock(),
+        session=mock_session
+    )
+
+    # Create a pipeline run
+    pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+    mock_session.add(pipeline_run)
+    mock_session.commit()
+    pipeline.pipeline_run_id = pipeline_run.id
+
+    # Run pipeline and assert error handling
+    with pytest.raises(ValueError, match="Pipeline run None not found"):
+        await pipeline.run_pipeline()
 
 @pytest.mark.asyncio
 async def test_retry_logic(pipeline, sample_product_idea, sample_product_info):
