@@ -31,6 +31,7 @@ from app.db.models import PipelineRun, ErrorLog
 from sqlalchemy.orm import Session
 import os
 from app.services.database_service import DatabaseService
+from app.db.database import SessionLocal
 
 logger = get_logger(__name__)
 
@@ -318,10 +319,21 @@ class Pipeline:
             List[ProductInfo]: List of successfully generated products
         """
         try:
+            # Start a new session
+            session = SessionLocal()
+
+            # Create a pipeline run
+            pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+            session.add(pipeline_run)
+            session.commit()
+
             # Get product info from Reddit
             products = await self.reddit_agent.get_product_info()
             if not products:
                 logger.warning("No products were generated")
+                pipeline_run.status = 'no_products'
+                pipeline_run.end_time = datetime.utcnow()
+                session.commit()
                 return []
 
             # Generate affiliate links for all products
@@ -330,11 +342,26 @@ class Pipeline:
                 error_msg = "No products were successfully processed with affiliate links"
                 self.log_error(error_msg)
                 logger.warning(error_msg)
+                pipeline_run.status = 'failed'
+                pipeline_run.end_time = datetime.utcnow()
+                session.commit()
                 raise Exception(error_msg)
+
+            # Persist ProductInfo to DB using ORM
+            for product_info in products_with_links:
+                orm_product_info = product_info_to_db(product_info, pipeline_run.id, self.reddit_post_id)
+                session.add(orm_product_info)
+
+            # Update pipeline run status
+            pipeline_run.status = "completed"
+            pipeline_run.end_time = datetime.utcnow()
+            session.commit()
 
             return products_with_links
         except Exception as e:
             error_msg = f"Error in run_pipeline: {str(e)}"
             self.log_error(error_msg)
             logger.error(error_msg)
-            raise  # Re-raise the exception 
+            raise  # Re-raise the exception
+        finally:
+            session.close() 
