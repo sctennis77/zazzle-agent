@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from app.pipeline import Pipeline
 from app.models import ProductIdea, RedditContext, ProductInfo, PipelineConfig
 from app.agents.reddit_agent import RedditAgent
@@ -199,4 +199,44 @@ async def test_run_pipeline(pipeline):
     # Get the RedditPost id for the test post
     db_reddit_post = session.query(RedditPostDB).filter_by(post_id='test_post_id').first()
     assert db_product.reddit_post_id == db_reddit_post.id
-    session.close() 
+    session.close()
+
+@patch('app.agents.reddit_agent.RedditAgent._find_trending_post')
+@patch('app.agents.reddit_agent.RedditAgent._determine_product_idea')
+async def test_pipeline_uses_correct_model(mock_determine, mock_find_post):
+    # Mock _find_trending_post to return a valid post
+    mock_find_post.return_value = MagicMock(
+        id='test_post_id',
+        title='Test Post Title',
+        url='https://reddit.com/test',
+        subreddit='test_subreddit',
+        selftext='Test content'
+    )
+    # Mock _determine_product_idea to return a valid product idea
+    mock_determine.return_value = ProductIdea(
+        theme='test_theme',
+        image_description='Test image description',
+        design_instructions={'image': 'https://example.com/image.jpg'},
+        reddit_context=RedditContext(
+            post_id='test_post_id',
+            post_title='Test Post Title',
+            post_url='https://reddit.com/test',
+            subreddit='test_subreddit'
+        ),
+        model='dall-e-2',
+        prompt_version='1.0.0'
+    )
+    # Create a pipeline with a specific model
+    pipeline = Pipeline(
+        reddit_agent=RedditAgent(config_or_model='dall-e-2'),
+        content_generator=MagicMock(),
+        image_generator=MagicMock(),
+        zazzle_designer=MagicMock(),
+        affiliate_linker=MagicMock(),
+        imgur_client=MagicMock(),
+        config=PipelineConfig(model='dall-e-2', zazzle_template_id='template123', zazzle_tracking_code='tracking456', zazzle_affiliate_id='test_affiliate_id', prompt_version='1.0.0')
+    )
+    # Run the pipeline
+    await pipeline.run()
+    # Verify that the RedditAgent's ImageGenerator was initialized with the correct model
+    assert pipeline.reddit_agent.image_generator.model == 'dall-e-2' 

@@ -107,7 +107,7 @@ async def run_full_pipeline(model: str = "dall-e-3"):
         pipeline_run_id = pipeline_run.id
 
         # Initialize components
-        reddit_agent = RedditAgent()
+        reddit_agent = RedditAgent(config_or_model=model)
         content_generator = ContentGenerator()
         image_generator = ImageGenerator(model=model)
         zazzle_designer = ZazzleProductDesigner()
