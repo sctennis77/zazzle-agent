@@ -11,6 +11,7 @@ import pytest
 from unittest import IsolatedAsyncioTestCase
 from app.db.database import SessionLocal
 from app.db.models import PipelineRun, RedditPost
+from datetime import datetime, timezone
 
 class TestRedditAgent(IsolatedAsyncioTestCase):
     """Test cases for the Reddit Agent."""
@@ -463,6 +464,36 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         result = self.reddit_agent.reply_to_comment_with_marketing('test_comment_id', product_info, {})
         assert result is not None
         assert isinstance(result, dict)
+
+    @patch('app.agents.reddit_agent.openai')
+    async def test_find_trending_post(self, mock_openai):
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        agent.openai = mock_openai
+        with patch('praw.Reddit') as mock_reddit:
+            mock_submission = MagicMock()
+            mock_submission.title = "Test Post"
+            mock_submission.score = 100
+            mock_submission.is_self = False
+            mock_submission.selftext = "Test content"
+            mock_submission.created_utc = datetime.now(timezone.utc).timestamp()
+            mock_submission.stickied = False
+            mock_submission.subreddit.display_name = "test_subreddit"
+            mock_comment = MagicMock()
+            mock_comment.body = "Test comment"
+            mock_submission.comments.replace_more = MagicMock(side_effect=lambda limit=0: None)
+            mock_submission.comments.list.return_value = [mock_comment]
+            subreddit_mock = MagicMock()
+            subreddit_mock.hot.return_value = [mock_submission]
+            agent.reddit.subreddit = MagicMock(return_value=subreddit_mock)
+            # Mock OpenAI response
+            mock_openai.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content="Summary of comments"))]
+            try:
+                result = await agent._find_trending_post(tries=3, limit=20)
+                assert result is not None
+                assert result.title == "Test Post"
+            except Exception as e:
+                print(f"Exception during test_find_trending_post: {e}")
+                raise
 
 if __name__ == '__main__':
     unittest.main() 

@@ -17,4 +17,13 @@ if DB_URL.startswith('sqlite'):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    Base.metadata.create_all(bind=engine) 
+    """Initialize the database by creating all tables."""
+    Base.metadata.create_all(bind=engine)
+
+def get_db():
+    """Get a database session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close() 

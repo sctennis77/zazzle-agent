@@ -183,7 +183,8 @@ class TestMain:
         test_argv = ['script.py', '--mode', 'image']
         with patch.object(sys, 'argv', test_argv):
             with caplog.at_level('ERROR', logger='app.main'):
-                await main()
+                with pytest.raises(SystemExit):
+                    await main()
         assert any('prompt is required' in record.message for record in caplog.records)
         mock_run_image.assert_not_called()
         

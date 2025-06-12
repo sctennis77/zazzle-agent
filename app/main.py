@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import csv
 import asyncio
+import sys
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
@@ -20,7 +21,7 @@ from app.utils.logging_config import setup_logging
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.clients.imgur_client import ImgurClient
 from app.pipeline import Pipeline
-from app.db.database import SessionLocal
+from app.db.database import init_db, SessionLocal
 from app.db.models import PipelineRun, ErrorLog
 
 # Configure logging
@@ -169,29 +170,29 @@ async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"
 async def main():
     """Main entry point for the application."""
     try:
-        # Ensure outputs directory exists
-        os.makedirs("outputs/generated_products", exist_ok=True)
-        logger.info("Ensured outputs directory exists")
-
+        # Initialize the database
+        init_db()
+        
         # Parse command line arguments
-        parser = argparse.ArgumentParser(description='Run the Zazzle agent pipeline.')
-        parser.add_argument('--mode', choices=['full', 'image'], default='full', help='Pipeline mode to run')
-        parser.add_argument('--prompt', type=str, help='Custom prompt for image generation')
-        parser.add_argument('--model', choices=['dall-e-2', 'dall-e-3'], default='dall-e-3', help='DALL-E model to use')
+        parser = argparse.ArgumentParser(description='Run the Zazzle Agent pipeline')
+        parser.add_argument('--mode', type=str, default='full', choices=['full', 'image'],
+                          help='Pipeline mode: full (complete pipeline) or image (image generation only)')
+        parser.add_argument('--model', type=str, default='dall-e-3',
+                          help='AI model to use (default: dall-e-3)')
+        parser.add_argument('--prompt', type=str,
+                          help='Image prompt (required for image mode)')
         args = parser.parse_args()
 
-        if args.mode == 'full':
-            await run_full_pipeline(model=args.model)
-        elif args.mode == 'image':
+        # Validate arguments based on mode
+        if args.mode == 'image':
             if not args.prompt:
-                logger.error("--prompt is required when running in image mode.")
-                return
+                logger.error("--prompt is required for image mode")
+                sys.exit(2)
             await run_generate_image_pipeline(args.prompt, args.model)
-        else:
-            logger.error(f"Unknown mode: {args.mode}")
-
+        else:  # full mode
+            await run_full_pipeline(model=args.model)
     except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
+        logger.error(f"Error in main: {e}")
         raise
 
 if __name__ == '__main__':

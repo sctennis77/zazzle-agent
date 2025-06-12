@@ -434,4 +434,13 @@ class DesignInstructions:
     product_type: str = "sticker"
     template_id: Optional[str] = None
     model: Optional[str] = None
-    prompt_version: Optional[str] = None 
+    prompt_version: Optional[str] = None
+
+
+@dataclass
+class AffiliateLinker:
+    zazzle_affiliate_id: str
+    zazzle_tracking_code: str
+
+    def compose_affiliate_link(self, product_url: str) -> str:
+        return f"{product_url}&rf={self.zazzle_affiliate_id}" 
