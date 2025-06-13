@@ -136,7 +136,7 @@ class Pipeline:
                 pipeline_run = self.session.query(PipelineRun).get(self.pipeline_run_id)
                 if pipeline_run:
                     pipeline_run.last_error = error_message
-                    pipeline_run.status = 'failed'
+                    pipeline_run.status = PipelineStatus.FAILED.value
                     pipeline_run.end_time = datetime.utcnow()
                     if pipeline_run.start_time:
                         pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
@@ -253,21 +253,14 @@ class Pipeline:
             # Get product info from Reddit
             products = await self.reddit_agent.get_product_info()
             if not products:
-                logger.warning("No products were generated")
-                pipeline_run.status = 'no_products'
-                pipeline_run.end_time = datetime.utcnow()
-                session.commit()
-                return []
+                error_msg = f"No products were generated. pipeline_run_id: {pipeline_run.id}"
+                raise Exception(error_msg)
 
             # Generate affiliate links for all products
             products_with_links = await self.affiliate_linker.generate_links_batch(products)
             if not products_with_links:
-                error_msg = "No products were successfully processed with affiliate links"
-                self.log_error(error_msg)
-                logger.warning(error_msg)
-                pipeline_run.status = 'failed'
-                pipeline_run.end_time = datetime.utcnow()
-                session.commit()
+                error_msg = f"No products were successfully processed with affiliate links pipeline_run_id: {pipeline_run.id}"
+               
                 raise Exception(error_msg)
 
             orm_reddit_post = None
@@ -289,7 +282,7 @@ class Pipeline:
                 logging.debug(f"Persisted ProductInfo with ID: {orm_product_info.id} and RedditPost ID: {orm_reddit_post.id}")
 
             # Update pipeline run status
-            pipeline_run.status = "completed"
+            pipeline_run.status = PipelineStatus.COMPLETED.value
             pipeline_run.end_time = datetime.utcnow()
             session.commit()
 
@@ -299,9 +292,12 @@ class Pipeline:
 
             return products_with_links
         except Exception as e:
-            error_msg = f"Error in run_pipeline: {str(e)}"
+            error_msg = f"Error in run_pipeline with pipeline_run_id: {pipeline_run.id} and reddit_post_id: {self.reddit_post_id}: {str(e)}"
             self.log_error(error_msg)
             logger.error(error_msg)
+            pipeline_run.status = PipelineStatus.FAILED.value
+            pipeline_run.end_time = datetime.utcnow()
+            session.commit()
             raise  # Re-raise the exception
         finally:
             logging.debug("Closing session...")

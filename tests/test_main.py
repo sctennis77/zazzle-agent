@@ -100,14 +100,14 @@ async def test_run_full_pipeline_no_product_generated():
          patch('app.agents.reddit_agent.RedditAgent') as mock_reddit_agent_impl:
         mock_agent = AsyncMock(spec=RedditAgent)
         mock_agent.get_product_info = AsyncMock(return_value=[])
-        
+
         # Create mock subreddit and hot iterator
         mock_subreddit = MagicMock()
         mock_subreddit.hot.return_value = iter([])
         mock_reddit = MagicMock()
         mock_reddit.subreddit.return_value = mock_subreddit
         mock_agent.reddit = mock_reddit
-        
+
         mock_reddit_agent_class.return_value = mock_agent
         mock_reddit_agent_impl.return_value = mock_agent
 
@@ -118,8 +118,10 @@ async def test_run_full_pipeline_no_product_generated():
                 zazzle_tracking_code="test_tracking_code",
                 prompt_version="1.0.0"
             )
-            result = await run_full_pipeline(config)
-            assert result == []
+            with pytest.raises(Exception) as exc_info:
+                await run_full_pipeline(config)
+            assert "No products were generated" in str(exc_info.value)
+            assert "pipeline_run_id" in str(exc_info.value)
             mock_save.assert_not_called()
 
 @pytest.mark.asyncio

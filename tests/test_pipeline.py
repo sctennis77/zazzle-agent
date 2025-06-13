@@ -148,15 +148,17 @@ async def test_run_pipeline_batch(pipeline):
 
 @pytest.mark.asyncio
 async def test_run_pipeline_empty(pipeline):
-    """Test processing an empty batch of product ideas."""
+    """Test that pipeline raises an exception when no products are generated."""
     pipeline.reddit_agent.get_product_info.return_value = []
-    results = await pipeline.run_pipeline()
-    assert len(results) == 0
+    with pytest.raises(Exception) as exc_info:
+        await pipeline.run_pipeline()
+    assert "No products were generated" in str(exc_info.value)
+    assert "pipeline_run_id" in str(exc_info.value)
 
 @pytest.mark.asyncio
 async def test_run_pipeline(mocker):
     """
-    Test that the pipeline runs successfully and returns product info.
+    Test that the pipeline raises an exception when no products are generated.
     """
     # Mock dependencies
     mock_session = mocker.Mock()
@@ -175,9 +177,11 @@ async def test_run_pipeline(mocker):
     # Mock get_product_info to return an empty list
     pipeline.reddit_agent.get_product_info.return_value = []
 
-    # Run pipeline and assert success
-    products = await pipeline.run_pipeline()
-    assert products == []
+    # Run pipeline and assert it raises an exception
+    with pytest.raises(Exception) as exc_info:
+        await pipeline.run_pipeline()
+    assert "No products were generated" in str(exc_info.value)
+    assert "pipeline_run_id" in str(exc_info.value)
 
 @patch('app.agents.reddit_agent.RedditAgent._find_trending_post')
 @patch('app.agents.reddit_agent.RedditAgent._determine_product_idea')
