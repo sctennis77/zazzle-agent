@@ -22,8 +22,67 @@ import csv
 import os
 import json
 from app.utils.logging_config import get_logger
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 logger = get_logger(__name__)
+
+# Pydantic schemas for API responses
+class RedditPostSchema(BaseModel):
+    id: int
+    pipeline_run_id: int
+    post_id: str
+    title: str
+    content: Optional[str] = None
+    subreddit: str
+    url: str
+    permalink: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PipelineRunSchema(BaseModel):
+    id: int
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    status: str
+    summary: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = None
+    duration: Optional[int] = None
+    retry_count: int = Field(default=0)
+    last_error: Optional[str] = None
+    version: Optional[str] = None
+
+    @field_validator('start_time', 'end_time', mode='before')
+    @classmethod
+    def parse_datetime(cls, value):
+        if isinstance(value, str):
+            return datetime.fromisoformat(value)
+        return value
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProductInfoSchema(BaseModel):
+    id: int
+    pipeline_run_id: int
+    reddit_post_id: int
+    theme: str
+    image_url: str
+    product_url: str
+    affiliate_link: Optional[str] = None
+    template_id: str
+    model: str
+    prompt_version: str
+    product_type: str
+    design_description: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class GeneratedProductSchema(BaseModel):
+    product_info: ProductInfoSchema
+    pipeline_run: PipelineRunSchema
+    reddit_post: RedditPostSchema
+
+    model_config = ConfigDict(from_attributes=True)
 
 # SQLAlchemy Enums
 class RedditPostStatus(Enum):
@@ -221,6 +280,19 @@ class RedditContext:
             logger.info(f"Content: {self.post_content[:100]}...")  # Log first 100 chars
         if self.comments:
             logger.info(f"Number of comments: {len(self.comments)}")
+
+    def to_schema(self) -> RedditPostSchema:
+        """Convert to Pydantic schema for API responses."""
+        return RedditPostSchema(
+            id=0,  # This will be set by the ORM model
+            pipeline_run_id=0,  # This will be set by the ORM model
+            post_id=self.post_id,
+            title=self.post_title,
+            content=self.post_content,
+            subreddit=self.subreddit,
+            url=self.post_url,
+            permalink=self.permalink
+        )
 
 
 @dataclass
@@ -425,6 +497,23 @@ class ProductInfo:
             str: Unique identifier combining product ID and timestamp
         """
         return f"{product_id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+
+    def to_schema(self) -> ProductInfoSchema:
+        """Convert to Pydantic schema for API responses."""
+        return ProductInfoSchema(
+            id=0,  # This will be set by the ORM model
+            pipeline_run_id=0,  # This will be set by the ORM model
+            reddit_post_id=0,  # This will be set by the ORM model
+            theme=self.theme,
+            image_url=self.image_url,
+            product_url=self.product_url,
+            affiliate_link=self.affiliate_link,
+            template_id=self.zazzle_template_id,
+            model=self.model,
+            prompt_version=self.prompt_version,
+            product_type=self.product_type,
+            design_description=self.design_instructions.get('description')
+        )
 
 
 @dataclass

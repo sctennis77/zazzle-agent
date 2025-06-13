@@ -1,13 +1,13 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
 class PipelineRun(Base):
     __tablename__ = 'pipeline_runs'
     id = Column(Integer, primary_key=True)
-    start_time = Column(DateTime, default=datetime.utcnow, index=True)
+    start_time = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     end_time = Column(DateTime, nullable=True, index=True)
     status = Column(String(32), default='pending', index=True)  # pending, running, success, failed, cancelled
     summary = Column(Text, nullable=True)
@@ -72,7 +72,7 @@ class ErrorLog(Base):
     component = Column(String(64), index=True)    # Component where error occurred (e.g., 'REDDIT_AGENT', 'IMAGE_GENERATOR')
     stack_trace = Column(Text, nullable=True)  # Full stack trace if available
     context_data = Column(JSON, nullable=True)  # Additional context data as JSON
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     severity = Column(String(16), default='ERROR', index=True)  # ERROR, WARNING, INFO
 
     pipeline_run = relationship('PipelineRun', back_populates='errors') 
