@@ -22,6 +22,7 @@ from app.utils.logging_config import get_logger
 from dataclasses import asdict
 from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
 from app.db.mappers import reddit_context_to_db
+from app.db.models import RedditPost
 
 logger = get_logger(__name__)
 
@@ -654,7 +655,11 @@ class RedditAgent(ChannelAgent):
             logger.error(f"Error interacting with subreddit: {str(e)}")
 
     async def _find_trending_post(self, tries: int = 3, limit: int = 20):
-        """Find a trending post from Reddit, retrying up to `tries` times and using up to `limit` posts per attempt."""
+        """
+        Find a trending Reddit post that has not already been processed.
+        Skips posts that are stickied, too old, or already present in the database (by post_id).
+        Returns the first valid post or None if none are found.
+        """
         logger.info(f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}")
         try:
             for attempt in range(tries):
@@ -676,6 +681,14 @@ class RedditAgent(ChannelAgent):
                     if not submission.selftext:
                         print('Skipping: no selftext')
                         continue
+                    
+                    # Check if we've already processed this post
+                    if self.session:
+                        existing_post = self.session.query(RedditPost).filter_by(post_id=submission.id).first()
+                        if existing_post:
+                            logger.info(f"Skipping post {submission.id}: already processed")
+                            continue
+                    
                     # Get top comments and generate summary
                     submission.comments.replace_more(limit=0)  # Load top-level comments only
                     top_comments = submission.comments.list()[:5]  # Get top 5 comments
