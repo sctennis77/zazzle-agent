@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api
 
 help:
 	@echo "Available targets:"
@@ -15,6 +15,8 @@ help:
 	@echo "  make docker-run   - Run Docker container"
 	@echo "  make scrape       - Run only the scraping part of the program"
 	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
+	@echo "  make run-api      - Run the API server"
+	@echo "  make stop-api     - Stop the API server"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -47,3 +49,25 @@ docker-run:
 
 scrape:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.product_scraper 
+
+run-api:
+	@echo "Stopping any existing API instances..."
+	@if lsof -ti :8000 > /dev/null; then \
+	  echo "Killing process(es) using port 8000:"; \
+	  lsof -i :8000; \
+	  lsof -ti :8000 | xargs kill -9; \
+	fi
+	@echo "Waiting for port 8000 to be released..."
+	@while lsof -i :8000 > /dev/null; do sleep 1; done
+	@echo "Starting API server..."
+	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.api
+
+stop-api:
+	@echo "Stopping API server..."
+	@if lsof -ti :8000 > /dev/null; then \
+	  echo "Killing process(es) using port 8000:"; \
+	  lsof -i :8000; \
+	  lsof -ti :8000 | xargs kill -9; \
+	fi
+	@echo "Waiting for port 8000 to be released..."
+	@while lsof -i :8000 > /dev/null; do sleep 1; done 
