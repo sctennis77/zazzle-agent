@@ -24,6 +24,7 @@ from app.db.models import PipelineRun, RedditPost, ProductInfo as DBProductInfo
 from datetime import datetime
 from app.db.mappers import product_info_to_db
 import logging
+from app.pipeline_status import PipelineStatus
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -143,7 +144,7 @@ async def test_full_pipeline_success(
     # Create a pipeline run
     session = SessionLocal()
     try:
-        pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+        pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
         session.add(pipeline_run)
         session.commit()
         logging.debug(f"Created PipelineRun with ID: {pipeline_run.id}")

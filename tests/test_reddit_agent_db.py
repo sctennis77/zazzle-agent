@@ -8,6 +8,7 @@ from app.models import ProductIdea
 from app.models import RedditContext
 from types import SimpleNamespace
 from app.services.database_service import DatabaseService
+from app.pipeline_status import PipelineStatus
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
@@ -20,7 +21,7 @@ def setup_and_teardown_db():
 @pytest.mark.asyncio
 def test_reddit_agent_persists_reddit_post(monkeypatch):
     session = SessionLocal()
-    pipeline_run = PipelineRun(status='started')
+    pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value)
     session.add(pipeline_run)
     session.commit()
     pipeline_run_id = pipeline_run.id

@@ -33,6 +33,7 @@ import os
 from app.services.database_service import DatabaseService
 from app.db.database import SessionLocal
 import logging
+from app.pipeline_status import PipelineStatus
 
 logger = get_logger(__name__)
 
@@ -244,7 +245,7 @@ class Pipeline:
                     raise ValueError(f"Pipeline run {self.pipeline_run_id} not found")
             else:
                 # Create a new pipeline run
-                pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+                pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
                 session.add(pipeline_run)
                 session.commit()
                 self.pipeline_run_id = pipeline_run.id

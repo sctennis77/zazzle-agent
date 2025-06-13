@@ -6,6 +6,7 @@ from app.db.models import PipelineRun, ErrorLog
 from app.db.database import SessionLocal, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
+from app.pipeline_status import PipelineStatus
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
@@ -133,7 +134,7 @@ async def test_run_pipeline_error(mocker, mock_session):
     )
 
     # Create a pipeline run
-    pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+    pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
     mock_session.add(pipeline_run)
     mock_session.commit()
     pipeline.pipeline_run_id = pipeline_run.id

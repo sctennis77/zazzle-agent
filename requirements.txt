@@ -11,4 +11,5 @@ pytest-asyncio
 praw
 httpx==0.24.1
 sqlalchemy>=2.0.0
-pytest-mock 
+pytest-mock
+fastapi==0.110.0 

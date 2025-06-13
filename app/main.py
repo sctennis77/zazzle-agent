@@ -23,6 +23,7 @@ from app.clients.imgur_client import ImgurClient
 from app.pipeline import Pipeline
 from app.db.database import init_db, SessionLocal
 from app.db.models import PipelineRun, ErrorLog
+from app.pipeline_status import PipelineStatus
 
 # Configure logging
 logging.basicConfig(
@@ -110,7 +111,7 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
         )
     try:
         # Create pipeline run
-        pipeline_run = PipelineRun(status='started', start_time=datetime.utcnow())
+        pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
         session = SessionLocal()
         session.add(pipeline_run)
         session.commit()
