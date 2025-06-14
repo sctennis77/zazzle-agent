@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from app.db.database import get_db, SessionLocal
+from app.db.database import get_db, SessionLocal, init_db
 from app.db.models import PipelineRun, ProductInfo, RedditPost
 from app.pipeline_status import PipelineStatus
 from app.models import (
@@ -20,6 +21,22 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5175"],  # Frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the database when the application starts."""
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized successfully!")
 
 def model_to_dict(obj):
     if obj is None:
