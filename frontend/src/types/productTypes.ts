@@ -19,6 +19,7 @@ export interface ProductInfo {
   prompt_version: string;
   product_type: string;
   design_description: string;
+  affiliate_link?: string;
 }
 
 export interface PipelineRun {

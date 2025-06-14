@@ -16,7 +16,7 @@ export const ProductGrid: React.FC = () => {
   if (error) {
     return (
       <div className="text-center text-red-600 p-4">
-        Error loading products: {error.message}
+        Error loading products: {error}
       </div>
     );
   }
@@ -30,7 +30,7 @@ export const ProductGrid: React.FC = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
+    <div className="flex flex-col items-center w-full min-h-screen py-8 gap-8 bg-gray-50">
       {products.map((product) => (
         <ProductCard key={product.product_info.id} product={product} />
       ))}
