@@ -7,8 +7,26 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 venv/
 ENV/
+zam/
 
 # Output
 outputs/
@@ -20,6 +38,9 @@ outputs/
 *.swp
 *.swo
 
+# Logs
+*.log
+
 # OS
 .DS_Store
 Thumbs.db
@@ -29,4 +50,8 @@ Thumbs.db
 .coverage
 
 zazzle_pipeline.db
+
+# Frontend
+node_modules/
+dist/
 
