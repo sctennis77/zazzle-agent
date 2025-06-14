@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .product-card {
+    @apply bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300;
+  }
+  
+  .product-image {
+    @apply w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-300;
+  }
+  
+  .product-title {
+    @apply text-lg font-semibold text-gray-900 truncate;
+  }
+  
+  .product-type {
+    @apply mt-1 text-sm text-gray-500;
+  }
+  
+  .product-link {
+    @apply text-sm font-medium text-indigo-600 hover:text-indigo-500;
+  }
+} 
