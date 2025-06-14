@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean
 
 help:
 	@echo "Available targets:"
@@ -17,6 +17,12 @@ help:
 	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
 	@echo "  make run-api      - Run the API server"
 	@echo "  make stop-api     - Stop the API server"
+	@echo "  make frontend-dev      # Start dev server at http://localhost:5173 (or next available port)"
+	@echo "  make frontend-build    # Build production bundle"
+	@echo "  make frontend-preview  # Preview production build"
+	@echo "  make frontend-install  # Install dependencies"
+	@echo "  make frontend-lint     # Lint code"
+	@echo "  make frontend-clean    # Remove node_modules, .vite, and dist"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -71,3 +77,39 @@ stop-api:
 	fi
 	@echo "Waiting for port 8000 to be released..."
 	@while lsof -i :8000 > /dev/null; do sleep 1; done 
+
+# =====================
+# Frontend (React) targets
+# =====================
+
+# Start the React development server (hot reload, for local development)
+frontend-dev:
+	cd frontend && npm run dev
+
+# Build the React frontend for production (outputs to frontend/dist)
+frontend-build:
+	cd frontend && npm run build
+
+# Preview the production build locally (serves frontend/dist)
+frontend-preview:
+	cd frontend && npm run preview
+
+# Install frontend dependencies
+frontend-install:
+	cd frontend && npm install
+
+# Lint the frontend code
+frontend-lint:
+	cd frontend && npm run lint
+
+# Clean frontend node_modules and cache
+frontend-clean:
+	rm -rf frontend/node_modules frontend/.vite frontend/dist
+
+# Usage:
+#   make frontend-dev      # Start dev server at http://localhost:5173 (or next available port)
+#   make frontend-build    # Build production bundle
+#   make frontend-preview  # Preview production build
+#   make frontend-install  # Install dependencies
+#   make frontend-lint     # Lint code
+#   make frontend-clean    # Remove node_modules, .vite, and dist 
