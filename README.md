@@ -586,6 +586,39 @@ This will run the full suite and report coverage for the `app/` directory.
 
 ## Daily Progress Updates
 
+### June 12, 2025
+
+#### Progress Made Today
+
+1. **API Integration:**
+   - The API integration has been successfully completed, with all endpoints functioning as expected.
+   - The `/api/generated_products` endpoint is now returning the correct data, including product details and associated Reddit posts.
+
+2. **Pipeline Execution:**
+   - The full pipeline was executed successfully, generating a product based on a trending Reddit post.
+   - The pipeline run included:
+     - Finding a trending post: "Shane Lowry is done with Oakmont…"
+     - Generating a product idea with the theme "Golf Humor"
+     - Creating an image using DALL-E and uploading it to Imgur
+     - Generating a Zazzle product URL with an affiliate link
+
+3. **Testing:**
+   - All tests have been run successfully, with 204 tests passing and 1 skipped.
+   - The overall test coverage is 75%, with some areas still needing improvement.
+
+#### End-to-End Run Summary
+
+- **Pipeline Run ID:** 5
+- **Reddit Post ID:** 1lanyla
+- **Product Theme:** Golf Humor
+- **Image Description:** A stylized, comedic image of golfer Shane Lowry swinging his club aggressively on the daunting Oakmont course with a speech bubble above his head stating "F this place". The golf course is simplistic, with hints of its notorious difficulty like sand traps and sloping greens. The sky should be filled with dark, stormy clouds showing a tough day on the course.
+- **Image URL:** [https://i.imgur.com/633Dwky.png](https://i.imgur.com/633Dwky.png)
+- **Zazzle Product URL:** [https://www.zazzle.com/api/create/at-238627313417608652?ax=linkover&pd=256689990112831136&fwd=productpage&ed=true&t_image1_url=https%3A//i.imgur.com/633Dwky.png&tc=RedditStickerz_0](https://www.zazzle.com/api/create/at-238627313417608652?ax=linkover&pd=256689990112831136&fwd=productpage&ed=true&t_image1_url=https%3A//i.imgur.com/633Dwky.png&tc=RedditStickerz_0)
+
+#### Screenshot
+
+![Daily Progress Update](assets/daily_progress_update_2025_06_12.png)
+
 ### June 13, 2025
 
 #### Progress Made Today
