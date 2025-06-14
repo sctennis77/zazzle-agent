@@ -117,7 +117,11 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
         session.commit()
 
         # Initialize components
-        reddit_agent = RedditAgent()
+        reddit_agent = RedditAgent(
+            config,
+            pipeline_run_id=pipeline_run.id,
+            session=session
+        )
         content_generator = ContentGenerator()
         image_generator = ImageGenerator(model=config.model)
         zazzle_designer = ZazzleProductDesigner()
@@ -140,11 +144,7 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
 
         # Run pipeline and get results
         results = await pipeline.run_pipeline()
-
-        # Update pipeline run status
-        pipeline_run.status = 'success' if results else 'no_products'
-        pipeline_run.end_time = datetime.utcnow()
-        session.commit()
+        logger.info(f"Pipeline results: {results}")
 
         # Save results to CSV if any products were generated
         if results:

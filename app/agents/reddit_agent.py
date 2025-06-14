@@ -274,6 +274,7 @@ class RedditAgent(ChannelAgent):
             reddit_post_id = orm_post.id
             logger.info(f"Persisted RedditPost with id {reddit_post_id}")
         elif self.session and self.pipeline_run_id:
+            logger.warning(f"[DEBUG] In save_reddit_context_to_db: self.session is set (type: {type(self.session)})")
             try:
                 orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
                 self.session.add(orm_post)
@@ -284,6 +285,8 @@ class RedditAgent(ChannelAgent):
                 logger.error(f"Failed to persist RedditPost: {str(e)}")
                 self.session.rollback()
                 return None
+        else:
+            logger.warning(f"[DEBUG] In save_reddit_context_to_db: self.session is None")
         return reddit_post_id
 
     def _reset_daily_stats_if_needed(self):
@@ -660,30 +663,29 @@ class RedditAgent(ChannelAgent):
         Skips posts that are stickied, too old, or already present in the database (by post_id).
         Returns the first valid post or None if none are found.
         """
+        logger.warning(f"[DEBUG] At start of _find_trending_post: self.session is {'set' if self.session else 'None'} (type: {type(self.session)})")
         logger.info(f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}")
         try:
             for attempt in range(tries):
-                # Get subreddit
                 subreddit = self.reddit.subreddit(self.subreddit_name)
-                found = False
-                # Get trending posts
                 for submission in subreddit.hot(limit=limit):
                     logger.info(f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)")
-                    # Skip stickied posts
                     if submission.stickied:
                         print('Skipping: stickied')
                         continue
-                    # Skip posts that are too old (increased to 2 days)
                     if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
                         print('Skipping: too old')
                         continue
-                    # Skip posts with no content
                     if not submission.selftext:
                         print('Skipping: no selftext')
                         continue
-                    
-                    # Check if we've already processed this post
+
+                    # Debug: Print all post_ids in the DB and session info
                     if self.session:
+                        all_posts = self.session.query(RedditPost).all()
+                        logger.info(f"[DEBUG] All post_ids in DB: {[repr(p.post_id) for p in all_posts]}")
+                        logger.info(f"[DEBUG] Checking for post_id: {repr(submission.id)}")
+                        logger.info(f"[DEBUG] Session info: {self.session}")
                         existing_post = self.session.query(RedditPost).filter_by(post_id=submission.id).first()
                         if existing_post:
                             logger.info(f"Skipping post {submission.id}: already processed")
