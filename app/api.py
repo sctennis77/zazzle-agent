@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from app.db.database import get_db, SessionLocal, init_db
+from app.db.database import get_db, SessionLocal, init_db, DB_URL
 from app.db.models import PipelineRun, ProductInfo, RedditPost
 from app.pipeline_status import PipelineStatus
 from app.models import (
@@ -57,7 +57,7 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
         pipeline run details, and associated Reddit post data.
     """
     try:
-        logger.info(f"Database URL: {os.getenv('DATABASE_URL', 'sqlite:///zazzle_pipeline.db')}")
+        logger.info(f"Database URL: {DB_URL}")
         logger.info("Fetching successful pipeline runs...")
         pipeline_runs = db.query(PipelineRun).filter_by(status=PipelineStatus.COMPLETED.value).all()
         logger.info(f"Found {len(pipeline_runs)} completed pipeline runs.")
