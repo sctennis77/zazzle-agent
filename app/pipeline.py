@@ -30,7 +30,6 @@ from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_contex
 from app.db.models import PipelineRun, ErrorLog
 from sqlalchemy.orm import Session
 import os
-from app.services.database_service import DatabaseService
 from app.db.database import SessionLocal
 import logging
 from app.pipeline_status import PipelineStatus
@@ -103,7 +102,6 @@ class Pipeline:
         self.pipeline_run_id = pipeline_run_id
         self.session = session
         self.reddit_post_id = reddit_post_id
-        self.db_service = DatabaseService(session) if session else None
 
     def log_error(self, error_message: str, error_type: str = 'SYSTEM_ERROR', component: str = 'PIPELINE', 
                  stack_trace: str = None, context_data: dict = None, severity: str = 'ERROR'):
@@ -169,24 +167,6 @@ class Pipeline:
                 template_id=product_idea.design_instructions.get("template_id")
             )
             product_idea.design_instructions["image"] = imgur_url
-
-            # Persist ProductIdea as ProductInfo in the DB if session and pipeline_run_id are provided
-            product_info_db_id = None
-            if self.db_service and self.pipeline_run_id and self.reddit_post_id:
-                product_data = {
-                    'theme': product_idea.theme,
-                    'image_url': product_idea.design_instructions.get('image'),
-                    'product_url': None,
-                    'affiliate_link': None,
-                    'template_id': product_idea.design_instructions.get('template_id'),
-                    'model': self.config.model,
-                    'prompt_version': self.config.prompt_version,
-                    'product_type': 'sticker',
-                    'design_description': product_idea.image_description
-                }
-                orm_product = self.db_service.add_product_info(self.pipeline_run_id, self.reddit_post_id, product_data)
-                product_info_db_id = orm_product.id
-                logger.info(f"Persisted ProductInfo using db service with id {product_info_db_id}")
 
             # Create product with retries
             for attempt in range(self.max_retries):
@@ -260,7 +240,6 @@ class Pipeline:
             products_with_links = await self.affiliate_linker.generate_links_batch(products)
             if not products_with_links:
                 error_msg = f"No products were successfully processed with affiliate links pipeline_run_id: {pipeline_run.id}"
-               
                 raise Exception(error_msg)
 
             orm_reddit_post = None

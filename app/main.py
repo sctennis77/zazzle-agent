@@ -105,8 +105,8 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
     if config is None:
         config = PipelineConfig(
             model="dall-e-3",
-            zazzle_template_id=os.getenv('ZAZZLE_TEMPLATE_ID', ''),
-            zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', ''),
+            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
             prompt_version="1.0.0"
         )
     try:
@@ -158,9 +158,10 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
     except Exception as e:
         logger.error(f"Error in full pipeline: {str(e)}")
         if 'pipeline_run' in locals():
-            pipeline_run.status = 'error'
-            pipeline_run.end_time = datetime.utcnow()
-            session.commit()
+            if pipeline_run.status != PipelineStatus.FAILED.value:
+                pipeline_run.status = PipelineStatus.FAILED.value
+                pipeline_run.end_time = datetime.utcnow()
+                session.commit()
         raise
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):

@@ -4,6 +4,7 @@ from app.db.database import SessionLocal, Base, engine
 from app.db.models import PipelineRun
 import asyncio
 from app.main import PipelineConfig
+from app.pipeline_status import PipelineStatus
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
@@ -15,9 +16,10 @@ def setup_and_teardown_db():
 
 @pytest.mark.asyncio
 def test_pipeline_run_creates_pipelinerun(monkeypatch):
-    # Patch pipeline to avoid actual API calls and just return []
-    monkeypatch.setattr('app.main.Pipeline.run_pipeline', lambda self: asyncio.Future())
-    monkeypatch.setattr('app.main.Pipeline.run_pipeline', lambda self: asyncio.sleep(0, result=[]))
+    # Patch pipeline to simulate an error (no products generated)
+    async def fake_run_pipeline(self):
+        raise Exception("No products were generated. pipeline_run_id: 1")
+    monkeypatch.setattr('app.main.Pipeline.run_pipeline', fake_run_pipeline)
     # Run the pipeline
     config = PipelineConfig(
         model="dall-e-3",
@@ -25,13 +27,16 @@ def test_pipeline_run_creates_pipelinerun(monkeypatch):
         zazzle_tracking_code="test_tracking_code",
         prompt_version="1.0.0"
     )
-    asyncio.run(run_full_pipeline(config))
+    try:
+        asyncio.run(run_full_pipeline(config))
+    except Exception:
+        pass
     # Check that a PipelineRun was created
     session = SessionLocal()
     runs = session.query(PipelineRun).all()
     assert len(runs) == 1
     run = runs[0]
-    assert run.status in ('no_products', 'success', 'error')
+    assert run.status in {status.value for status in PipelineStatus}
     assert run.start_time is not None
     assert run.end_time is not None
     session.close() 

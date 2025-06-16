@@ -23,6 +23,9 @@ from dataclasses import asdict
 from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
 from app.db.mappers import reddit_context_to_db
 from app.db.models import RedditPost
+from sqlalchemy.orm import Session
+from app.clients.reddit_client import RedditClient
+from app.pipeline_status import PipelineStatus
 
 logger = get_logger(__name__)
 
@@ -38,54 +41,35 @@ class RedditAgent(ChannelAgent):
     - Track daily engagement statistics
     """
 
-    def __init__(self, config_or_model: Any = None, subreddit_name='golf', pipeline_run_id=None, session=None, db_service=None):
+    def __init__(
+        self,
+        config: Optional[PipelineConfig] = None,
+        pipeline_run_id: int = None,
+        session: Session = None,
+        reddit_post_id: int = None,
+        subreddit_name: str = 'golf'
+    ):
         """
-        Initialize the Reddit agent with configuration or model string.
-        Optionally accepts pipeline_run_id and session for DB persistence.
+        Initialize the Reddit agent with configuration and database session.
         
         Args:
-            config_or_model: PipelineConfig dict or model string (for backward compatibility)
-            subreddit_name: Optional subreddit to target, defaults to 'golf'
-            pipeline_run_id: Optional pipeline run ID for DB persistence
-            session: Optional SQLAlchemy session for DB persistence
-            db_service: Optional DatabaseService for DB persistence
+            config: Pipeline configuration
+            pipeline_run_id: ID of the current pipeline run
+            session: SQLAlchemy session for DB operations
+            reddit_post_id: ID of the current Reddit post
+            subreddit_name: Name of the subreddit to interact with
         """
         super().__init__()
-        # Support both config dict and model string for backward compatibility in tests
-        if isinstance(config_or_model, dict):
-            model = config_or_model.get('model', 'dall-e-3')
-            self.personality = config_or_model.get('personality', {})
-            self.daily_stats = config_or_model.get('daily_stats', {
-                'posts': 0,
-                'comments': 0,
-                'upvotes': 0,
-                'affiliate_posts': 0,
-                'organic_posts': 0,
-                'last_action_time': None
-            })
-        elif isinstance(config_or_model, str):
-            model = config_or_model
-        else:
-            model = 'dall-e-3'
-        self.config = PipelineConfig(
-            model=model,
+        self.config = config or PipelineConfig(
+            model="dall-e-3",
             zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
             prompt_version="1.0.0"
         )
-        self.image_generator = ImageGenerator(model=model)
-        self.product_designer = ZazzleProductDesigner()
-        if not hasattr(self, 'daily_stats'):
-            self.daily_stats = {
-                'posts': 0,
-                'comments': 0,
-                'upvotes': 0,
-                'affiliate_posts': 0,
-                'organic_posts': 0,
-                'last_action_time': None
-            }
-        self.openai = openai
-        
+        self.pipeline_run_id = pipeline_run_id
+        self.session = session
+        self.reddit_post_id = reddit_post_id
         # Initialize Reddit client
         self.reddit = praw.Reddit(
             client_id=os.getenv('REDDIT_CLIENT_ID'),
@@ -96,10 +80,18 @@ class RedditAgent(ChannelAgent):
         )
         self.subreddit_name = subreddit_name
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
-        # New: store pipeline_run_id and session for DB persistence
-        self.pipeline_run_id = pipeline_run_id
-        self.session = session
-        self.db_service = db_service
+        self.openai = openai
+        self.image_generator = ImageGenerator(model=self.config.model)
+        self.product_designer = ZazzleProductDesigner()
+        if not hasattr(self, 'daily_stats'):
+            self.daily_stats = {
+                'posts': 0,
+                'comments': 0,
+                'upvotes': 0,
+                'affiliate_posts': 0,
+                'organic_posts': 0,
+                'last_action_time': None
+            }
 
     def _determine_product_idea(self, reddit_context: RedditContext) -> Optional[ProductIdea]:
         """
@@ -259,21 +251,8 @@ class RedditAgent(ChannelAgent):
             int: The ID of the persisted RedditPost if successful
             None: If persistence fails or no session/pipeline_run_id is provided
         """
-        from app.db.mappers import reddit_context_to_db
         reddit_post_id = None
-        if self.db_service and self.pipeline_run_id:
-            post_data = {
-                'id': reddit_context.post_id,
-                'title': reddit_context.post_title,
-                'content': reddit_context.post_content,
-                'subreddit': reddit_context.subreddit,
-                'url': reddit_context.post_url,
-                'permalink': reddit_context.permalink
-            }
-            orm_post = self.db_service.add_reddit_post(self.pipeline_run_id, post_data)
-            reddit_post_id = orm_post.id
-            logger.info(f"Persisted RedditPost with id {reddit_post_id}")
-        elif self.session and self.pipeline_run_id:
+        if self.session and self.pipeline_run_id:
             logger.warning(f"[DEBUG] In save_reddit_context_to_db: self.session is set (type: {type(self.session)})")
             try:
                 orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)

@@ -7,7 +7,6 @@ from app.db.models import PipelineRun
 from app.db.database import SessionLocal
 import os
 import json
-from app.services.database_service import DatabaseService
 
 # Add DB setup/teardown fixture
 from app.db.database import Base, engine
