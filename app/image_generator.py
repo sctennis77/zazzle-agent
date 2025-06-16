@@ -38,10 +38,10 @@ IMAGE_GENERATION_BASE_PROMPTS = {
         "version": "1.0.0"
     },
     "dall-e-3": {
-        "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
-        "version": "1.0.0" 
-        #"prompt": "You are a world-class illustrator and designer, deeply inspired by impressionist painters such as Seurat, Monet, and Van Gogh. Create an image where the core content perfectly fills a circular image with a 3-inch diameter. The composition should be balanced, detailed, and beautiful even at small scale. Only include text if it is logical, it should never dominate the image.",
-       # "version": "1.1"
+        # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
+        # "version": "1.0.0" 
+        "prompt": "Create a square (1:1) image optimized for a 3-inch circular or 3x3-inch square sticker. Center the composition so it works well when cropped to a circle. Use at least 1024x1024 resolution. Keep key elements (like text or faces) within the central 2.75-inch area to allow for bleed and trimming. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Create a image for the following description:",
+        "version": "1.1"
     }
 }
 
