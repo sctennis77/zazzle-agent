@@ -337,7 +337,7 @@ async def test_create_product_success(mock_zazzle_response):
     assert result.product_url.startswith('https://www.zazzle.com/api/create/at-test123?')
     assert 'pd=template123' in result.product_url
     assert 't_image1_url=https%3A//example.com/image.jpg' in result.product_url
-    assert 'tc=RedditStickerz_0' in result.product_url
+    assert 'tc=Clouvel-0' in result.product_url
 
 @pytest.mark.asyncio
 async def test_create_product_failure():

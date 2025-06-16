@@ -107,12 +107,13 @@ class ZazzleTemplateConfig:
                 return False
         return True
 
+# TODO improve logic for multiple templates
 # Define the Zazzle Sticker Template
 ZAZZLE_STICKER_TEMPLATE = ZazzleTemplateConfig(
     product_type="Sticker",
-    zazzle_template_id="256689990112831136",
+    zazzle_template_id="256577895504131235",
     original_url="https://www.zazzle.com/beautiful_stickers_for_beautiful_moments-256689990112831136",
-    zazzle_tracking_code="RedditStickerz_0",
+    zazzle_tracking_code="Clouvel-0",
     customizable_fields={
         "image": CustomizableField(
             type="image",

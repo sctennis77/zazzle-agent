@@ -108,10 +108,11 @@ class RedditAgent(ChannelAgent):
         """
         try:
             # Use OpenAI to analyze post and generate product idea
+            # TODO: need to version these too
             response = self.openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a creative product idea generator for Zazzle or other platforms. Generate unique, innovative, marketable, and artistic product designs based Reddit posts. Keep image descriptions simple and focused on the key visual elements. Avoid complex details or too many elements. Focus on one main subject and the natural scenery (when applicable)."},
+                    {"role": "system", "content": "You are a creative product idea generator for Zazzle or other platforms. Generate unique, innovative, marketable, and artistic product designs based Reddit posts. Keep image descriptions simple and focused on the key visual elements. Avoid complex details or too many elements. Focus on one main subject and the natural scenery (when applicable). Text in the content is optional should be used sparingly and limited to one or two words."},
                     {"role": "user", "content": f"Based on this Reddit post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\n\nGenerate a product idea with the following format:\nTheme: [Your creative theme here]\nImage Description: [A simple, clear description of the desired image content]"}
                 ]
             )
@@ -636,7 +637,7 @@ class RedditAgent(ChannelAgent):
         except Exception as e:
             logger.error(f"Error interacting with subreddit: {str(e)}")
 
-    async def _find_trending_post(self, tries: int = 3, limit: int = 20):
+    async def _find_trending_post(self, tries: int = 3, limit: int = 50):
         """
         Find a trending Reddit post that has not already been processed.
         Skips posts that are stickied, too old, or already present in the database (by post_id).

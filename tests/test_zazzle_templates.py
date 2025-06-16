@@ -51,7 +51,7 @@ def test_zazzle_template_config():
 def test_zazzle_sticker_template():
     """Test the predefined ZAZZLE_STICKER_TEMPLATE."""
     assert ZAZZLE_STICKER_TEMPLATE.product_type == "Sticker"
-    assert ZAZZLE_STICKER_TEMPLATE.zazzle_template_id == "256689990112831136"
+    assert ZAZZLE_STICKER_TEMPLATE.zazzle_template_id == "256577895504131235"
     assert "image" in ZAZZLE_STICKER_TEMPLATE.customizable_fields
     assert ZAZZLE_STICKER_TEMPLATE.customizable_fields["image"].type == "image"
 
