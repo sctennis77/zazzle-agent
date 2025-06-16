@@ -49,7 +49,6 @@ Thumbs.db
 
 .coverage
 
-zazzle_pipeline.db
 
 # Frontend
 node_modules/

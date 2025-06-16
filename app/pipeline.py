@@ -186,7 +186,7 @@ class Pipeline:
                 }
                 orm_product = self.db_service.add_product_info(self.pipeline_run_id, self.reddit_post_id, product_data)
                 product_info_db_id = orm_product.id
-                logger.info(f"Persisted ProductInfo with id {product_info_db_id}")
+                logger.info(f"Persisted ProductInfo using db service with id {product_info_db_id}")
 
             # Create product with retries
             for attempt in range(self.max_retries):
