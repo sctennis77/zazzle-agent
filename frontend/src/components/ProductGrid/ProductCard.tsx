@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { GeneratedProduct } from '../../types/productTypes';
+import { FaReddit, FaInfoCircle } from 'react-icons/fa';
 
 interface ProductCardProps {
   product: GeneratedProduct;
@@ -12,54 +13,77 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     <div
       className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 max-w-md w-full mx-auto flex flex-col items-center border border-gray-200 group"
     >
-      <div className="w-full aspect-square overflow-hidden rounded-t-2xl flex items-center justify-center bg-gray-100">
-        <img
-          src={product.product_info.image_url}
-          alt={product.product_info.theme}
-          className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-        />
+      <div className="w-full aspect-square overflow-hidden rounded-t-2xl flex items-center justify-center bg-gray-100 relative">
+        <div className="relative">
+          <img
+            src={product.product_info.image_url}
+            alt={product.product_info.theme}
+            className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+          />
+          <a
+            href={product.reddit_post.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-2 left-2 bg-[#FF4500] text-white text-xs px-2 py-1 rounded-full hover:bg-[#FF4500]/90 transition-colors"
+          >
+            r/{product.reddit_post.subreddit}
+          </a>
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="absolute bottom-2 right-2 text-gray-600 hover:text-gray-800 transition-colors"
+            title="Show details"
+          >
+            <FaInfoCircle size={20} />
+          </button>
+        </div>
       </div>
       <div className="w-full p-5 flex flex-col items-center">
         <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">
-          {product.product_info.theme}
+          {product.reddit_post.title}
         </h3>
-        <a
-          href={product.product_info.product_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block px-6 py-2 mb-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 text-white font-semibold shadow hover:from-blue-600 hover:to-blue-500 transition-colors duration-200 text-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          View on Zazzle
-        </a>
-        <button
-          onClick={() => setShowDetails((prev) => !prev)}
-          className="text-sm text-gray-500 hover:text-pink-500 mt-1 focus:outline-none"
-        >
-          {showDetails ? 'Hide Details' : 'Show Details'}
-        </button>
+        <div className="p-4">
+          <div className="flex flex-col gap-2">
+            <a
+              href={product.product_info.affiliate_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-center"
+            >
+              Buy
+            </a>
+            <span className="text-sm text-gray-500">
+              {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </span>
+          </div>
+        </div>
         {showDetails && (
           <div className="w-full mt-4 bg-gray-50 rounded-xl p-4 text-gray-700 text-sm border border-gray-200 transition-all duration-300">
-            <div className="mb-2">
-              <span className="font-semibold">Product Type:</span> {product.product_info.product_type}
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Model:</span> {product.product_info.model}
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Prompt Version:</span> {product.product_info.prompt_version}
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Affiliate Link:</span> <a href={product.product_info.affiliate_link} target="_blank" rel="noopener noreferrer" className="text-pink-500 underline break-all">{product.product_info.affiliate_link}</a>
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Reddit Subreddit:</span> {product.reddit_post.subreddit}
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Reddit Title:</span> {product.reddit_post.title}
-            </div>
-            <div className="mb-2">
-              <span className="font-semibold">Reddit Post:</span> <a href={product.reddit_post.url} target="_blank" rel="noopener noreferrer" className="text-pink-500 underline break-all">View Reddit Post</a>
+            <div className="space-y-2">
+              <div>
+                <span className="font-semibold">Summary:</span> {product.product_info.theme}
+              </div>
+              <div>
+                <span className="font-semibold">Type:</span> {product.product_info.product_type}
+              </div>
+              {product.reddit_post.content && (
+                <div>
+                  <span className="font-semibold">Post Content:</span>
+                  <p className="mt-1 text-sm text-gray-600">{product.reddit_post.content}</p>
+                </div>
+              )}
+              {product.reddit_post.comment_summary && (
+                <div>
+                  <span className="font-semibold">Comments:</span>
+                  <p className="mt-1 text-sm text-gray-600">{product.reddit_post.comment_summary}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
