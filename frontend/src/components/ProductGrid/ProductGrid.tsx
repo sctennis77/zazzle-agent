@@ -30,7 +30,7 @@ export const ProductGrid: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col items-center w-full min-h-screen py-8 gap-8 bg-gray-50">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-8 bg-gray-50">
       {products.map((product) => (
         <ProductCard key={product.product_info.id} product={product} />
       ))}
