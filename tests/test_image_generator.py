@@ -93,13 +93,15 @@ class TestImageGenerator(IsolatedAsyncioTestCase):
         image_generator = ImageGenerator(model="dall-e-2")
         prompt_info = image_generator.get_prompt_info()
         assert prompt_info["version"] == "1.0.0"
-        assert "You are a incredibly talented designer" in prompt_info["prompt"]
+        assert "Create a square (1:1) image optimized for a 3-inch circular" in prompt_info["prompt"]
+        assert "Style should be inspired by impressionist painters" in prompt_info["prompt"]
         
         # Test DALL-E 3
         image_generator = ImageGenerator(model="dall-e-3")
         prompt_info = image_generator.get_prompt_info()
-        assert prompt_info["version"] == "1.1"
-        assert "Create a square (1:1) image" in prompt_info["prompt"]
+        assert prompt_info["version"] == "1.0.0"
+        assert "Create a square (1:1) image optimized picture books" in prompt_info["prompt"]
+        assert "Style should be inspired by impressionist painters" in prompt_info["prompt"]
 
     async def test_generate_image(self):
         """Test generating an image for a product idea."""

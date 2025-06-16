@@ -20,7 +20,7 @@ import json
 from app.image_generator import ImageGenerator
 from app.utils.logging_config import get_logger
 from dataclasses import asdict
-from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
+from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 from app.db.mappers import reddit_context_to_db
 from app.db.models import RedditPost
 from sqlalchemy.orm import Session
@@ -62,8 +62,8 @@ class RedditAgent(ChannelAgent):
         super().__init__()
         self.config = config or PipelineConfig(
             model="dall-e-3",
-            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
-            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
             prompt_version="1.0.0"
         )

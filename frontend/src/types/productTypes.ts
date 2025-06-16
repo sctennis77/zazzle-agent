@@ -25,6 +25,7 @@ export interface ProductInfo {
 export interface PipelineRun {
   id: number;
   start_time: string;
+  end_time: string;
   status: string;
   retry_count: number;
 }
@@ -38,6 +39,7 @@ export interface RedditPost {
   subreddit: string;
   url: string;
   permalink: string;
+  comment_summary?: string;
 }
 
 export interface GeneratedProduct {

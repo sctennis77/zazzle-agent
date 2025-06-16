@@ -20,7 +20,7 @@ from app.utils.logging_config import get_logger
 import os
 from urllib.parse import quote, urlparse
 from dotenv import load_dotenv
-from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
+from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -83,8 +83,8 @@ class ZazzleProductDesigner:
             the default sticker template. The tracking code is always taken from the
             template configuration.
         """
-        template_id = design_instructions.template_id or ZAZZLE_STICKER_TEMPLATE.zazzle_template_id
-        tracking_code = ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code  # Always use template tracking code for now
+        template_id = design_instructions.template_id or ZAZZLE_PRINT_TEMPLATE.zazzle_template_id
+        tracking_code = ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code  # Always use template tracking code for now
         return template_id, tracking_code
 
     def _is_valid_url(self, url: str) -> bool:

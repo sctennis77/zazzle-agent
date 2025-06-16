@@ -34,14 +34,16 @@ logger = get_logger(__name__)
 # Base prompts for image generation with versioning
 IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-2": {
-        "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
+       # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
+        # version": "1.0.0"
+        "prompt": "Create a square (1:1) image optimized for a 3-inch circular or 3x3-inch square sticker. Center the composition so it works well when cropped to a circle. Use at least 1024x1024 resolution. Keep key elements (like text or faces) within the central 2.75-inch area to allow for bleed and trimming. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Create a image for the following description:",
         "version": "1.0.0"
     },
     "dall-e-3": {
         # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
         # "version": "1.0.0" 
-        "prompt": "Create a square (1:1) image optimized for a 3-inch circular or 3x3-inch square sticker. Center the composition so it works well when cropped to a circle. Use at least 1024x1024 resolution. Keep key elements (like text or faces) within the central 2.75-inch area to allow for bleed and trimming. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Create a image for the following description:",
-        "version": "1.1"
+        "prompt": "Create a square (1:1) image optimized picture books. You're working with 1024x1024 image size so design accordingly. Keep key elements (like text or faces) within the central area. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Create a image for the following description:",
+        "version": "1.0.0"
     }
 }
 
@@ -274,7 +276,7 @@ class ImageGenerator:
                 product_info = ProductInfo(
                     product_id=f"product_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     name=idea.theme,
-                    product_type="sticker",
+                    product_type="print",
                     zazzle_template_id=template_id,
                     zazzle_tracking_code="",
                     image_url=imgur_url,

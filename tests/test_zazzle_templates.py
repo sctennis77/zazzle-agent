@@ -2,7 +2,7 @@ import pytest
 from app.zazzle_templates import (
     CustomizableField,
     ZazzleTemplateConfig,
-    ZAZZLE_STICKER_TEMPLATE,
+    ZAZZLE_PRINT_TEMPLATE,
     get_product_template,
     ALL_TEMPLATES
 )
@@ -48,26 +48,30 @@ def test_zazzle_template_config():
     assert "image" in config.customizable_fields
     assert config.customizable_fields["image"].type == "image"
 
-def test_zazzle_sticker_template():
-    """Test the predefined ZAZZLE_STICKER_TEMPLATE."""
-    assert ZAZZLE_STICKER_TEMPLATE.product_type == "Sticker"
-    assert ZAZZLE_STICKER_TEMPLATE.zazzle_template_id == "256577895504131235"
-    assert "image" in ZAZZLE_STICKER_TEMPLATE.customizable_fields
-    assert ZAZZLE_STICKER_TEMPLATE.customizable_fields["image"].type == "image"
+def test_zazzle_print_template():
+    """Test the predefined ZAZZLE_PRINT_TEMPLATE."""
+    assert ZAZZLE_PRINT_TEMPLATE.product_type == "Print"
+    assert ZAZZLE_PRINT_TEMPLATE.zazzle_template_id == "256344169523425346"
+    assert "image" in ZAZZLE_PRINT_TEMPLATE.customizable_fields
+    assert ZAZZLE_PRINT_TEMPLATE.customizable_fields["image"].type == "image"
 
 def test_get_product_template():
-    """Test get_product_template returns the correct template or None."""
-    template = get_product_template("Sticker")
-    assert template == ZAZZLE_STICKER_TEMPLATE
-    template = get_product_template("STICKER")
-    assert template == ZAZZLE_STICKER_TEMPLATE
+    """Test retrieving templates by product type."""
+    template = get_product_template("print")
+    assert template is not None
+    assert template == ZAZZLE_PRINT_TEMPLATE
+
+    template = get_product_template("Print")
+    assert template is not None
+    assert template == ZAZZLE_PRINT_TEMPLATE
+
     template = get_product_template("nonexistent")
     assert template is None
 
 def test_all_templates():
-    """Test ALL_TEMPLATES contains the sticker template and is a list."""
+    """Test that all templates are properly registered."""
+    assert ZAZZLE_PRINT_TEMPLATE in ALL_TEMPLATES
     assert isinstance(ALL_TEMPLATES, list)
-    assert ZAZZLE_STICKER_TEMPLATE in ALL_TEMPLATES
     for template in ALL_TEMPLATES:
         assert isinstance(template, ZazzleTemplateConfig)
         assert hasattr(template, "product_type")

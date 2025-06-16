@@ -124,8 +124,24 @@ ZAZZLE_STICKER_TEMPLATE = ZazzleTemplateConfig(
     }
 )
 
+ZAZZLE_PRINT_TEMPLATE = ZazzleTemplateConfig(
+    product_type="Print",
+    zazzle_template_id="256344169523425346",
+    original_url="https://www.zazzle.com/stories_from_reddit_inspired_masterpieces_faux_canvas_print-256344169523425346",
+    zazzle_tracking_code="Clouvel-0",
+    customizable_fields={
+        "image": CustomizableField(
+            type="image",
+            description="Custom image to be displayed on the print",
+            formats=["png", "jpg", "jpeg"],
+            max_size_mb=5
+        ),
+    }
+)
+
+
 # List of all available templates
-ALL_TEMPLATES: List[ZazzleTemplateConfig] = [ZAZZLE_STICKER_TEMPLATE]
+ALL_TEMPLATES: List[ZazzleTemplateConfig] = [ZAZZLE_PRINT_TEMPLATE]
 
 def get_product_template(product_type: str) -> Optional[ZazzleTemplateConfig]:
     """

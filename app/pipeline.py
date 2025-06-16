@@ -25,7 +25,7 @@ from app.zazzle_product_designer import ZazzleProductDesigner
 from app.affiliate_linker import ZazzleAffiliateLinker
 from app.clients.imgur_client import ImgurClient
 from app.utils.logging_config import get_logger
-from app.zazzle_templates import ZAZZLE_STICKER_TEMPLATE
+from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
 from app.db.models import PipelineRun, ErrorLog
 from sqlalchemy.orm import Session
@@ -92,8 +92,8 @@ class Pipeline:
         self.imgur_client = imgur_client
         self.config = config or PipelineConfig(
             model="dall-e-3",
-            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
-            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
             prompt_version="1.0.0"
         )

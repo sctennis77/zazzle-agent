@@ -16,7 +16,7 @@ from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerErr
 from app.content_generator import ContentGenerator
 from app.models import ProductInfo, PipelineConfig
 from app.agents.reddit_agent import RedditAgent
-from app.zazzle_templates import get_product_template, ZAZZLE_STICKER_TEMPLATE
+from app.zazzle_templates import get_product_template, ZAZZLE_PRINT_TEMPLATE
 from app.image_generator import ImageGenerator
 from app.utils.logging_config import setup_logging
 from app.zazzle_product_designer import ZazzleProductDesigner
@@ -118,8 +118,8 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
     if config is None:
         config = PipelineConfig(
             model="dall-e-3",
-            zazzle_template_id=ZAZZLE_STICKER_TEMPLATE.zazzle_template_id,
-            zazzle_tracking_code=ZAZZLE_STICKER_TEMPLATE.zazzle_tracking_code,
+            zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
+            zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             prompt_version="1.0.0"
         )
     try:
