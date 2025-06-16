@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import csv
 import asyncio
 import sys
+from contextlib import contextmanager
 
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
@@ -92,6 +93,18 @@ def log_product_info(product_info: ProductInfo):
     logger.info("\nGenerated Image URL:")
     logger.info(f"{product_info.image_url}")
 
+@contextmanager
+def session_scope():
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
     """
     Run the complete product generation pipeline.
@@ -110,58 +123,66 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
             prompt_version="1.0.0"
         )
     try:
-        # Create pipeline run
-        pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
-        session = SessionLocal()
-        session.add(pipeline_run)
-        session.commit()
+        with session_scope() as session:
+            # Create pipeline run
+            pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
+            session.add(pipeline_run)
+            session.commit()
 
-        # Initialize components
-        reddit_agent = RedditAgent(
-            config,
-            pipeline_run_id=pipeline_run.id,
-            session=session
-        )
-        content_generator = ContentGenerator()
-        image_generator = ImageGenerator(model=config.model)
-        zazzle_designer = ZazzleProductDesigner()
-        affiliate_linker = ZazzleAffiliateLinker(
-            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
-            zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', '')
-        )
-        imgur_client = ImgurClient()
+            # Initialize components
+            reddit_agent = RedditAgent(
+                config,
+                pipeline_run_id=pipeline_run.id,
+                session=session
+            )
+            content_generator = ContentGenerator()
+            image_generator = ImageGenerator(model=config.model)
+            zazzle_designer = ZazzleProductDesigner()
+            affiliate_linker = ZazzleAffiliateLinker(
+                zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
+                zazzle_tracking_code=os.getenv('ZAZZLE_TRACKING_CODE', '')
+            )
+            imgur_client = ImgurClient()
 
-        # Create and run pipeline
-        pipeline = Pipeline(
-            reddit_agent=reddit_agent,
-            content_generator=content_generator,
-            image_generator=image_generator,
-            zazzle_designer=zazzle_designer,
-            affiliate_linker=affiliate_linker,
-            imgur_client=imgur_client,
-            config=config
-        )
+            # Create and run pipeline
+            pipeline = Pipeline(
+                reddit_agent=reddit_agent,
+                content_generator=content_generator,
+                image_generator=image_generator,
+                zazzle_designer=zazzle_designer,
+                affiliate_linker=affiliate_linker,
+                imgur_client=imgur_client,
+                config=config,
+                pipeline_run_id=pipeline_run.id,
+                session=session
+            )
 
-        # Run pipeline and get results
-        results = await pipeline.run_pipeline()
-        logger.info(f"Pipeline results: {results}")
+            # Run pipeline and get results
+            results = await pipeline.run_pipeline()
+            logger.info(f"Pipeline results: {results}")
 
-        # Save results to CSV if any products were generated
-        if results:
-            output_dir = os.getenv('OUTPUT_DIR', 'outputs')
-            os.makedirs(output_dir, exist_ok=True)
-            output_file = os.path.join(output_dir, 'processed_products.csv')
-            save_to_csv(results, output_file)
+            # Save results to CSV if any products were generated
+            if results:
+                output_dir = os.getenv('OUTPUT_DIR', 'outputs')
+                os.makedirs(output_dir, exist_ok=True)
+                output_file = os.path.join(output_dir, 'processed_products.csv')
+                save_to_csv(results, output_file)
 
-        return results
+            # Update pipeline run status and end time
+            pipeline_run.status = PipelineStatus.COMPLETED.value
+            pipeline_run.end_time = datetime.utcnow()
+            session.add(pipeline_run)
+            session.commit()
+
+            return results
 
     except Exception as e:
         logger.error(f"Error in full pipeline: {str(e)}")
         if 'pipeline_run' in locals():
-            if pipeline_run.status != PipelineStatus.FAILED.value:
-                pipeline_run.status = PipelineStatus.FAILED.value
-                pipeline_run.end_time = datetime.utcnow()
-                session.commit()
+            pipeline_run.status = PipelineStatus.FAILED.value
+            pipeline_run.end_time = datetime.utcnow()
+            session.add(pipeline_run)
+            session.commit()
         raise
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):

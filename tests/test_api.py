@@ -37,7 +37,8 @@ async def test_get_generated_products_successful(monkeypatch):
                 "content": "Test Content",
                 "subreddit": "test",
                 "url": "https://reddit.com/test",
-                "permalink": "/r/test/test123"
+                "permalink": "/r/test/test123",
+                "comment_summary": "Test comment summary"
             }
         }]
 

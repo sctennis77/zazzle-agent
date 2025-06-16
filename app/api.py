@@ -84,7 +84,8 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     post_url=reddit_post.url,
                     subreddit=reddit_post.subreddit,
                     post_content=reddit_post.content,
-                    permalink=reddit_post.permalink
+                    permalink=reddit_post.permalink,
+                    comments=[{'text':reddit_post.comment_summary}] if reddit_post.comment_summary else [] or []
                 )
 
                 product_info_data = ProductInfoDataClass(

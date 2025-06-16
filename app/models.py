@@ -36,6 +36,7 @@ class RedditPostSchema(BaseModel):
     subreddit: str
     url: str
     permalink: Optional[str] = None
+    comment_summary: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
