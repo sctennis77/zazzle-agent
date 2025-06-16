@@ -32,18 +32,10 @@ class RedditPost(Base):
     subreddit = Column(String(64), index=True)
     url = Column(Text)
     permalink = Column(Text)
+    comment_summary = Column(Text, nullable=True)
 
     pipeline_run = relationship('PipelineRun', back_populates='reddit_posts')
-    comments = relationship('CommentSummary', back_populates='reddit_post', cascade='all, delete-orphan')
     products = relationship('ProductInfo', back_populates='reddit_post', cascade='all, delete-orphan')
-
-class CommentSummary(Base):
-    __tablename__ = 'comment_summaries'
-    id = Column(Integer, primary_key=True)
-    reddit_post_id = Column(Integer, ForeignKey('reddit_posts.id', ondelete='CASCADE'))
-    summary = Column(Text)
-
-    reddit_post = relationship('RedditPost', back_populates='comments')
 
 class ProductInfo(Base):
     __tablename__ = 'product_infos'

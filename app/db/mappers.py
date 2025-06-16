@@ -38,7 +38,12 @@ def reddit_context_to_db(reddit_context: RedditContext, pipeline_run_id: int) ->
         content=getattr(reddit_context, 'post_content', None),
         subreddit=reddit_context.subreddit,
         url=reddit_context.post_url,
-        permalink=getattr(reddit_context, 'permalink', None)
+        permalink=getattr(reddit_context, 'permalink', None),
+        comment_summary=(
+            reddit_context.comments[0]['text']
+            if reddit_context.comments and len(reddit_context.comments) > 0 and 'text' in reddit_context.comments[0]
+            else None
+        )
     )
 
 def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:

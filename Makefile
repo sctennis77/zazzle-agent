@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade
 
 help:
 	@echo "Available targets:"
@@ -23,6 +23,10 @@ help:
 	@echo "  make frontend-install  # Install dependencies"
 	@echo "  make frontend-lint     # Lint code"
 	@echo "  make frontend-clean    # Remove node_modules, .vite, and dist"
+	@echo "  make alembic-init     - Initialize Alembic for database migrations"
+	@echo "  make alembic-revision - Generate a new Alembic migration revision"
+	@echo "  make alembic-upgrade  - Upgrade the database to the latest migration"
+	@echo "  make alembic-downgrade - Downgrade the database to the previous migration"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -113,3 +117,20 @@ frontend-clean:
 #   make frontend-install  # Install dependencies
 #   make frontend-lint     # Lint code
 #   make frontend-clean    # Remove node_modules, .vite, and dist 
+
+# Alembic commands
+alembic-init:
+	@echo "Initializing Alembic for database migrations."
+	alembic init alembic
+
+alembic-revision:
+	@echo "Generating a new Alembic migration revision."
+	alembic revision --autogenerate -m "add comment_summary to RedditPost and remove CommentSummary table"
+
+alembic-upgrade:
+	@echo "Upgrading the database to the latest migration."
+	alembic upgrade head
+
+alembic-downgrade:
+	@echo "Downgrading the database to the previous migration."
+	alembic downgrade -1 
