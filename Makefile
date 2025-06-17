@@ -11,6 +11,7 @@ help:
 	@echo "  make test         - Run the test suite with coverage"
 	@echo "  make test-pattern <test_path> - Run a specific test suite or file. Example: make test-pattern tests/test_file.py"
 	@echo "  make run-full     - Run the complete product generation pipeline"
+	@echo "  make run-full SUBREDDIT=<subreddit> - Run pipeline with specific subreddit (e.g., SUBREDDIT=golf)"
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
 	@echo "  make docker-run   - Run Docker container"
@@ -46,7 +47,7 @@ test-pattern:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
 run-full:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)"
+	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 run-generate-image:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode image --prompt "$(IMAGE_PROMPT)" --model "$(MODEL)"

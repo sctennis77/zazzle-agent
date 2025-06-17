@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
 from app.content_generator import ContentGenerator
 from app.models import ProductInfo, PipelineConfig
-from app.agents.reddit_agent import RedditAgent
+from app.agents.reddit_agent import RedditAgent, pick_subreddit, AVAILABLE_SUBREDDITS
 from app.zazzle_templates import get_product_template, ZAZZLE_PRINT_TEMPLATE
 from app.image_generator import ImageGenerator
 from app.utils.logging_config import setup_logging
@@ -105,12 +105,13 @@ def session_scope():
     finally:
         session.close()
 
-async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
+async def run_full_pipeline(config: PipelineConfig = None, subreddit_name: Optional[str] = None) -> List[ProductInfo]:
     """
     Run the complete product generation pipeline.
 
     Args:
         config (PipelineConfig): The pipeline configuration object. Defaults to a config with model 'dall-e-3'.
+        subreddit_name (Optional[str]): The subreddit to use. If None, a random subreddit will be selected.
 
     Returns:
         List[ProductInfo]: List of generated product information.
@@ -122,6 +123,15 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             prompt_version="1.0.0"
         )
+    
+    # Determine which subreddit to use
+    if subreddit_name is None:
+        subreddit_name = pick_subreddit()
+        logger.info(f"Selected subreddit: {subreddit_name}")
+    else:
+        validate_subreddit(subreddit_name)
+        logger.info(f"Using specified subreddit: {subreddit_name}")
+    
     try:
         with session_scope() as session:
             # Create pipeline run
@@ -133,7 +143,8 @@ async def run_full_pipeline(config: PipelineConfig = None) -> List[ProductInfo]:
             reddit_agent = RedditAgent(
                 config,
                 pipeline_run_id=pipeline_run.id,
-                session=session
+                session=session,
+                subreddit_name=subreddit_name
             )
             content_generator = ContentGenerator()
             image_generator = ImageGenerator(model=config.model)
@@ -195,6 +206,19 @@ async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"
     except Exception as e:
         logger.error(f"Error generating image: {e}")
 
+def validate_subreddit(subreddit_name: str) -> None:
+    """
+    Validate that the given subreddit name is in the available subreddits list.
+    
+    Args:
+        subreddit_name: The subreddit name to validate
+        
+    Raises:
+        ValueError: If the subreddit is not in the available list
+    """
+    if subreddit_name not in AVAILABLE_SUBREDDITS:
+        raise ValueError(f"Subreddit '{subreddit_name}' is not available. Available subreddits: {AVAILABLE_SUBREDDITS}")
+
 async def main():
     """Main entry point for the application."""
     try:
@@ -209,6 +233,8 @@ async def main():
                           help='AI model to use (default: dall-e-3)')
         parser.add_argument('--prompt', type=str,
                           help='Image prompt (required for image mode)')
+        parser.add_argument('--subreddit', type=str,
+                          help='Subreddit to use (optional, will pick randomly if not specified)')
         args = parser.parse_args()
 
         # Validate arguments based on mode
@@ -218,7 +244,7 @@ async def main():
                 sys.exit(2)
             await run_generate_image_pipeline(args.prompt, args.model)
         else:  # full mode
-            await run_full_pipeline()
+            await run_full_pipeline(subreddit_name=args.subreddit)
     except Exception as e:
         logger.error(f"Error in main: {e}")
         raise

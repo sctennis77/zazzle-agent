@@ -3,9 +3,9 @@ import pytest
 import json
 import csv
 from unittest.mock import patch, mock_open, MagicMock, AsyncMock, Mock
-from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main, log_product_info, run_generate_image_pipeline
+from app.main import ensure_output_dir, save_to_csv, run_full_pipeline, main, log_product_info, run_generate_image_pipeline, validate_subreddit
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig
-from app.agents.reddit_agent import RedditAgent
+from app.agents.reddit_agent import RedditAgent, AVAILABLE_SUBREDDITS
 from app.content_generator import ContentGenerator
 from app.affiliate_linker import ZazzleAffiliateLinker
 import sys
@@ -199,7 +199,23 @@ class TestMain:
         test_argv = ['script.py', '--mode', 'image', '--prompt', 'Test prompt']
         with patch.object(sys, 'argv', test_argv):
             await main()
-        mock_run_image.assert_called_once_with('Test prompt', 'dall-e-3')  # Default model
+        mock_run_image.assert_called_once_with('Test prompt', 'dall-e-3')
+        
+    @patch('app.main.run_full_pipeline')
+    async def test_main_with_subreddit_argument(self, mock_run_full):
+        """Test main function with --subreddit argument."""
+        test_argv = ['script.py', '--subreddit', 'golf']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_full.assert_called_once_with(subreddit_name='golf')
+        
+    @patch('app.main.run_full_pipeline')
+    async def test_main_without_subreddit_argument(self, mock_run_full):
+        """Test main function without --subreddit argument (should pass None)."""
+        test_argv = ['script.py']
+        with patch.object(sys, 'argv', test_argv):
+            await main()
+        mock_run_full.assert_called_once_with(subreddit_name=None)
 
 def test_save_to_csv():
     """Test saving product information to CSV with model and version."""
@@ -315,4 +331,73 @@ def test_save_to_csv_missing_fields():
     finally:
         # Clean up test file
         if os.path.exists(test_file):
-            os.remove(test_file) 
+            os.remove(test_file)
+
+def test_validate_subreddit_valid():
+    """Test that validate_subreddit accepts valid subreddits."""
+    for subreddit in AVAILABLE_SUBREDDITS:
+        validate_subreddit(subreddit)  # Should not raise
+
+def test_validate_subreddit_invalid():
+    """Test that validate_subreddit raises ValueError for invalid subreddits."""
+    with pytest.raises(ValueError, match="Subreddit 'invalid_subreddit' is not available"):
+        validate_subreddit("invalid_subreddit")
+
+@pytest.mark.asyncio
+async def test_run_full_pipeline_with_specified_subreddit(mock_product_info):
+    """Test run_full_pipeline with a specified subreddit."""
+    with patch('app.main.Pipeline') as mock_pipeline_class:
+        mock_pipeline = AsyncMock()
+        mock_pipeline.run_pipeline = AsyncMock(return_value=[mock_product_info])
+        mock_pipeline_class.return_value = mock_pipeline
+
+        with patch('app.main.save_to_csv') as mock_save:
+            config = PipelineConfig(
+                model="dall-e-3",
+                zazzle_template_id="test_template_id",
+                zazzle_tracking_code="test_tracking_code",
+                prompt_version="1.0.0"
+            )
+            result = await run_full_pipeline(config, subreddit_name="golf")
+            assert result == [mock_product_info]
+            mock_save.assert_called_once()
+            # Verify Pipeline was called with the correct arguments
+            mock_pipeline_class.assert_called_once()
+            call_args = mock_pipeline_class.call_args
+            # Check that the reddit_agent was passed with the correct subreddit
+            reddit_agent = call_args[1]['reddit_agent']
+            assert reddit_agent.subreddit_name == "golf"
+
+@pytest.mark.asyncio
+async def test_run_full_pipeline_with_random_subreddit(mock_product_info):
+    """Test run_full_pipeline with no subreddit specified (should pick randomly)."""
+    with patch('app.main.Pipeline') as mock_pipeline_class, \
+         patch('app.main.pick_subreddit', return_value="space") as mock_pick_subreddit:
+        mock_pipeline = AsyncMock()
+        mock_pipeline.run_pipeline = AsyncMock(return_value=[mock_product_info])
+        mock_pipeline_class.return_value = mock_pipeline
+
+        with patch('app.main.save_to_csv') as mock_save:
+            config = PipelineConfig(
+                model="dall-e-3",
+                zazzle_template_id="test_template_id",
+                zazzle_tracking_code="test_tracking_code",
+                prompt_version="1.0.0"
+            )
+            result = await run_full_pipeline(config, subreddit_name=None)
+            assert result == [mock_product_info]
+            mock_save.assert_called_once()
+            # Verify pick_subreddit was called
+            mock_pick_subreddit.assert_called_once()
+            # Verify Pipeline was called with the correct arguments
+            mock_pipeline_class.assert_called_once()
+            call_args = mock_pipeline_class.call_args
+            # Check that the reddit_agent was passed with the picked subreddit
+            reddit_agent = call_args[1]['reddit_agent']
+            assert reddit_agent.subreddit_name == "space"
+
+@pytest.mark.asyncio
+async def test_run_full_pipeline_invalid_subreddit():
+    """Test run_full_pipeline with an invalid subreddit."""
+    with pytest.raises(ValueError, match="Subreddit 'invalid_subreddit' is not available"):
+        await run_full_pipeline(subreddit_name="invalid_subreddit") 
