@@ -17,7 +17,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
     <>
       <div
-        className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 max-w-md w-full mx-auto flex flex-col items-center border border-gray-200 group"
+        className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 max-w-md w-full mx-auto flex flex-col border border-gray-200 group h-full"
       >
         <div className="w-full aspect-square overflow-hidden rounded-t-2xl flex items-center justify-center bg-gray-100 relative">
           <div className="relative w-full h-full">
@@ -45,11 +45,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </button>
           </div>
         </div>
-        <div className="w-full p-5 flex flex-col items-center">
-          <h3 className="text-xl font-bold text-gray-900 mb-2 text-center cursor-pointer hover:text-blue-600 transition-colors" onClick={handleImageClick}>
+        <div className="flex flex-col flex-1 p-5">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 text-center cursor-pointer hover:text-blue-600 transition-colors flex-1">
             {product.reddit_post.title}
           </h3>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-500 text-center mt-auto">
             {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
