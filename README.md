@@ -217,6 +217,93 @@ This run demonstrates the successful transition to the new print template and th
 - Handles error recovery and retry logic
 - Maintains system state and logging
 
+## Supported Subreddits
+
+The system supports 50 diverse subreddits across 9 categories, carefully selected for their rich visual content, high engagement, and strong purchasing potential. Each subreddit has been evaluated based on three key criteria:
+
+- **Image Generation**: Quality of visual content for AI image generation
+- **Engagement**: Community activity and passion level
+- **Purchase Likelihood**: Likelihood of community members buying products
+
+### Subreddit Categories and Criteria
+
+| Category | Subreddit | Image Generation | Engagement | Purchase Likelihood |
+|----------|-----------|------------------|------------|-------------------|
+| **Nature & Outdoors** | nature | Excellent - Diverse landscapes, wildlife, natural phenomena | High - Nature enthusiasts are passionate | Very High - Nature lovers often buy decor, clothing, and accessories |
+| | earthporn | Outstanding - Stunning landscape photography with dramatic lighting | Very High - Photography enthusiasts with appreciation for visual art | High - Likely to buy prints, wall art, and photography-related products |
+| | landscapephotography | Excellent - Professional quality landscape images with artistic composition | High - Photography community with technical knowledge | High - Photography enthusiasts often purchase related products |
+| | hiking | Very Good - Trail views, mountain vistas, outdoor adventure scenes | High - Active outdoor community with strong passion for nature | Very High - Hikers buy gear, clothing, and outdoor-themed products |
+| | camping | Good - Campfire scenes, tent setups, wilderness camping | High - Outdoor enthusiasts with strong community bonds | Very High - Campers regularly buy outdoor gear and accessories |
+| | gardening | Very Good - Beautiful gardens, flowers, plants, garden design | High - Gardening community with strong passion and knowledge | High - Gardeners buy tools, decor, and garden-themed products |
+| | plants | Excellent - Diverse plant species, indoor/outdoor plants, botanical beauty | Very High - Plant enthusiasts with strong community and knowledge sharing | Very High - Plant lovers buy planters, decor, and plant-related items |
+| | succulents | Very Good - Unique succulent varieties, arrangements, minimalist beauty | High - Dedicated succulent community with strong passion | High - Succulent enthusiasts buy planters and related products |
+| **Space & Science** | space | Outstanding - Nebulae, galaxies, planets, space phenomena with stunning visuals | Very High - Space enthusiasts with strong interest and knowledge | High - Space fans buy posters, clothing, and space-themed products |
+| | astrophotography | Exceptional - Professional space photography with incredible detail and beauty | Very High - Photography and space enthusiasts with technical expertise | High - Likely to purchase prints and space-themed decor |
+| | nasa | Excellent - Official NASA imagery, spacecraft, astronauts, mission photos | Very High - Space and science enthusiasts with strong interest | High - NASA fans buy official merchandise and space-themed products |
+| | science | Good - Scientific concepts, experiments, research visuals | High - Science enthusiasts with strong intellectual curiosity | Medium-High - Science fans buy educational and themed products |
+| | physics | Good - Physics concepts, diagrams, experimental setups | High - Physics enthusiasts with strong technical knowledge | Medium-High - Physics fans buy educational and themed products |
+| | chemistry | Good - Chemical reactions, lab setups, molecular structures | High - Chemistry enthusiasts with strong interest in science | Medium-High - Chemistry fans buy educational and themed products |
+| | biology | Very Good - Microscopic life, ecosystems, biological diversity | High - Biology enthusiasts with strong interest in life sciences | Medium-High - Biology fans buy educational and themed products |
+| **Sports & Recreation** | golf | Good - Golf courses, equipment, players, scenic golf settings | Very High - Golf enthusiasts with strong passion and purchasing power | Very High - Golfers buy equipment, clothing, and golf-themed products |
+| | soccer | Good - Stadiums, players, action shots, team colors | Very High - Global soccer community with massive following | Very High - Soccer fans buy jerseys, memorabilia, and team products |
+| | basketball | Good - Courts, players, action shots, team colors | Very High - Basketball community with strong passion | Very High - Basketball fans buy jerseys, memorabilia, and team products |
+| | tennis | Good - Courts, players, equipment, tennis settings | High - Tennis enthusiasts with strong community | High - Tennis players buy equipment, clothing, and tennis products |
+| | baseball | Good - Stadiums, players, fields, team colors | Very High - Baseball community with strong tradition and passion | Very High - Baseball fans buy memorabilia, jerseys, and team products |
+| | hockey | Good - Rinks, players, equipment, team colors | High - Hockey community with strong passion | High - Hockey fans buy jerseys, memorabilia, and team products |
+| | fishing | Very Good - Fishing scenes, water, boats, fish, outdoor settings | High - Fishing enthusiasts with strong community | Very High - Fishermen buy equipment, clothing, and fishing products |
+| | surfing | Excellent - Ocean waves, surfers, beach scenes, coastal beauty | High - Surfing community with strong passion for ocean | High - Surfers buy equipment, clothing, and ocean-themed products |
+| | skiing | Excellent - Snow-covered mountains, skiers, winter sports | High - Skiing community with strong passion for winter sports | High - Skiers buy equipment, clothing, and winter-themed products |
+| | rockclimbing | Very Good - Cliffs, climbers, outdoor adventure, scenic views | High - Climbing community with strong passion for adventure | High - Climbers buy equipment, clothing, and adventure products |
+| **Animals & Pets** | aww | Excellent - Cute animals, pets, heartwarming moments | Very High - Universal appeal, massive community | Very High - Pet owners buy pet-related products and cute animal items |
+| | cats | Excellent - Cat photos, behaviors, cute moments | Very High - Cat lovers with strong community and passion | Very High - Cat owners buy cat-themed products and accessories |
+| | dogs | Excellent - Dog photos, behaviors, cute moments | Very High - Dog lovers with strong community and passion | Very High - Dog owners buy dog-themed products and accessories |
+| | puppies | Excellent - Puppy photos, cute moments, playful scenes | Very High - Universal appeal, emotional connection | Very High - Puppy owners buy pet products and cute items |
+| | kittens | Excellent - Kitten photos, cute moments, playful scenes | Very High - Universal appeal, emotional connection | Very High - Kitten owners buy pet products and cute items |
+| | wildlife | Excellent - Wild animals, natural behaviors, diverse species | High - Wildlife enthusiasts with strong interest in nature | High - Wildlife fans buy nature-themed products and decor |
+| | birding | Very Good - Bird species, natural habitats, bird behaviors | High - Birding community with strong passion and knowledge | High - Birders buy equipment, guides, and bird-themed products |
+| | aquariums | Very Good - Fish, aquatic plants, tank setups, underwater scenes | High - Aquarium enthusiasts with strong community | High - Aquarium owners buy equipment, decor, and fish products |
+| **Food & Cooking** | food | Excellent - Diverse cuisines, cooking, presentation, food photography | Very High - Food lovers with strong community and passion | High - Food enthusiasts buy kitchen products and food-themed items |
+| | foodporn | Outstanding - High-quality food photography, presentation, culinary art | Very High - Food photography enthusiasts with appreciation for visual appeal | High - Likely to buy kitchen products and food-themed decor |
+| | cooking | Good - Cooking processes, ingredients, kitchen scenes | Very High - Cooking enthusiasts with strong community | Very High - Cooks buy kitchen equipment and cooking products |
+| | baking | Very Good - Baked goods, pastries, desserts, baking process | High - Baking enthusiasts with strong passion | High - Bakers buy baking equipment and kitchen products |
+| | coffee | Very Good - Coffee drinks, cafes, brewing, coffee culture | High - Coffee enthusiasts with strong community | High - Coffee lovers buy brewing equipment and coffee products |
+| | tea | Good - Tea varieties, brewing, tea culture, relaxation | High - Tea enthusiasts with strong community | High - Tea lovers buy brewing equipment and tea products |
+| | wine | Good - Wine bottles, vineyards, wine culture, tasting | High - Wine enthusiasts with strong community and purchasing power | High - Wine lovers buy wine accessories and wine-themed products |
+| **Art & Design** | art | Excellent - Diverse art styles, creativity, artistic expression | Very High - Art enthusiasts with strong appreciation for creativity | High - Art lovers buy art supplies and artistic products |
+| | design | Very Good - Design concepts, layouts, visual design | High - Design professionals and enthusiasts | High - Designers buy design tools and design-themed products |
+| | architecture | Excellent - Buildings, structures, architectural beauty | High - Architecture enthusiasts with strong appreciation | Medium-High - Architecture fans buy architectural products and decor |
+| | interiordesign | Very Good - Room designs, furniture, decor, home aesthetics | High - Interior design enthusiasts with strong interest | High - Design enthusiasts buy home decor and design products |
+| | streetart | Excellent - Urban art, murals, graffiti, street culture | High - Street art enthusiasts with strong appreciation | Medium-High - Street art fans buy urban-themed products |
+| | digitalart | Very Good - Digital artwork, digital painting, digital design | High - Digital artists and enthusiasts | High - Digital artists buy digital tools and art products |
+| **Technology & Gaming** | programming | Good - Code, technology concepts, programming themes | Very High - Programmers with strong community and purchasing power | High - Programmers buy tech products and programming-themed items |
+| | gaming | Good - Game characters, scenes, gaming culture | Very High - Gaming community with massive following | Very High - Gamers buy gaming products and merchandise |
+| | pcgaming | Good - PC setups, gaming hardware, gaming culture | Very High - PC gaming community with strong purchasing power | Very High - PC gamers buy hardware and gaming products |
+| | retrogaming | Good - Retro games, classic consoles, nostalgic gaming | High - Retro gaming enthusiasts with strong nostalgia | High - Retro gamers buy vintage and retro-themed products |
+| | cyberpunk | Excellent - Futuristic aesthetics, neon, cyberpunk themes | High - Cyberpunk enthusiasts with strong aesthetic appreciation | High - Cyberpunk fans buy themed products and decor |
+| | futurology | Good - Future concepts, technology, innovation themes | High - Future enthusiasts with strong interest in technology | Medium-High - Future enthusiasts buy tech and innovation products |
+| **Travel & Culture** | travel | Excellent - Travel destinations, cultures, landscapes, experiences | Very High - Travel enthusiasts with strong passion for exploration | High - Travelers buy travel products and destination-themed items |
+| | backpacking | Very Good - Backpacking scenes, trails, outdoor adventure | High - Backpacking community with strong passion for adventure | High - Backpackers buy outdoor gear and travel products |
+| | photography | Excellent - Diverse photography styles, techniques, subjects | Very High - Photography enthusiasts with strong technical knowledge | High - Photographers buy equipment and photography products |
+| | cityporn | Excellent - Urban landscapes, cityscapes, architecture | High - Urban photography enthusiasts with appreciation for cities | Medium-High - City enthusiasts buy urban-themed products |
+| | history | Good - Historical artifacts, events, historical themes | High - History enthusiasts with strong interest in the past | Medium-High - History fans buy historical and educational products |
+| **Lifestyle & Wellness** | fitness | Good - Exercise, fitness, health, active lifestyle | Very High - Fitness enthusiasts with strong community | Very High - Fitness enthusiasts buy equipment and fitness products |
+| | yoga | Very Good - Yoga poses, meditation, wellness, tranquility | High - Yoga community with strong passion for wellness | High - Yogis buy yoga equipment and wellness products |
+| | meditation | Good - Meditation, mindfulness, peace, tranquility | High - Meditation community with strong interest in wellness | High - Meditators buy wellness products and meditation items |
+| | minimalism | Good - Clean design, simplicity, minimalist aesthetics | High - Minimalist community with appreciation for simplicity | High - Minimalists buy quality, simple products |
+| | sustainability | Good - Eco-friendly concepts, nature, sustainable living | High - Sustainability enthusiasts with strong environmental values | High - Sustainability advocates buy eco-friendly products |
+| | vegan | Good - Plant-based food, vegan lifestyle, animal welfare | High - Vegan community with strong values and passion | High - Vegans buy plant-based and ethical products |
+
+### Selection Criteria Summary
+
+The subreddits were carefully selected based on:
+
+1. **Rich Visual Content**: Communities that post high-quality images, photos, and visual content that can inspire great AI-generated designs
+2. **High Engagement**: Active communities with passionate members who are likely to interact with and purchase products
+3. **Diverse Themes**: Wide variety of interests to create varied product offerings
+4. **Purchasing Power**: Communities with demonstrated willingness to buy related products and merchandise
+
+This diverse selection ensures the system can generate products that appeal to a wide range of audiences and interests, maximizing the potential for successful product sales.
+
 ## Workflow Diagram
 
 ```mermaid
