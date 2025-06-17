@@ -31,7 +31,370 @@ from app.pipeline_status import PipelineStatus
 logger = get_logger(__name__)
 
 # Available subreddits for the agent to work with
-AVAILABLE_SUBREDDITS = ["golf", "space", "nature"]
+AVAILABLE_SUBREDDITS = [
+    # Nature & Outdoors (High visual appeal, engaged communities)
+    "nature", "earthporn", "landscapephotography", "hiking", "camping", "gardening", "plants", "succulents",
+    
+    # Space & Science (Fascinating visuals, tech-savvy audience)
+    "space", "astrophotography", "nasa", "science", "physics", "chemistry", "biology",
+    
+    # Sports & Recreation (Passionate communities, great visuals)
+    "golf", "soccer", "basketball", "tennis", "baseball", "hockey", "fishing", "surfing", "skiing", "rockclimbing",
+    
+    # Animals & Pets (Universal appeal, emotional connection)
+    "aww", "cats", "dogs", "puppies", "kittens", "wildlife", "birding", "aquariums",
+    
+    # Food & Cooking (Visual appeal, lifestyle audience)
+    "food", "foodporn", "cooking", "baking", "coffee", "tea", "wine",
+    
+    # Art & Design (Creative communities, design appreciation)
+    "art", "design", "architecture", "interiordesign", "streetart", "digitalart",
+    
+    # Technology & Gaming (Tech-savvy, purchasing power)
+    "programming", "gaming", "pcgaming", "retrogaming", "cyberpunk", "futurology",
+    
+    # Travel & Culture (Diverse visuals, adventurous audience)
+    "travel", "backpacking", "photography", "cityporn", "history",
+    
+    # Lifestyle & Wellness (Health-conscious, purchasing power)
+    "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan"
+]
+
+# Detailed criteria for each subreddit selection
+SUBREDDIT_CRITERIA = {
+    # Nature & Outdoors
+    "nature": {
+        "image_generation": "Excellent - Diverse landscapes, wildlife, natural phenomena provide rich visual content",
+        "engagement": "High - Nature enthusiasts are passionate and likely to purchase nature-themed products",
+        "purchase_likelihood": "Very High - Nature lovers often buy decor, clothing, and accessories"
+    },
+    "earthporn": {
+        "image_generation": "Outstanding - Stunning landscape photography with dramatic lighting and composition",
+        "engagement": "Very High - Photography enthusiasts with appreciation for visual art",
+        "purchase_likelihood": "High - Likely to buy prints, wall art, and photography-related products"
+    },
+    "landscapephotography": {
+        "image_generation": "Excellent - Professional quality landscape images with artistic composition",
+        "engagement": "High - Photography community with technical knowledge and appreciation",
+        "purchase_likelihood": "High - Photography enthusiasts often purchase related products"
+    },
+    "hiking": {
+        "image_generation": "Very Good - Trail views, mountain vistas, outdoor adventure scenes",
+        "engagement": "High - Active outdoor community with strong passion for nature",
+        "purchase_likelihood": "Very High - Hikers buy gear, clothing, and outdoor-themed products"
+    },
+    "camping": {
+        "image_generation": "Good - Campfire scenes, tent setups, wilderness camping",
+        "engagement": "High - Outdoor enthusiasts with strong community bonds",
+        "purchase_likelihood": "Very High - Campers regularly buy outdoor gear and accessories"
+    },
+    "gardening": {
+        "image_generation": "Very Good - Beautiful gardens, flowers, plants, garden design",
+        "engagement": "High - Gardening community with strong passion and knowledge",
+        "purchase_likelihood": "High - Gardeners buy tools, decor, and garden-themed products"
+    },
+    "plants": {
+        "image_generation": "Excellent - Diverse plant species, indoor/outdoor plants, botanical beauty",
+        "engagement": "Very High - Plant enthusiasts with strong community and knowledge sharing",
+        "purchase_likelihood": "Very High - Plant lovers buy planters, decor, and plant-related items"
+    },
+    "succulents": {
+        "image_generation": "Very Good - Unique succulent varieties, arrangements, minimalist beauty",
+        "engagement": "High - Dedicated succulent community with strong passion",
+        "purchase_likelihood": "High - Succulent enthusiasts buy planters and related products"
+    },
+    
+    # Space & Science
+    "space": {
+        "image_generation": "Outstanding - Nebulae, galaxies, planets, space phenomena with stunning visuals",
+        "engagement": "Very High - Space enthusiasts with strong interest and knowledge",
+        "purchase_likelihood": "High - Space fans buy posters, clothing, and space-themed products"
+    },
+    "astrophotography": {
+        "image_generation": "Exceptional - Professional space photography with incredible detail and beauty",
+        "engagement": "Very High - Photography and space enthusiasts with technical expertise",
+        "purchase_likelihood": "High - Likely to purchase prints and space-themed decor"
+    },
+    "nasa": {
+        "image_generation": "Excellent - Official NASA imagery, spacecraft, astronauts, mission photos",
+        "engagement": "Very High - Space and science enthusiasts with strong interest",
+        "purchase_likelihood": "High - NASA fans buy official merchandise and space-themed products"
+    },
+    "science": {
+        "image_generation": "Good - Scientific concepts, experiments, research visuals",
+        "engagement": "High - Science enthusiasts with strong intellectual curiosity",
+        "purchase_likelihood": "Medium-High - Science fans buy educational and themed products"
+    },
+    "physics": {
+        "image_generation": "Good - Physics concepts, diagrams, experimental setups",
+        "engagement": "High - Physics enthusiasts with strong technical knowledge",
+        "purchase_likelihood": "Medium-High - Physics fans buy educational and themed products"
+    },
+    "chemistry": {
+        "image_generation": "Good - Chemical reactions, lab setups, molecular structures",
+        "engagement": "High - Chemistry enthusiasts with strong interest in science",
+        "purchase_likelihood": "Medium-High - Chemistry fans buy educational and themed products"
+    },
+    "biology": {
+        "image_generation": "Very Good - Microscopic life, ecosystems, biological diversity",
+        "engagement": "High - Biology enthusiasts with strong interest in life sciences",
+        "purchase_likelihood": "Medium-High - Biology fans buy educational and themed products"
+    },
+    
+    # Sports & Recreation
+    "golf": {
+        "image_generation": "Good - Golf courses, equipment, players, scenic golf settings",
+        "engagement": "Very High - Golf enthusiasts with strong passion and purchasing power",
+        "purchase_likelihood": "Very High - Golfers buy equipment, clothing, and golf-themed products"
+    },
+    "soccer": {
+        "image_generation": "Good - Stadiums, players, action shots, team colors",
+        "engagement": "Very High - Global soccer community with massive following",
+        "purchase_likelihood": "Very High - Soccer fans buy jerseys, memorabilia, and team products"
+    },
+    "basketball": {
+        "image_generation": "Good - Courts, players, action shots, team colors",
+        "engagement": "Very High - Basketball community with strong passion",
+        "purchase_likelihood": "Very High - Basketball fans buy jerseys, memorabilia, and team products"
+    },
+    "tennis": {
+        "image_generation": "Good - Courts, players, equipment, tennis settings",
+        "engagement": "High - Tennis enthusiasts with strong community",
+        "purchase_likelihood": "High - Tennis players buy equipment, clothing, and tennis products"
+    },
+    "baseball": {
+        "image_generation": "Good - Stadiums, players, fields, team colors",
+        "engagement": "Very High - Baseball community with strong tradition and passion",
+        "purchase_likelihood": "Very High - Baseball fans buy memorabilia, jerseys, and team products"
+    },
+    "hockey": {
+        "image_generation": "Good - Rinks, players, equipment, team colors",
+        "engagement": "High - Hockey community with strong passion",
+        "purchase_likelihood": "High - Hockey fans buy jerseys, memorabilia, and team products"
+    },
+    "fishing": {
+        "image_generation": "Very Good - Fishing scenes, water, boats, fish, outdoor settings",
+        "engagement": "High - Fishing enthusiasts with strong community",
+        "purchase_likelihood": "Very High - Fishermen buy equipment, clothing, and fishing products"
+    },
+    "surfing": {
+        "image_generation": "Excellent - Ocean waves, surfers, beach scenes, coastal beauty",
+        "engagement": "High - Surfing community with strong passion for ocean",
+        "purchase_likelihood": "High - Surfers buy equipment, clothing, and ocean-themed products"
+    },
+    "skiing": {
+        "image_generation": "Excellent - Snow-covered mountains, skiers, winter sports",
+        "engagement": "High - Skiing community with strong passion for winter sports",
+        "purchase_likelihood": "High - Skiers buy equipment, clothing, and winter-themed products"
+    },
+    "rockclimbing": {
+        "image_generation": "Very Good - Cliffs, climbers, outdoor adventure, scenic views",
+        "engagement": "High - Climbing community with strong passion for adventure",
+        "purchase_likelihood": "High - Climbers buy equipment, clothing, and adventure products"
+    },
+    
+    # Animals & Pets
+    "aww": {
+        "image_generation": "Excellent - Cute animals, pets, heartwarming moments",
+        "engagement": "Very High - Universal appeal, massive community",
+        "purchase_likelihood": "Very High - Pet owners buy pet-related products and cute animal items"
+    },
+    "cats": {
+        "image_generation": "Excellent - Cat photos, behaviors, cute moments",
+        "engagement": "Very High - Cat lovers with strong community and passion",
+        "purchase_likelihood": "Very High - Cat owners buy cat-themed products and accessories"
+    },
+    "dogs": {
+        "image_generation": "Excellent - Dog photos, behaviors, cute moments",
+        "engagement": "Very High - Dog lovers with strong community and passion",
+        "purchase_likelihood": "Very High - Dog owners buy dog-themed products and accessories"
+    },
+    "puppies": {
+        "image_generation": "Excellent - Puppy photos, cute moments, playful scenes",
+        "engagement": "Very High - Universal appeal, emotional connection",
+        "purchase_likelihood": "Very High - Puppy owners buy pet products and cute items"
+    },
+    "kittens": {
+        "image_generation": "Excellent - Kitten photos, cute moments, playful scenes",
+        "engagement": "Very High - Universal appeal, emotional connection",
+        "purchase_likelihood": "Very High - Kitten owners buy pet products and cute items"
+    },
+    "wildlife": {
+        "image_generation": "Excellent - Wild animals, natural behaviors, diverse species",
+        "engagement": "High - Wildlife enthusiasts with strong interest in nature",
+        "purchase_likelihood": "High - Wildlife fans buy nature-themed products and decor"
+    },
+    "birding": {
+        "image_generation": "Very Good - Bird species, natural habitats, bird behaviors",
+        "engagement": "High - Birding community with strong passion and knowledge",
+        "purchase_likelihood": "High - Birders buy equipment, guides, and bird-themed products"
+    },
+    "aquariums": {
+        "image_generation": "Very Good - Fish, aquatic plants, tank setups, underwater scenes",
+        "engagement": "High - Aquarium enthusiasts with strong community",
+        "purchase_likelihood": "High - Aquarium owners buy equipment, decor, and fish products"
+    },
+    
+    # Food & Cooking
+    "food": {
+        "image_generation": "Excellent - Diverse cuisines, cooking, presentation, food photography",
+        "engagement": "Very High - Food lovers with strong community and passion",
+        "purchase_likelihood": "High - Food enthusiasts buy kitchen products and food-themed items"
+    },
+    "foodporn": {
+        "image_generation": "Outstanding - High-quality food photography, presentation, culinary art",
+        "engagement": "Very High - Food photography enthusiasts with appreciation for visual appeal",
+        "purchase_likelihood": "High - Likely to buy kitchen products and food-themed decor"
+    },
+    "cooking": {
+        "image_generation": "Good - Cooking processes, ingredients, kitchen scenes",
+        "engagement": "Very High - Cooking enthusiasts with strong community",
+        "purchase_likelihood": "Very High - Cooks buy kitchen equipment and cooking products"
+    },
+    "baking": {
+        "image_generation": "Very Good - Baked goods, pastries, desserts, baking process",
+        "engagement": "High - Baking enthusiasts with strong passion",
+        "purchase_likelihood": "High - Bakers buy baking equipment and kitchen products"
+    },
+    "coffee": {
+        "image_generation": "Very Good - Coffee drinks, cafes, brewing, coffee culture",
+        "engagement": "High - Coffee enthusiasts with strong community",
+        "purchase_likelihood": "High - Coffee lovers buy brewing equipment and coffee products"
+    },
+    "tea": {
+        "image_generation": "Good - Tea varieties, brewing, tea culture, relaxation",
+        "engagement": "High - Tea enthusiasts with strong community",
+        "purchase_likelihood": "High - Tea lovers buy brewing equipment and tea products"
+    },
+    "wine": {
+        "image_generation": "Good - Wine bottles, vineyards, wine culture, tasting",
+        "engagement": "High - Wine enthusiasts with strong community and purchasing power",
+        "purchase_likelihood": "High - Wine lovers buy wine accessories and wine-themed products"
+    },
+    
+    # Art & Design
+    "art": {
+        "image_generation": "Excellent - Diverse art styles, creativity, artistic expression",
+        "engagement": "Very High - Art enthusiasts with strong appreciation for creativity",
+        "purchase_likelihood": "High - Art lovers buy art supplies and artistic products"
+    },
+    "design": {
+        "image_generation": "Very Good - Design concepts, layouts, visual design",
+        "engagement": "High - Design professionals and enthusiasts",
+        "purchase_likelihood": "High - Designers buy design tools and design-themed products"
+    },
+    "architecture": {
+        "image_generation": "Excellent - Buildings, structures, architectural beauty",
+        "engagement": "High - Architecture enthusiasts with strong appreciation",
+        "purchase_likelihood": "Medium-High - Architecture fans buy architectural products and decor"
+    },
+    "interiordesign": {
+        "image_generation": "Very Good - Room designs, furniture, decor, home aesthetics",
+        "engagement": "High - Interior design enthusiasts with strong interest",
+        "purchase_likelihood": "High - Design enthusiasts buy home decor and design products"
+    },
+    "streetart": {
+        "image_generation": "Excellent - Urban art, murals, graffiti, street culture",
+        "engagement": "High - Street art enthusiasts with strong appreciation",
+        "purchase_likelihood": "Medium-High - Street art fans buy urban-themed products"
+    },
+    "digitalart": {
+        "image_generation": "Very Good - Digital artwork, digital painting, digital design",
+        "engagement": "High - Digital artists and enthusiasts",
+        "purchase_likelihood": "High - Digital artists buy digital tools and art products"
+    },
+    
+    # Technology & Gaming
+    "programming": {
+        "image_generation": "Good - Code, technology concepts, programming themes",
+        "engagement": "Very High - Programmers with strong community and purchasing power",
+        "purchase_likelihood": "High - Programmers buy tech products and programming-themed items"
+    },
+    "gaming": {
+        "image_generation": "Good - Game characters, scenes, gaming culture",
+        "engagement": "Very High - Gaming community with massive following",
+        "purchase_likelihood": "Very High - Gamers buy gaming products and merchandise"
+    },
+    "pcgaming": {
+        "image_generation": "Good - PC setups, gaming hardware, gaming culture",
+        "engagement": "Very High - PC gaming community with strong purchasing power",
+        "purchase_likelihood": "Very High - PC gamers buy hardware and gaming products"
+    },
+    "retrogaming": {
+        "image_generation": "Good - Retro games, classic consoles, nostalgic gaming",
+        "engagement": "High - Retro gaming enthusiasts with strong nostalgia",
+        "purchase_likelihood": "High - Retro gamers buy vintage and retro-themed products"
+    },
+    "cyberpunk": {
+        "image_generation": "Excellent - Futuristic aesthetics, neon, cyberpunk themes",
+        "engagement": "High - Cyberpunk enthusiasts with strong aesthetic appreciation",
+        "purchase_likelihood": "High - Cyberpunk fans buy themed products and decor"
+    },
+    "futurology": {
+        "image_generation": "Good - Future concepts, technology, innovation themes",
+        "engagement": "High - Future enthusiasts with strong interest in technology",
+        "purchase_likelihood": "Medium-High - Future enthusiasts buy tech and innovation products"
+    },
+    
+    # Travel & Culture
+    "travel": {
+        "image_generation": "Excellent - Travel destinations, cultures, landscapes, experiences",
+        "engagement": "Very High - Travel enthusiasts with strong passion for exploration",
+        "purchase_likelihood": "High - Travelers buy travel products and destination-themed items"
+    },
+    "backpacking": {
+        "image_generation": "Very Good - Backpacking scenes, trails, outdoor adventure",
+        "engagement": "High - Backpacking community with strong passion for adventure",
+        "purchase_likelihood": "High - Backpackers buy outdoor gear and travel products"
+    },
+    "photography": {
+        "image_generation": "Excellent - Diverse photography styles, techniques, subjects",
+        "engagement": "Very High - Photography enthusiasts with strong technical knowledge",
+        "purchase_likelihood": "High - Photographers buy equipment and photography products"
+    },
+    "cityporn": {
+        "image_generation": "Excellent - Urban landscapes, cityscapes, architecture",
+        "engagement": "High - Urban photography enthusiasts with appreciation for cities",
+        "purchase_likelihood": "Medium-High - City enthusiasts buy urban-themed products"
+    },
+    "history": {
+        "image_generation": "Good - Historical artifacts, events, historical themes",
+        "engagement": "High - History enthusiasts with strong interest in the past",
+        "purchase_likelihood": "Medium-High - History fans buy historical and educational products"
+    },
+    
+    # Lifestyle & Wellness
+    "fitness": {
+        "image_generation": "Good - Exercise, fitness, health, active lifestyle",
+        "engagement": "Very High - Fitness enthusiasts with strong community",
+        "purchase_likelihood": "Very High - Fitness enthusiasts buy equipment and fitness products"
+    },
+    "yoga": {
+        "image_generation": "Very Good - Yoga poses, meditation, wellness, tranquility",
+        "engagement": "High - Yoga community with strong passion for wellness",
+        "purchase_likelihood": "High - Yogis buy yoga equipment and wellness products"
+    },
+    "meditation": {
+        "image_generation": "Good - Meditation, mindfulness, peace, tranquility",
+        "engagement": "High - Meditation community with strong interest in wellness",
+        "purchase_likelihood": "High - Meditators buy wellness products and meditation items"
+    },
+    "minimalism": {
+        "image_generation": "Good - Clean design, simplicity, minimalist aesthetics",
+        "engagement": "High - Minimalist community with appreciation for simplicity",
+        "purchase_likelihood": "High - Minimalists buy quality, simple products"
+    },
+    "sustainability": {
+        "image_generation": "Good - Eco-friendly concepts, nature, sustainable living",
+        "engagement": "High - Sustainability enthusiasts with strong environmental values",
+        "purchase_likelihood": "High - Sustainability advocates buy eco-friendly products"
+    },
+    "vegan": {
+        "image_generation": "Good - Plant-based food, vegan lifestyle, animal welfare",
+        "engagement": "High - Vegan community with strong values and passion",
+        "purchase_likelihood": "High - Vegans buy plant-based and ethical products"
+    }
+}
 
 def pick_subreddit() -> str:
     """
