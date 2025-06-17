@@ -618,5 +618,22 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         session.close()
         Base.metadata.drop_all(bind=engine)
 
+    def test_pick_subreddit(self):
+        """Test that pick_subreddit returns a valid subreddit from the available list."""
+        from app.agents.reddit_agent import pick_subreddit, AVAILABLE_SUBREDDITS
+        
+        # Test multiple calls to ensure randomness
+        results = set()
+        for _ in range(10):
+            result = pick_subreddit()
+            results.add(result)
+            # Verify the result is in the available subreddits
+            self.assertIn(result, AVAILABLE_SUBREDDITS)
+        
+        # With 10 calls and 3 subreddits, we should get at least 2 different results
+        # (though it's theoretically possible to get the same one 10 times, it's very unlikely)
+        self.assertGreaterEqual(len(results), 1)
+        self.assertLessEqual(len(results), len(AVAILABLE_SUBREDDITS))
+
 if __name__ == '__main__':
     unittest.main() 

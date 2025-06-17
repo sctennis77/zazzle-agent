@@ -9,6 +9,7 @@ from .base import ChannelAgent
 import logging
 import os
 import time
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DistributionStatus, DistributionMetadata, DesignInstructions
@@ -28,6 +29,18 @@ from app.clients.reddit_client import RedditClient
 from app.pipeline_status import PipelineStatus
 
 logger = get_logger(__name__)
+
+# Available subreddits for the agent to work with
+AVAILABLE_SUBREDDITS = ["golf", "space", "nature"]
+
+def pick_subreddit() -> str:
+    """
+    Pick a random subreddit from the available subreddits list.
+    
+    Returns:
+        str: A randomly selected subreddit name
+    """
+    return random.choice(AVAILABLE_SUBREDDITS)
 
 class RedditAgent(ChannelAgent):
     """
