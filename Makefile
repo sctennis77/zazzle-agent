@@ -9,7 +9,7 @@ help:
 	@echo "  make venv         - Create a Python virtual environment"
 	@echo "  make install      - Install dependencies into venv"
 	@echo "  make test         - Run the test suite with coverage"
-	@echo "  make test-pattern - Run a specific test suite or file. Usage: TEST_PATH=tests/test_file.py make test-pattern"
+	@echo "  make test-pattern <test_path> - Run a specific test suite or file. Example: make test-pattern tests/test_file.py"
 	@echo "  make run-full     - Run the complete product generation pipeline"
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
@@ -39,11 +39,11 @@ test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
 test-pattern:
-	@if [ -z "$(TEST_PATH)" ]; then \
-	  echo "Error: TEST_PATH is not set. Usage: TEST_PATH=tests/test_file.py make test-pattern"; \
+	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
+	  echo "Usage: make test-pattern <test_path>"; \
 	  exit 1; \
 	fi
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest $(TEST_PATH) --cov=app
+	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
 run-full:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)"
@@ -139,3 +139,6 @@ alembic-upgrade:
 alembic-downgrade:
 	@echo "Downgrading the database to the previous migration."
 	alembic downgrade -1 
+
+%::
+	@: 
