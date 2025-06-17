@@ -49,26 +49,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <h3 className="text-xl font-bold text-gray-900 mb-2 text-center cursor-pointer hover:text-blue-600 transition-colors" onClick={handleImageClick}>
             {product.reddit_post.title}
           </h3>
-          <div className="p-4">
-            <div className="flex flex-col gap-2">
-              <a
-                href={product.product_info.affiliate_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-center"
-              >
-                Buy
-              </a>
-              <span className="text-sm text-gray-500">
-                {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </span>
-            </div>
+          <div className="text-sm text-gray-500">
+            {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </div>
         </div>
       </div>
