@@ -9,10 +9,17 @@ logger = logging.getLogger(__name__)
 
 # Get the absolute path to the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
-DB_URL = os.getenv('DATABASE_URL', f'sqlite:///{DB_PATH}')
 
-logger.info(f"Using database at: {DB_PATH}")
+# Check if we're in testing mode
+if os.getenv('TESTING') == 'true':
+    # Use in-memory database for tests
+    DB_URL = 'sqlite:///:memory:'
+    logger.info("Using in-memory database for testing")
+else:
+    # Use file-based database for production
+    DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
+    DB_URL = os.getenv('DATABASE_URL', f'sqlite:///{DB_PATH}')
+    logger.info(f"Using database at: {DB_PATH}")
 
 engine = create_engine(DB_URL, echo=False, future=True)
 
@@ -27,10 +34,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     """Initialize the database by creating all tables."""
-    if not DB_PATH.exists():
-        logger.info(f"Creating new database at {DB_PATH}")
+    if os.getenv('TESTING') == 'true':
+        logger.info("Initializing in-memory test database")
     else:
-        logger.info(f"Using existing database at {DB_PATH}")
+        if not DB_PATH.exists():
+            logger.info(f"Creating new database at {DB_PATH}")
+        else:
+            logger.info(f"Using existing database at {DB_PATH}")
     Base.metadata.create_all(bind=engine)
 
 def get_db():

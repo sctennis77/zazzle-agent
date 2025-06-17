@@ -3,6 +3,15 @@ import pytest
 import shutil
 from pathlib import Path
 
+@pytest.fixture(scope="session", autouse=True)
+def set_testing_environment():
+    """Set the TESTING environment variable for all tests to use in-memory database."""
+    os.environ['TESTING'] = 'true'
+    yield
+    # Clean up after all tests
+    if 'TESTING' in os.environ:
+        del os.environ['TESTING']
+
 @pytest.fixture(scope="session")
 def test_output_dir(tmp_path_factory):
     """Create a temporary directory for test outputs."""

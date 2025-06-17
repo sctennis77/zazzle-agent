@@ -37,14 +37,15 @@ install: venv
 	. $(VENV_NAME)/bin/activate && $(PIP) install --upgrade pip && $(PIP) install -r requirements.txt
 
 test:
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
+	. $(VENV_NAME)/bin/activate && TESTING=true $(PYTHON) -m pytest tests/ --cov=app
 
 test-pattern:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-	  echo "Usage: make test-pattern <test_path>"; \
-	  exit 1; \
+		echo "Error: Please specify a test path. Usage: make test-pattern <test_path>"; \
+		echo "Example: make test-pattern tests/test_file.py"; \
+		exit 1; \
 	fi
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
+	. $(VENV_NAME)/bin/activate && TESTING=true $(PYTHON) -m pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
 run-full:
 	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
