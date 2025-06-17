@@ -9,6 +9,7 @@ help:
 	@echo "  make venv         - Create a Python virtual environment"
 	@echo "  make install      - Install dependencies into venv"
 	@echo "  make test         - Run the test suite with coverage"
+	@echo "  make test-pattern - Run a specific test suite or file. Usage: TEST_PATH=tests/test_file.py make test-pattern"
 	@echo "  make run-full     - Run the complete product generation pipeline"
 	@echo "  make clean        - Remove venv and outputs"
 	@echo "  make docker-build - Build Docker image (tests must pass first)"
@@ -38,6 +39,10 @@ test:
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest tests/ --cov=app
 
 test-pattern:
+	@if [ -z "$(TEST_PATH)" ]; then \
+	  echo "Error: TEST_PATH is not set. Usage: TEST_PATH=tests/test_file.py make test-pattern"; \
+	  exit 1; \
+	fi
 	. $(VENV_NAME)/bin/activate && $(PYTHON) -m pytest $(TEST_PATH) --cov=app
 
 run-full:
