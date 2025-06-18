@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db
 
 help:
 	@echo "Available targets:"
@@ -38,6 +38,7 @@ help:
 	@echo "  make restore-db       - Restore database from backup"
 	@echo "  make reset-db         - Reset database (WARNING: deletes all data)"
 	@echo "  make health-check     - Check system health and dependencies"
+	@echo "  make create-test-db   - Create test database with sample data"
 	@echo ""
 	@echo "Pipeline Management:"
 	@echo "  make run-pipeline-debug    - Run pipeline with debug logging"
@@ -249,6 +250,10 @@ logs-clear:
 test-interaction-agent:
 	@echo "Testing Reddit interaction agent..."
 	. $(VENV_NAME)/bin/activate && $(PYTHON) test_interaction_agent.py
+
+create-test-db:
+	@echo "Creating test database with sample data..."
+	. $(VENV_NAME)/bin/activate && python3 scripts/create_test_db.py
 
 %::
 	@: 

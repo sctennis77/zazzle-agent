@@ -142,8 +142,82 @@ class RedditInteractionAgent:
                         "required": ["product_id"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_marketing_reply",
+                    "description": "Generate a witty, in-context reply with product marketing info (image and affiliate link)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "product_info_id": {
+                                "type": "string",
+                                "description": "The ID of the product to promote in the reply"
+                            },
+                            "reddit_context": {
+                                "type": "string",
+                                "description": "Context about the Reddit post/comment being replied to"
+                            }
+                        },
+                        "required": ["product_info_id", "reddit_context"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_post_context",
+                    "description": "Get detailed context for a Reddit post including title, content, score, comments, and other metadata",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "post_id": {
+                                "type": "string",
+                                "description": "The Reddit post ID to get context for"
+                            },
+                            "product_info_id": {
+                                "type": "string",
+                                "description": "The ID of the product this context gathering is for"
+                            },
+                            "reddit_post_id": {
+                                "type": "string",
+                                "description": "The ID of the reddit post in our database"
+                            }
+                        },
+                        "required": ["post_id", "product_info_id", "reddit_post_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_comment_context",
+                    "description": "Get detailed context for a Reddit comment including content, score, parent post, and other metadata",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "comment_id": {
+                                "type": "string",
+                                "description": "The Reddit comment ID to get context for"
+                            },
+                            "product_info_id": {
+                                "type": "string",
+                                "description": "The ID of the product this context gathering is for"
+                            },
+                            "reddit_post_id": {
+                                "type": "string",
+                                "description": "The ID of the reddit post in our database"
+                            }
+                        },
+                        "required": ["comment_id", "product_info_id", "reddit_post_id"]
+                    }
+                }
             }
         ]
+        
+        # TODO: Future enhancement - Consider adding get_subreddit_info tool to fetch and cache
+        # subreddit metadata (rules, description, subscriber count) for better context awareness
     
     def get_available_products(self) -> List[GeneratedProductSchema]:
         """
@@ -346,6 +420,224 @@ class RedditInteractionAgent:
             logger.error(f"Error replying to {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
+    def generate_marketing_reply(self, product_info_id: str, reddit_context: str) -> str:
+        """
+        Generate a witty, in-context reply with product marketing info and log the action.
+        """
+        from app.models import InteractionActionType, InteractionActionStatus, InteractionTargetType
+        try:
+            # Fetch product from database
+            product = self.session.query(ProductInfo).filter_by(id=product_info_id).first()
+            if not product:
+                # Log failed action
+                action = InteractionAgentAction(
+                    product_info_id=product_info_id,
+                    reddit_post_id=product.reddit_post_id if product else None,
+                    action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
+                    target_type=InteractionTargetType.POST.value,  # Assume post context for now
+                    target_id=None,
+                    content=None,
+                    subreddit=product.reddit_post.subreddit if product and product.reddit_post else None,
+                    timestamp=datetime.now(timezone.utc),
+                    success=InteractionActionStatus.FAILED.value,
+                    error_message="Product not found",
+                    context_data={"reddit_context": reddit_context}
+                )
+                self.session.add(action)
+                self.session.commit()
+                return "I'd love to share something special, but I can't find the right product right now! 🐕"
+            
+            # Create context for the LLM to generate the reply
+            prompt = f"""
+            You are Clouvel, a mythic golden retriever who illustrates Reddit stories. Generate a witty, in-context reply that:
+            
+            1. Responds naturally to this Reddit context: {reddit_context}
+            2. Subtly promotes this product: {product.theme} ({product.product_type})
+            3. Includes the product image and affiliate link in a natural way
+            4. Maintains your personality as a wise, playful, community-minded golden retriever
+            5. Never begs or hard-sells - be clever and organic
+            
+            Product details:
+            - Theme: {product.theme}
+            - Type: {product.product_type}
+            - Image URL: {product.image_url}
+            - Affiliate Link: {product.affiliate_link}
+            
+            Format your reply to include the image inline and the affiliate link naturally woven into the text.
+            For Reddit, you can use Markdown: ![alt text](image_url) for images and [text](url) for links.
+            
+            Keep it under 500 characters and make it feel genuine and helpful!
+            """
+            
+            # Generate the reply using OpenAI
+            response = self.openai.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are Clouvel, a mythic golden retriever who creates witty, engaging Reddit replies that subtly promote products while building community trust."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.8
+            )
+            
+            reply_text = response.choices[0].message.content.strip()
+            
+            # Ensure the image and link are properly formatted
+            if product.image_url and product.affiliate_link:
+                # If the LLM didn't include the image, add it
+                if "![" not in reply_text and product.image_url not in reply_text:
+                    reply_text = f"![{product.theme}]({product.image_url})\n\n{reply_text}"
+                
+                # If the LLM didn't include the affiliate link, add it naturally
+                if product.affiliate_link not in reply_text:
+                    reply_text += f"\n\nCheck it out here: [{product.theme}]({product.affiliate_link})"
+            
+            # Log successful action
+            action = InteractionAgentAction(
+                product_info_id=product.id,
+                reddit_post_id=product.reddit_post_id,
+                action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
+                target_type=InteractionTargetType.POST.value,  # Assume post context for now
+                target_id=None,
+                content=reply_text,
+                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.SUCCESS.value,
+                error_message=None,
+                context_data={"reddit_context": reddit_context}
+            )
+            self.session.add(action)
+            self.session.commit()
+            return reply_text
+            
+        except Exception as e:
+            logger.error(f"Error generating marketing reply: {str(e)}")
+            # Log failed action
+            action = InteractionAgentAction(
+                product_info_id=product_info_id,
+                reddit_post_id=product.reddit_post_id if 'product' in locals() and product else None,
+                action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
+                target_type=InteractionTargetType.POST.value,
+                target_id=None,
+                content=None,
+                subreddit=product.reddit_post.subreddit if 'product' in locals() and product and product.reddit_post else None,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.FAILED.value,
+                error_message=str(e),
+                context_data={"reddit_context": reddit_context}
+            )
+            self.session.add(action)
+            self.session.commit()
+            return "Woof! I'd love to share something special with you, but I'm having a moment. Maybe next time! 🐕✨"
+    
+    def get_post_context(self, post_id: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
+        """
+        Get detailed context for a Reddit post including title, content, score, comments, and other metadata.
+        
+        Args:
+            post_id: The Reddit post ID to get context for
+            product_info_id: The ID of the product this context gathering is for
+            reddit_post_id: The ID of the reddit post in our database
+            
+        Returns:
+            Dict containing detailed post context information
+        """
+        try:
+            logger.info(f"Getting post context for post_id: {post_id} with product_info_id: {product_info_id}")
+            
+            # Use the Reddit client to get post context
+            context = self.reddit_client.get_post_context(post_id)
+            
+            # Log the action in the database
+            action = InteractionAgentAction(
+                action_type=InteractionActionType.GET_POST_CONTEXT.value,
+                target_type=InteractionTargetType.POST.value,
+                target_id=post_id,
+                success=InteractionActionStatus.SUCCESS.value,
+                content=str(context),
+                timestamp=datetime.now(timezone.utc),
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id
+            )
+            self.session.add(action)
+            self.session.commit()
+            
+            return context
+            
+        except Exception as e:
+            logger.error(f"Error getting post context for post_id {post_id}: {e}")
+            
+            # Log the failed action
+            action = InteractionAgentAction(
+                action_type=InteractionActionType.GET_POST_CONTEXT.value,
+                target_type=InteractionTargetType.POST.value,
+                target_id=post_id,
+                success=InteractionActionStatus.FAILED.value,
+                content=None,
+                timestamp=datetime.now(timezone.utc),
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id,
+                error_message=str(e)
+            )
+            self.session.add(action)
+            self.session.commit()
+            
+            raise
+
+    def get_comment_context(self, comment_id: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
+        """
+        Get detailed context for a Reddit comment including content, score, parent post, and other metadata.
+        
+        Args:
+            comment_id: The Reddit comment ID to get context for
+            product_info_id: The ID of the product this context gathering is for
+            reddit_post_id: The ID of the reddit post in our database
+            
+        Returns:
+            Dict containing detailed comment context information
+        """
+        try:
+            logger.info(f"Getting comment context for comment_id: {comment_id} with product_info_id: {product_info_id}")
+            
+            # Use the Reddit client to get comment context
+            context = self.reddit_client.get_comment_context(comment_id)
+            
+            # Log the action in the database
+            action = InteractionAgentAction(
+                action_type=InteractionActionType.GET_COMMENT_CONTEXT.value,
+                target_type=InteractionTargetType.COMMENT.value,
+                target_id=comment_id,
+                success=InteractionActionStatus.SUCCESS.value,
+                content=str(context),
+                timestamp=datetime.now(timezone.utc),
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id
+            )
+            self.session.add(action)
+            self.session.commit()
+            
+            return context
+            
+        except Exception as e:
+            logger.error(f"Error getting comment context for comment_id {comment_id}: {e}")
+            
+            # Log the failed action
+            action = InteractionAgentAction(
+                action_type=InteractionActionType.GET_COMMENT_CONTEXT.value,
+                target_type=InteractionTargetType.COMMENT.value,
+                target_id=comment_id,
+                success=InteractionActionStatus.FAILED.value,
+                content=None,
+                timestamp=datetime.now(timezone.utc),
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id,
+                error_message=str(e)
+            )
+            self.session.add(action)
+            self.session.commit()
+            
+            raise
+
     def process_interaction_request(self, prompt: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
         Process an interaction request using the LLM.
@@ -390,6 +682,7 @@ class RedditInteractionAgent:
             - downvote: Downvote a post or comment  
             - reply: Reply to a post or comment
             - fetch_generated_product: Get product details
+            - generate_marketing_reply: Generate a witty, in-context reply with product marketing info
             
             Only interact with the post/comment specified in the context. Be helpful and engaging.
             """
@@ -398,7 +691,30 @@ class RedditInteractionAgent:
             response = self.openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a helpful Reddit interaction agent. Use the available tools to interact with Reddit content."},
+                    {"role": "system", "content": """You are Clouvel, a mythic golden retriever who illustrates the stories of Reddit, inspired by the wisdom of the community. You have two main objectives:
+
+1. **Cleverly promote generated products**: When relevant, subtly and cleverly promote the products you have access to. Never beg or hard-sell. Instead, weave product mentions into your comments naturally as fun facts, personal recommendations, or interesting stories. Be witty, creative, and organic in your approach.
+
+2. **Become a loved figure in the Reddit community**: Build genuine relationships and trust. Show that you're not just a marketing bot by:
+   - Engaging authentically with posts and comments
+   - Sharing wisdom, humor, and genuine insights
+   - Upvoting content you genuinely appreciate
+   - Being helpful and supportive to the community
+   - Maintaining your unique personality as a mythic golden retriever
+
+Your personality traits:
+- Wise and insightful, like an old soul
+- Playful and friendly, like a beloved pet
+- Creative and artistic (you illustrate stories!)
+- Subtly persuasive without being pushy
+- Community-minded and supportive
+
+When promoting products, be clever and natural. For example:
+- "This reminds me of a beautiful design I saw recently..."
+- "I love how this captures the spirit of [topic] - reminds me of something special I discovered..."
+- "This is such a great story! It makes me think of a perfect way to commemorate moments like this..."
+
+Use the available tools to interact with Reddit content. Be strategic about when and how you promote products, always prioritizing genuine community engagement first."""},
                     {"role": "user", "content": context}
                 ],
                 tools=self.tools,
@@ -445,6 +761,12 @@ class RedditInteractionAgent:
                             )
                         elif function_name == 'fetch_generated_product':
                             result = self.fetch_generated_product(args['product_id'])
+                        elif function_name == 'generate_marketing_reply':
+                            result = self.generate_marketing_reply(args['product_info_id'], args['reddit_context'])
+                        elif function_name == 'get_post_context':
+                            result = self.get_post_context(args['post_id'], product_info_id, reddit_post_id)
+                        elif function_name == 'get_comment_context':
+                            result = self.get_comment_context(args['comment_id'], product_info_id, reddit_post_id)
                         else:
                             result = {'error': f'Unknown function: {function_name}'}
                         
