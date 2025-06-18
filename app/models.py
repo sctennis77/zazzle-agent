@@ -75,6 +75,7 @@ class ProductInfoSchema(BaseModel):
     prompt_version: str
     product_type: str
     design_description: Optional[str] = None
+    available_actions: Optional[Dict[str, int]] = None  # Maps action_type to remaining count
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -513,7 +514,8 @@ class ProductInfo:
             model=self.model,
             prompt_version=self.prompt_version,
             product_type=self.product_type,
-            design_description=self.design_instructions.get('description')
+            design_description=self.design_instructions.get('description'),
+            available_actions=self.design_instructions.get('available_actions')
         )
 
 

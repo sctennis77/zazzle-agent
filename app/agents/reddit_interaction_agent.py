@@ -237,8 +237,14 @@ class RedditInteractionAgent:
                 reddit_post = product.reddit_post
                 
                 if pipeline_run and reddit_post:
+                    # Calculate available actions for this product
+                    available_actions = self.calculate_available_actions(product.id)
+                    
                     # Convert to schemas
                     product_schema = ProductInfoSchema.model_validate(product)
+                    # Add available actions to the schema
+                    product_schema.available_actions = available_actions
+                    
                     pipeline_schema = PipelineRunSchema.model_validate(pipeline_run)
                     reddit_schema = RedditPostSchema.model_validate(reddit_post)
                     
@@ -253,6 +259,53 @@ class RedditInteractionAgent:
             logger.error(f"Error fetching available products: {str(e)}")
             return []
     
+    def calculate_available_actions(self, product_info_id: int) -> Dict[str, int]:
+        """
+        Calculate available actions for a product based on existing interaction actions.
+        
+        Args:
+            product_info_id: The ID of the product to check
+            
+        Returns:
+            Dict[str, int]: Mapping of action types to remaining allowed counts
+        """
+        try:
+            # Get all successful actions for this product
+            actions = self.session.query(InteractionAgentAction).filter_by(
+                product_info_id=product_info_id,
+                success=InteractionActionStatus.SUCCESS.value
+            ).all()
+            
+            # Count actions by type
+            action_counts = {}
+            for action in actions:
+                action_type = action.action_type
+                action_counts[action_type] = action_counts.get(action_type, 0) + 1
+            
+            # Define limits for each action type
+            action_limits = {
+                InteractionActionType.UPVOTE.value: 1,      # Only upvote once
+                InteractionActionType.DOWNVOTE.value: 1,    # Only downvote once
+                InteractionActionType.REPLY.value: 1,       # Only reply with content once
+                InteractionActionType.GENERATE_MARKETING_REPLY.value: 1,  # Only generate marketing reply once
+                InteractionActionType.GET_POST_CONTEXT.value: 5,    # Can get context multiple times
+                InteractionActionType.GET_COMMENT_CONTEXT.value: 5  # Can get context multiple times
+            }
+            
+            # Calculate remaining actions
+            available_actions = {}
+            for action_type, limit in action_limits.items():
+                used_count = action_counts.get(action_type, 0)
+                remaining = max(0, limit - used_count)
+                if remaining > 0:
+                    available_actions[action_type] = remaining
+            
+            return available_actions
+            
+        except Exception as e:
+            logger.error(f"Error calculating available actions for product {product_info_id}: {str(e)}")
+            return {}
+
     def fetch_generated_product(self, product_id: str) -> Optional[GeneratedProductSchema]:
         """
         Fetch a specific generated product from the database.
@@ -275,8 +328,14 @@ class RedditInteractionAgent:
             if not pipeline_run or not reddit_post:
                 return None
             
+            # Calculate available actions for this product
+            available_actions = self.calculate_available_actions(product.id)
+            
             # Convert to schemas
             product_schema = ProductInfoSchema.model_validate(product)
+            # Add available actions to the schema
+            product_schema.available_actions = available_actions
+            
             pipeline_schema = PipelineRunSchema.model_validate(pipeline_run)
             reddit_schema = RedditPostSchema.model_validate(reddit_post)
             
@@ -289,6 +348,20 @@ class RedditInteractionAgent:
             logger.error(f"Error fetching product {product_id}: {str(e)}")
             return None
     
+    def is_action_available(self, product_info_id: int, action_type: str) -> bool:
+        """
+        Check if a specific action is still available for a product.
+        
+        Args:
+            product_info_id: The ID of the product to check
+            action_type: The type of action to check
+            
+        Returns:
+            bool: True if the action is available, False otherwise
+        """
+        available_actions = self.calculate_available_actions(product_info_id)
+        return available_actions.get(action_type, 0) > 0
+
     def upvote(self, target_type: str, target_id: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
         Upvote a Reddit post or comment.
@@ -303,6 +376,10 @@ class RedditInteractionAgent:
         Returns:
             Dict containing the result of the action
         """
+        # Check if upvote action is still available
+        if not self.is_action_available(product_info_id, InteractionActionType.UPVOTE.value):
+            return {'error': 'Upvote action has already been performed for this product'}
+        
         try:
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
@@ -346,6 +423,10 @@ class RedditInteractionAgent:
         Returns:
             Dict containing the result of the action
         """
+        # Check if downvote action is still available
+        if not self.is_action_available(product_info_id, InteractionActionType.DOWNVOTE.value):
+            return {'error': 'Downvote action has already been performed for this product'}
+        
         try:
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
@@ -390,6 +471,10 @@ class RedditInteractionAgent:
         Returns:
             Dict containing the result of the action
         """
+        # Check if reply action is still available
+        if not self.is_action_available(product_info_id, InteractionActionType.REPLY.value):
+            return {'error': 'Reply action has already been performed for this product'}
+        
         try:
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
@@ -425,6 +510,11 @@ class RedditInteractionAgent:
         Generate a witty, in-context reply with product marketing info and log the action.
         """
         from app.models import InteractionActionType, InteractionActionStatus, InteractionTargetType
+        
+        # Check if generate_marketing_reply action is still available
+        if not self.is_action_available(int(product_info_id), InteractionActionType.GENERATE_MARKETING_REPLY.value):
+            return "I've already generated a marketing reply for this product. Let me engage in other ways! 🐕"
+        
         try:
             # Fetch product from database
             product = self.session.query(ProductInfo).filter_by(id=product_info_id).first()
@@ -514,13 +604,13 @@ class RedditInteractionAgent:
             logger.error(f"Error generating marketing reply: {str(e)}")
             # Log failed action
             action = InteractionAgentAction(
-                product_info_id=product_info_id,
-                reddit_post_id=product.reddit_post_id if 'product' in locals() and product else None,
+                product_info_id=product.id,
+                reddit_post_id=product.reddit_post_id,
                 action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
                 target_type=InteractionTargetType.POST.value,
                 target_id=None,
                 content=None,
-                subreddit=product.reddit_post.subreddit if 'product' in locals() and product and product.reddit_post else None,
+                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
                 timestamp=datetime.now(timezone.utc),
                 success=InteractionActionStatus.FAILED.value,
                 error_message=str(e),
@@ -638,6 +728,35 @@ class RedditInteractionAgent:
             
             raise
 
+    def _format_available_actions(self, available_actions: Dict[str, int]) -> str:
+        """
+        Format available actions for display in LLM context.
+        
+        Args:
+            available_actions: Dictionary mapping action types to remaining counts
+            
+        Returns:
+            str: Formatted string describing available actions
+        """
+        if not available_actions:
+            return "No actions available - all actions have been performed for this product."
+        
+        action_descriptions = {
+            InteractionActionType.UPVOTE.value: "upvote",
+            InteractionActionType.DOWNVOTE.value: "downvote", 
+            InteractionActionType.REPLY.value: "reply with content",
+            InteractionActionType.GENERATE_MARKETING_REPLY.value: "generate marketing reply",
+            InteractionActionType.GET_POST_CONTEXT.value: "get post context",
+            InteractionActionType.GET_COMMENT_CONTEXT.value: "get comment context"
+        }
+        
+        formatted_actions = []
+        for action_type, count in available_actions.items():
+            description = action_descriptions.get(action_type, action_type)
+            formatted_actions.append(f"- {description}: {count} remaining")
+        
+        return "\n".join(formatted_actions)
+
     def process_interaction_request(self, prompt: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
         Process an interaction request using the LLM.
@@ -658,6 +777,9 @@ class RedditInteractionAgent:
             if not product or not reddit_post:
                 return {'error': 'Product or Reddit post not found'}
             
+            # Calculate available actions for this product
+            available_actions = self.calculate_available_actions(product_info_id)
+            
             # Create context for the LLM
             context = f"""
             You are a Reddit interaction agent. You can interact with Reddit posts and comments using the available tools.
@@ -675,15 +797,20 @@ class RedditInteractionAgent:
             - Content: {reddit_post.content or 'No content'}
             - Comment Summary: {reddit_post.comment_summary or 'No comments'}
             
+            Available Actions for this Product:
+            {self._format_available_actions(available_actions)}
+            
             User Request: {prompt}
             
             Available tools:
-            - upvote: Upvote a post or comment
-            - downvote: Downvote a post or comment  
-            - reply: Reply to a post or comment
-            - fetch_generated_product: Get product details
-            - generate_marketing_reply: Generate a witty, in-context reply with product marketing info
+            - upvote: Upvote a post or comment (only if upvote action is available)
+            - downvote: Downvote a post or comment (only if downvote action is available)
+            - reply: Reply to a post or comment (only if reply action is available)
+            - fetch_generated_product: Get product details with available actions
+            - generate_marketing_reply: Generate a witty, in-context reply with product marketing info (only if generate_marketing_reply action is available)
             
+            IMPORTANT: Only perform actions that are still available for this product. Check the available actions list above.
+            If an action has already been performed, suggest alternative actions or explain why it's not available.
             Only interact with the post/comment specified in the context. Be helpful and engaging.
             """
             

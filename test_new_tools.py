@@ -68,6 +68,26 @@ def test_new_tools():
     print(f"GET_POST_CONTEXT enum: {InteractionActionType.GET_POST_CONTEXT.value}")
     print(f"GET_COMMENT_CONTEXT enum: {InteractionActionType.GET_COMMENT_CONTEXT.value}")
 
+    print("\n5. Testing available actions functionality...")
+    try:
+        # Test fetch_generated_product with available actions
+        product_result = agent.fetch_generated_product(str(product_id))
+        if product_result and product_result.product_info.available_actions:
+            print(f"✅ Available actions found: {product_result.product_info.available_actions}")
+        else:
+            print("⚠️  No available actions found (this is normal for a fresh product)")
+        
+        # Test calculate_available_actions directly
+        available_actions = agent.calculate_available_actions(product_id)
+        print(f"✅ Direct calculation result: {available_actions}")
+        
+        # Test is_action_available
+        is_upvote_available = agent.is_action_available(product_id, InteractionActionType.UPVOTE.value)
+        print(f"✅ Upvote available: {is_upvote_available}")
+        
+    except Exception as e:
+        print(f"❌ Available actions test failed: {e}")
+
     print("\n✅ All tests completed!")
 
 
