@@ -2,10 +2,19 @@ import pytest
 from unittest.mock import patch
 import shutil
 from pathlib import Path
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 @pytest.fixture(autouse=True, scope="session")
-def patch_get_database_url():
-    with patch("app.db.database.get_database_url", return_value="sqlite:///:memory:"):
+def patch_database():
+    """Patch all database-related imports to use in-memory database for tests."""
+    # Create a test engine and session
+    test_engine = create_engine('sqlite:///:memory:')
+    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    
+    with patch("app.db.database.get_database_url", return_value="sqlite:///:memory:"), \
+         patch("app.db.database.engine", test_engine), \
+         patch("app.db.database.SessionLocal", TestSessionLocal):
         yield
 
 @pytest.fixture(scope="session")
