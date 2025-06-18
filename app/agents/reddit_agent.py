@@ -597,7 +597,7 @@ class RedditAgent:
                 image=imgur_url,
                 theme=product_idea.theme,
                 text=product_idea.image_description,
-                product_type='sticker',
+                product_type=ZAZZLE_PRINT_TEMPLATE.product_type,
                 template_id=self.config.zazzle_template_id,
                 model=self.config.model,
                 prompt_version=self.config.prompt_version
