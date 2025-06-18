@@ -6,10 +6,10 @@ using various tools like upvoting, downvoting, and replying. The agent only inte
 posts that exist in the database and logs all actions for tracking.
 """
 
-import logging
+import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from app.clients.reddit_client import RedditClient
@@ -483,6 +483,57 @@ class RedditInteractionAgent:
             logger.error(f"Error downvoting {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
+    def _execute_reply_action(self, target_type: str, target_id: str, content: str, subreddit: str, 
+                             product_info_id: int, reddit_post_id: int, action_type: str, 
+                             action_description: str) -> Dict[str, Any]:
+        """
+        Helper method to execute reply actions with consistent error handling and logging.
+        
+        Args:
+            target_type: 'post' or 'comment'
+            target_id: Reddit post/comment ID
+            content: Reply content
+            subreddit: Subreddit name
+            product_info_id: Database product info ID
+            reddit_post_id: Database reddit post ID
+            action_type: The action type enum value
+            action_description: Description for logging (e.g., "marketing replied", "non-marketing replied")
+            
+        Returns:
+            Dict containing the result of the action
+        """
+        try:
+            action = InteractionAgentAction(
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id,
+                action_type=action_type,
+                target_type=target_type,
+                target_id=target_id,
+                content=content,
+                subreddit=subreddit,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.PENDING.value
+            )
+            self.session.add(action)
+            
+            if target_type == InteractionTargetType.POST.value:
+                result = self.reddit_client.comment_on_post(target_id, content)
+            else:
+                result = self.reddit_client.reply_to_comment(target_id, content)
+                
+            action.success = InteractionActionStatus.SUCCESS.value
+            action.context_data = result
+            self.session.commit()
+            logger.info(f"Successfully {action_description} to {target_type} {target_id} in r/{subreddit}")
+            return result
+        except Exception as e:
+            if 'action' in locals():
+                action.success = InteractionActionStatus.FAILED.value
+                action.error_message = str(e)
+                self.session.commit()
+            logger.error(f"Error {action_description} to {target_type} {target_id}: {str(e)}")
+            return {'error': str(e)}
+
     def marketing_reply(self, target_type: str, target_id: str, content: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
         Reply to a Reddit post or comment with product content (marketing reply).
@@ -502,35 +553,10 @@ class RedditInteractionAgent:
         if not self.is_action_available(product_info_id, InteractionActionType.MARKETING_REPLY.value):
             return {'error': 'Marketing reply action has already been performed for this product'}
         
-        try:
-            action = InteractionAgentAction(
-                product_info_id=product_info_id,
-                reddit_post_id=reddit_post_id,
-                action_type=InteractionActionType.MARKETING_REPLY.value,
-                target_type=target_type,
-                target_id=target_id,
-                content=content,
-                subreddit=subreddit,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.PENDING.value
-            )
-            self.session.add(action)
-            if target_type == InteractionTargetType.POST.value:
-                result = self.reddit_client.comment_on_post(target_id, content)
-            else:
-                result = self.reddit_client.reply_to_comment(target_id, content)
-            action.success = InteractionActionStatus.SUCCESS.value
-            action.context_data = result
-            self.session.commit()
-            logger.info(f"Successfully marketing replied to {target_type} {target_id} in r/{subreddit}")
-            return result
-        except Exception as e:
-            if 'action' in locals():
-                action.success = InteractionActionStatus.FAILED.value
-                action.error_message = str(e)
-                self.session.commit()
-            logger.error(f"Error marketing replying to {target_type} {target_id}: {str(e)}")
-            return {'error': str(e)}
+        return self._execute_reply_action(
+            target_type, target_id, content, subreddit, product_info_id, reddit_post_id,
+            InteractionActionType.MARKETING_REPLY.value, "marketing replied"
+        )
 
     def non_marketing_reply(self, target_type: str, target_id: str, content: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
@@ -551,36 +577,40 @@ class RedditInteractionAgent:
         if not self.is_action_available(product_info_id, InteractionActionType.NON_MARKETING_REPLY.value):
             return {'error': 'Non-marketing reply action limit reached for this product'}
         
-        try:
-            action = InteractionAgentAction(
-                product_info_id=product_info_id,
-                reddit_post_id=reddit_post_id,
-                action_type=InteractionActionType.NON_MARKETING_REPLY.value,
-                target_type=target_type,
-                target_id=target_id,
-                content=content,
-                subreddit=subreddit,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.PENDING.value
-            )
-            self.session.add(action)
-            if target_type == InteractionTargetType.POST.value:
-                result = self.reddit_client.comment_on_post(target_id, content)
-            else:
-                result = self.reddit_client.reply_to_comment(target_id, content)
-            action.success = InteractionActionStatus.SUCCESS.value
-            action.context_data = result
-            self.session.commit()
-            logger.info(f"Successfully non-marketing replied to {target_type} {target_id} in r/{subreddit}")
-            return result
-        except Exception as e:
-            if 'action' in locals():
-                action.success = InteractionActionStatus.FAILED.value
-                action.error_message = str(e)
-                self.session.commit()
-            logger.error(f"Error non-marketing replying to {target_type} {target_id}: {str(e)}")
-            return {'error': str(e)}
+        return self._execute_reply_action(
+            target_type, target_id, content, subreddit, product_info_id, reddit_post_id,
+            InteractionActionType.NON_MARKETING_REPLY.value, "non-marketing replied"
+        )
     
+    def _log_generate_reply_action(self, product_info_id: int, action_type: str, reddit_context: str, 
+                                  reply_text: str = None, error_message: str = None, product = None) -> None:
+        """
+        Helper method to log generate reply actions with consistent error handling.
+        
+        Args:
+            product_info_id: The product info ID
+            action_type: The action type enum value
+            reddit_context: Context about the Reddit post/comment
+            reply_text: The generated reply text (if successful)
+            error_message: Error message (if failed)
+            product: The product object (if available)
+        """
+        action = InteractionAgentAction(
+            product_info_id=product_info_id,
+            reddit_post_id=product.reddit_post_id if product else None,
+            action_type=action_type,
+            target_type=InteractionTargetType.POST.value,
+            target_id=None,
+            content=reply_text,
+            subreddit=product.reddit_post.subreddit if product and product.reddit_post else None,
+            timestamp=datetime.now(timezone.utc),
+            success=InteractionActionStatus.SUCCESS.value if not error_message else InteractionActionStatus.FAILED.value,
+            error_message=error_message,
+            context_data={"reddit_context": reddit_context}
+        )
+        self.session.add(action)
+        self.session.commit()
+
     def generate_marketing_reply(self, product_info_id: str, reddit_context: str) -> str:
         """
         Generate a witty, in-context reply with product marketing info and log the action.
@@ -595,22 +625,12 @@ class RedditInteractionAgent:
             # Fetch product from database
             product = self.session.query(ProductInfo).filter_by(id=product_info_id).first()
             if not product:
-                # Log failed action
-                action = InteractionAgentAction(
-                    product_info_id=product_info_id,
-                    reddit_post_id=product.reddit_post_id if product else None,
-                    action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
-                    target_type=InteractionTargetType.POST.value,  # Assume post context for now
-                    target_id=None,
-                    content=None,
-                    subreddit=product.reddit_post.subreddit if product and product.reddit_post else None,
-                    timestamp=datetime.now(timezone.utc),
-                    success=InteractionActionStatus.FAILED.value,
-                    error_message="Product not found",
-                    context_data={"reddit_context": reddit_context}
+                self._log_generate_reply_action(
+                    product_info_id, 
+                    InteractionActionType.GENERATE_MARKETING_REPLY.value, 
+                    reddit_context, 
+                    error_message="Product not found"
                 )
-                self.session.add(action)
-                self.session.commit()
                 return "I'd love to share something special, but I can't find the right product right now! 🐕"
             
             # Create context for the LLM to generate the reply
@@ -659,41 +679,25 @@ class RedditInteractionAgent:
                     reply_text += f"\n\nCheck it out here: [{product.theme}]({product.affiliate_link})"
             
             # Log successful action
-            action = InteractionAgentAction(
-                product_info_id=product.id,
-                reddit_post_id=product.reddit_post_id,
-                action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
-                target_type=InteractionTargetType.POST.value,  # Assume post context for now
-                target_id=None,
-                content=reply_text,
-                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.SUCCESS.value,
-                error_message=None,
-                context_data={"reddit_context": reddit_context}
+            self._log_generate_reply_action(
+                product.id, 
+                InteractionActionType.GENERATE_MARKETING_REPLY.value, 
+                reddit_context, 
+                reply_text=reply_text,
+                product=product
             )
-            self.session.add(action)
-            self.session.commit()
             return reply_text
             
         except Exception as e:
             logger.error(f"Error generating marketing reply: {str(e)}")
             # Log failed action
-            action = InteractionAgentAction(
-                product_info_id=product.id,
-                reddit_post_id=product.reddit_post_id,
-                action_type=InteractionActionType.GENERATE_MARKETING_REPLY.value,
-                target_type=InteractionTargetType.POST.value,
-                target_id=None,
-                content=None,
-                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.FAILED.value,
+            self._log_generate_reply_action(
+                product_info_id, 
+                InteractionActionType.GENERATE_MARKETING_REPLY.value, 
+                reddit_context, 
                 error_message=str(e),
-                context_data={"reddit_context": reddit_context}
+                product=product if 'product' in locals() else None
             )
-            self.session.add(action)
-            self.session.commit()
             return "Woof! I'd love to share something special with you, but I'm having a moment. Maybe next time! 🐕✨"
     
     def get_post_context(self, post_id: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
@@ -937,7 +941,6 @@ Use the available tools to interact with Reddit content. Be strategic about when
                         function_args = tool_call.function.arguments
                         
                         # Parse arguments
-                        import json
                         args = json.loads(function_args)
                         
                         # Execute the tool
@@ -1023,22 +1026,12 @@ Use the available tools to interact with Reddit content. Be strategic about when
             # Fetch product from database for context
             product = self.session.query(ProductInfo).filter_by(id=product_info_id).first()
             if not product:
-                # Log failed action
-                action = InteractionAgentAction(
-                    product_info_id=product_info_id,
-                    reddit_post_id=product.reddit_post_id if product else None,
-                    action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
-                    target_type=InteractionTargetType.POST.value,
-                    target_id=None,
-                    content=None,
-                    subreddit=product.reddit_post.subreddit if product and product.reddit_post else None,
-                    timestamp=datetime.now(timezone.utc),
-                    success=InteractionActionStatus.FAILED.value,
-                    error_message="Product not found",
-                    context_data={"reddit_context": reddit_context}
+                self._log_generate_reply_action(
+                    product_info_id, 
+                    InteractionActionType.GENERATE_NON_MARKETING_REPLY.value, 
+                    reddit_context, 
+                    error_message="Product not found"
                 )
-                self.session.add(action)
-                self.session.commit()
                 return "I'd love to chat, but I can't find the right context right now! 🐕"
             
             # Create prompt for non-marketing reply
@@ -1084,39 +1077,23 @@ Use the available tools to interact with Reddit content. Be strategic about when
                 reply_text = reply_text.replace(f"Check out this {product.theme}", "")
             
             # Log successful action
-            action = InteractionAgentAction(
-                product_info_id=product.id,
-                reddit_post_id=product.reddit_post_id,
-                action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
-                target_type=InteractionTargetType.POST.value,
-                target_id=None,
-                content=reply_text,
-                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.SUCCESS.value,
-                error_message=None,
-                context_data={"reddit_context": reddit_context}
+            self._log_generate_reply_action(
+                product.id, 
+                InteractionActionType.GENERATE_NON_MARKETING_REPLY.value, 
+                reddit_context, 
+                reply_text=reply_text,
+                product=product
             )
-            self.session.add(action)
-            self.session.commit()
             return reply_text
             
         except Exception as e:
             logger.error(f"Error generating non-marketing reply: {str(e)}")
             # Log failed action
-            action = InteractionAgentAction(
-                product_info_id=product_info_id,
-                reddit_post_id=product.reddit_post_id if 'product' in locals() and product else None,
-                action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
-                target_type=InteractionTargetType.POST.value,
-                target_id=None,
-                content=None,
-                subreddit=product.reddit_post.subreddit if 'product' in locals() and product and product.reddit_post else None,
-                timestamp=datetime.now(timezone.utc),
-                success=InteractionActionStatus.FAILED.value,
+            self._log_generate_reply_action(
+                product_info_id, 
+                InteractionActionType.GENERATE_NON_MARKETING_REPLY.value, 
+                reddit_context, 
                 error_message=str(e),
-                context_data={"reddit_context": reddit_context}
+                product=product if 'product' in locals() else None
             )
-            self.session.add(action)
-            self.session.commit()
             return "Woof! I'd love to chat, but I'm having a moment. Maybe next time! 🐕✨"
