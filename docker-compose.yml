@@ -74,12 +74,14 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
       - ZAZZLE_AFFILIATE_ID=${ZAZZLE_AFFILIATE_ID}
+      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID}
+      - IMGUR_CLIENT_SECRET=${IMGUR_CLIENT_SECRET}
       - PIPELINE_SCHEDULE=0 */6 * * *  # Every 6 hours
     depends_on:
       database:
@@ -96,11 +98,13 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID}
+      - IMGUR_CLIENT_SECRET=${IMGUR_CLIENT_SECRET}
       - INTERACTION_SCHEDULE=0 */2 * * *  # Every 2 hours
     depends_on:
       database:
