@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zazzle-agent-interaction
+  namespace: zazzle-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zazzle-agent-interaction
+  template:
+    metadata:
+      labels:
+        app: zazzle-agent-interaction
+    spec:
+      containers:
+      - name: interaction
+        image: ghcr.io/sctennis77/zazzle-agent/interaction:latest
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: zazzle-agent-config
+              key: DATABASE_URL
+        - name: INTERACTION_SCHEDULE
+          valueFrom:
+            configMapKeyRef:
+              name: zazzle-agent-config
+              key: INTERACTION_SCHEDULE
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: OPENAI_API_KEY
+        - name: REDDIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_CLIENT_ID
+        - name: REDDIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_CLIENT_SECRET
+        - name: REDDIT_USER_AGENT
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_USER_AGENT
+        - name: ZAZZLE_AFFILIATE_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: ZAZZLE_AFFILIATE_ID
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: zazzle-agent-pvc 

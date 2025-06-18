@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zazzle-agent-config
+  namespace: zazzle-agent
+data:
+  DATABASE_URL: "sqlite:///app/data/zazzle_pipeline.db"
+  PIPELINE_SCHEDULE: "0 */6 * * *"
+  INTERACTION_SCHEDULE: "0 */2 * * *"
+  VITE_API_URL: "http://api:8000" 

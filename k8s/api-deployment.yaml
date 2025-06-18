@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zazzle-agent-api
+  namespace: zazzle-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: zazzle-agent-api
+  template:
+    metadata:
+      labels:
+        app: zazzle-agent-api
+    spec:
+      containers:
+      - name: api
+        image: ghcr.io/sctennis77/zazzle-agent/api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: zazzle-agent-config
+              key: DATABASE_URL
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: OPENAI_API_KEY
+        - name: REDDIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_CLIENT_ID
+        - name: REDDIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_CLIENT_SECRET
+        - name: REDDIT_USER_AGENT
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: REDDIT_USER_AGENT
+        - name: ZAZZLE_AFFILIATE_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-agent-secrets
+              key: ZAZZLE_AFFILIATE_ID
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: zazzle-agent-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zazzle-agent-api-service
+  namespace: zazzle-agent
+spec:
+  selector:
+    app: zazzle-agent-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP 

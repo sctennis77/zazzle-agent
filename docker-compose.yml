@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # Database service (SQLite with persistent storage)
+  database:
+    image: alpine:latest
+    volumes:
+      - ./data:/app/data
+    command: >
+      sh -c "
+        apk add --no-cache sqlite &&
+        mkdir -p /app/data &&
+        touch /app/data/zazzle_pipeline.db &&
+        chmod 666 /app/data/zazzle_pipeline.db &&
+        tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD", "sqlite3", "/app/data/zazzle_pipeline.db", "SELECT 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - ZAZZLE_AFFILIATE_ID=${ZAZZLE_AFFILIATE_ID}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Pipeline Runner (scheduled service)
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.pipeline
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - ZAZZLE_AFFILIATE_ID=${ZAZZLE_AFFILIATE_ID}
+      - PIPELINE_SCHEDULE=0 */6 * * *  # Every 6 hours
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Interaction Agent (scheduled service)
+  interaction:
+    build:
+      context: .
+      dockerfile: Dockerfile.interaction
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - INTERACTION_SCHEDULE=0 */2 * * *  # Every 2 hours
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  data: 

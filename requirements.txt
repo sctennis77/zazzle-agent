@@ -15,4 +15,5 @@ pytest-mock
 fastapi==0.110.0
 uvicorn==0.27.1
 alembic
-Pillow 
+Pillow
+schedule==1.2.0 

@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production
 
 help:
 	@echo "Available targets:"
@@ -17,50 +17,35 @@ help:
 	@echo "  make docker-run   - Run Docker container"
 	@echo "  make scrape       - Run only the scraping part of the program"
 	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
-	@echo "  make run-api      - Run the API server"
-	@echo "  make stop-api     - Stop the API server"
-	@echo "  make frontend-dev      # Start dev server at http://localhost:5173 (or next available port)"
-	@echo "  make frontend-build    # Build production bundle"
-	@echo "  make frontend-preview  # Preview production build"
-	@echo "  make frontend-install  # Install dependencies"
-	@echo "  make frontend-lint     # Lint code"
-	@echo "  make frontend-clean    # Remove node_modules, .vite, and dist"
-	@echo "  make alembic-init     - Initialize Alembic for database migrations"
-	@echo "  make alembic-revision - Generate a new Alembic migration revision"
-	@echo "  make alembic-upgrade  - Upgrade the database to the latest migration"
-	@echo "  make alembic-downgrade - Downgrade the database to the previous migration"
+	@echo "  make run-api      - Start the FastAPI server"
+	@echo "  make stop-api     - Stop the FastAPI server"
+	@echo "  make frontend-dev - Start the frontend development server"
+	@echo "  make test-interaction-agent - Test the Reddit interaction agent"
+	@echo "  make create-test-db - Create test database with sample data"
 	@echo ""
-	@echo "🆕 Complete Environment Setup:"
-	@echo "  make full_from_fresh_env - Complete fresh setup: clean, install, test, start services"
-	@echo "  make dev_setup          - Quick development setup (preserves existing env)"
+	@echo "Complete Environment Setup:"
+	@echo "  make full_from_fresh_env - Complete fresh setup with cleanup, install, test, and service startup"
+	@echo "  make dev_setup          - Quick development setup preserving existing environment"
 	@echo "  make start-services     - Start API and frontend services"
 	@echo "  make stop-services      - Stop all services"
 	@echo "  make restart-services   - Restart all services"
-	@echo "  make status             - Check system status and health"
+	@echo "  make status             - Check system health and service status"
 	@echo ""
-	@echo "Database & Monitoring:"
-	@echo "  make check-db         - Check database contents and pipeline runs"
-	@echo "  make check-pipeline-db - Check pipeline database status"
-	@echo "  make get-last-run     - Get details of the last pipeline run"
-	@echo "  make backup-db        - Create a backup of the database"
-	@echo "  make restore-db       - Restore database from backup"
-	@echo "  make reset-db         - Reset database (WARNING: deletes all data)"
-	@echo "  make health-check     - Check system health and dependencies"
-	@echo "  make create-test-db   - Create test database with sample data"
+	@echo "Docker Commands:"
+	@echo "  make docker-build-all   - Build all Docker images (API, Frontend, Pipeline, Interaction)"
+	@echo "  make docker-run-local   - Start all services with Docker Compose"
+	@echo "  make docker-stop-local  - Stop Docker Compose services"
+	@echo "  make docker-logs        - Show Docker Compose logs"
+	@echo "  make docker-clean       - Clean up Docker resources"
 	@echo ""
-	@echo "Pipeline Management:"
-	@echo "  make run-pipeline-debug    - Run pipeline with debug logging"
-	@echo "  make run-pipeline-dry-run  - Run pipeline without creating products (dry run)"
-	@echo "  make run-pipeline-single   - Run pipeline for a single product"
-	@echo "  make run-pipeline-batch    - Run pipeline for multiple products"
-	@echo "  make monitor-pipeline      - Monitor pipeline status in real-time"
+	@echo "Kubernetes Commands:"
+	@echo "  make k8s-deploy         - Deploy to Kubernetes cluster"
+	@echo "  make k8s-status         - Check Kubernetes deployment status"
+	@echo "  make k8s-logs           - Show Kubernetes logs"
+	@echo "  make k8s-delete         - Delete Kubernetes deployment"
+	@echo "  make deploy-production  - Complete production deployment (test, build, deploy)"
 	@echo ""
-	@echo "Logging & Debugging:"
-	@echo "  make logs-tail        - Tail the application logs"
-	@echo "  make logs-clear       - Clear application logs"
-	@echo ""
-	@echo "Interaction Agent:"
-	@echo "  make test-interaction-agent - Test the Reddit interaction agent"
+	@echo "For more information, see docs/DEPLOYMENT_GUIDE.md"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -427,6 +412,91 @@ status:
 	else \
 		echo "❌ Frontend Dependencies: NOT INSTALLED"; \
 	fi
+
+# =====================
+# Docker Commands
+# =====================
+
+docker-build-all:
+	@echo "🐳 Building all Docker images..."
+	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
+	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
+	@docker build -f Dockerfile.pipeline -t zazzle-agent/pipeline:latest .
+	@docker build -f Dockerfile.interaction -t zazzle-agent/interaction:latest .
+	@echo "✅ All Docker images built successfully"
+
+docker-run-local:
+	@echo "🚀 Starting Zazzle Agent with Docker Compose..."
+	@docker-compose up -d
+	@echo "✅ Services started. Check http://localhost:5173 for frontend"
+	@echo "📊 API available at http://localhost:8000"
+
+docker-stop-local:
+	@echo "🛑 Stopping Docker Compose services..."
+	@docker-compose down
+	@echo "✅ Services stopped"
+
+docker-logs:
+	@echo "📋 Showing Docker Compose logs..."
+	@docker-compose logs -f
+
+docker-clean:
+	@echo "🧹 Cleaning up Docker resources..."
+	@docker-compose down -v
+	@docker system prune -f
+	@echo "✅ Docker cleanup completed"
+
+# =====================
+# Kubernetes Commands
+# =====================
+
+k8s-deploy:
+	@echo "🚀 Deploying to Kubernetes..."
+	@kubectl apply -f k8s/namespace.yaml
+	@kubectl apply -f k8s/configmap.yaml
+	@kubectl apply -f k8s/secrets.yaml
+	@kubectl apply -f k8s/persistent-volume.yaml
+	@kubectl apply -f k8s/api-deployment.yaml
+	@kubectl apply -f k8s/frontend-deployment.yaml
+	@kubectl apply -f k8s/pipeline-deployment.yaml
+	@kubectl apply -f k8s/interaction-deployment.yaml
+	@kubectl apply -f k8s/ingress.yaml
+	@echo "✅ Kubernetes deployment completed"
+
+k8s-status:
+	@echo "📊 Kubernetes deployment status:"
+	@kubectl get pods -n zazzle-agent
+	@echo ""
+	@echo "🌐 Services:"
+	@kubectl get services -n zazzle-agent
+	@echo ""
+	@echo "🔗 Ingress:"
+	@kubectl get ingress -n zazzle-agent
+
+k8s-logs:
+	@echo "📋 Showing Kubernetes logs..."
+	@kubectl logs -f deployment/zazzle-agent-api -n zazzle-agent
+
+k8s-delete:
+	@echo "🗑️ Deleting Kubernetes deployment..."
+	@kubectl delete namespace zazzle-agent
+	@echo "✅ Kubernetes deployment deleted"
+
+# =====================
+# Production Deployment
+# =====================
+
+deploy-production:
+	@echo "🚀 Starting production deployment..."
+	@echo "Step 1: Running tests..."
+	@make test
+	@echo "Step 2: Building Docker images..."
+	@make docker-build-all
+	@echo "Step 3: Deploying to Kubernetes..."
+	@make k8s-deploy
+	@echo "Step 4: Checking deployment status..."
+	@make k8s-status
+	@echo "✅ Production deployment completed!"
 
 %::
 	@: 
