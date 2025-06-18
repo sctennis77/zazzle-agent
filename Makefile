@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check
 
 help:
 	@echo "Available targets:"
@@ -29,6 +29,26 @@ help:
 	@echo "  make alembic-revision - Generate a new Alembic migration revision"
 	@echo "  make alembic-upgrade  - Upgrade the database to the latest migration"
 	@echo "  make alembic-downgrade - Downgrade the database to the previous migration"
+	@echo ""
+	@echo "Database & Monitoring:"
+	@echo "  make check-db         - Check database contents and pipeline runs"
+	@echo "  make check-pipeline-db - Check pipeline database status"
+	@echo "  make get-last-run     - Get details of the last pipeline run"
+	@echo "  make backup-db        - Create a backup of the database"
+	@echo "  make restore-db       - Restore database from backup"
+	@echo "  make reset-db         - Reset database (WARNING: deletes all data)"
+	@echo "  make health-check     - Check system health and dependencies"
+	@echo ""
+	@echo "Pipeline Management:"
+	@echo "  make run-pipeline-debug    - Run pipeline with debug logging"
+	@echo "  make run-pipeline-dry-run  - Run pipeline without creating products (dry run)"
+	@echo "  make run-pipeline-single   - Run pipeline for a single product"
+	@echo "  make run-pipeline-batch    - Run pipeline for multiple products"
+	@echo "  make monitor-pipeline      - Monitor pipeline status in real-time"
+	@echo ""
+	@echo "Logging & Debugging:"
+	@echo "  make logs-tail        - Tail the application logs"
+	@echo "  make logs-clear       - Clear application logs"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -141,6 +161,87 @@ alembic-upgrade:
 alembic-downgrade:
 	@echo "Downgrading the database to the previous migration."
 	alembic downgrade -1 
+
+# Database & Monitoring targets
+
+check-db:
+	@echo "Checking database contents..."
+	. $(VENV_NAME)/bin/activate && python3 -m scripts.check_db
+
+check-pipeline-db:
+	@echo "Checking pipeline database status..."
+	. $(VENV_NAME)/bin/activate && python3 -m scripts.check_pipeline_db
+
+get-last-run:
+	@echo "Getting last pipeline run details..."
+	. $(VENV_NAME)/bin/activate && python3 -m scripts.get_last_run
+
+backup-db:
+	@echo "Creating database backup..."
+	@if [ -f zazzle_pipeline.db ]; then \
+		cp zazzle_pipeline.db zazzle_pipeline.db.backup.$$(date +%Y%m%d_%H%M%S); \
+		echo "Database backed up to zazzle_pipeline.db.backup.$$(date +%Y%m%d_%H%M%S)"; \
+	else \
+		echo "No database file found to backup"; \
+	fi
+
+restore-db:
+	@echo "Available backups:"
+	@ls -la zazzle_pipeline.db.backup.* 2>/dev/null || echo "No backups found"
+	@echo ""
+	@echo "To restore, run: cp zazzle_pipeline.db.backup.<timestamp> zazzle_pipeline.db"
+
+reset-db:
+	@echo "WARNING: This will delete all data in the database!"
+	@read -p "Are you sure? Type 'yes' to confirm: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		rm -f zazzle_pipeline.db; \
+		echo "Database reset. Run 'make alembic-upgrade' to recreate tables."; \
+	else \
+		echo "Database reset cancelled."; \
+	fi
+
+health-check:
+	@echo "Running comprehensive health check..."
+	. $(VENV_NAME)/bin/activate && python3 -m scripts.health_check
+
+# Pipeline Management targets
+
+run-pipeline-debug:
+	@echo "Running pipeline with debug logging..."
+	source .env && . $(VENV_NAME)/bin/activate && LOG_LEVEL=DEBUG $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+
+run-pipeline-dry-run:
+	@echo "Running pipeline in dry-run mode (no products created)..."
+	source .env && . $(VENV_NAME)/bin/activate && DRY_RUN=true $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+
+run-pipeline-single:
+	@echo "Running pipeline for single product..."
+	source .env && . $(VENV_NAME)/bin/activate && SINGLE_PRODUCT=true $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+
+run-pipeline-batch:
+	@echo "Running pipeline for batch processing..."
+	source .env && . $(VENV_NAME)/bin/activate && BATCH_SIZE=5 $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+
+monitor-pipeline:
+	@echo "Starting pipeline monitor..."
+	. $(VENV_NAME)/bin/activate && python3 -m scripts.pipeline_monitor
+
+# Logging & Debugging targets
+
+logs-tail:
+	@echo "Tailing application logs..."
+	@if [ -f app.log ]; then \
+		tail -f app.log; \
+	else \
+		echo "No log file found. Run the application to generate logs."; \
+	fi
+
+logs-clear:
+	@echo "Clearing application logs..."
+	@rm -f app.log
+	@rm -f *.log
+	@echo "Logs cleared"
 
 %::
 	@: 

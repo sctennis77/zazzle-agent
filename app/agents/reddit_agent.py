@@ -485,8 +485,8 @@ class RedditAgent:
             response = self.openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a creative product idea generator for Zazzle or other platforms. Generate unique, innovative, marketable, and artistic product designs based Reddit posts. Keep image descriptions simple and focused on the key visual elements. Avoid complex details or too many elements. Focus on one main subject and the natural scenery (when applicable). Text in the content is optional should be used sparingly and limited to one or two words."},
-                    {"role": "user", "content": f"Based on this Reddit post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\n\nGenerate a product idea with the following format:\nTheme: [Your creative theme here]\nImage Description: [A simple, clear description of the desired image content]"}
+                    {"role": "system", "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well."},
+                    {"role": "user", "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]"}
                 ]
             )
 
