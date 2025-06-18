@@ -9,7 +9,7 @@ import praw
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DesignInstructions
 import pytest
 from unittest import IsolatedAsyncioTestCase
-from app.db.database import SessionLocal, Base, engine
+from app.db.database import get_test_engine, SessionLocal, Base
 from app.db.models import PipelineRun, RedditPost
 from datetime import datetime, timezone
 from app.pipeline_status import PipelineStatus
@@ -19,10 +19,12 @@ import time
 @pytest.fixture(autouse=True)
 def clean_db():
     """Ensure a clean database state before each test by dropping and recreating all tables."""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    # Use test-specific engine to avoid affecting production database
+    test_engine = get_test_engine()
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=test_engine)
 
 class TestRedditAgent(IsolatedAsyncioTestCase):
     """Test cases for the Reddit Agent."""
@@ -207,8 +209,9 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_post2.stickied = False
 
         # Create a session and add a processed post
+        test_engine = get_test_engine()
         session = SessionLocal()
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=test_engine)
         pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value)
         session.add(pipeline_run)
         session.commit()
@@ -220,28 +223,36 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             content='Test Content 1',
             subreddit='test_subreddit',
             url='https://reddit.com/test1',
-            permalink='/r/test/123'
+            permalink='/r/test/123',
+            comment_summary='Test comment summary 1'
         )
         session.add(reddit_post)
         session.commit()
 
-        # Create agent with session
-        agent = RedditAgent(pipeline_run_id=pipeline_run.id, session=session)
+        # Create a new RedditAgent with the session
+        agent_with_session = RedditAgent(
+            config=self.config,
+            pipeline_run_id=pipeline_run.id,
+            session=session,
+            subreddit_name='test_subreddit'
+        )
+        agent_with_session.reddit = MagicMock()
 
-        # Mock subreddit.hot to return both posts
+        # Mock the subreddit to return our test posts
         mock_subreddit = MagicMock()
         mock_subreddit.hot.return_value = [mock_post1, mock_post2]
-        agent.reddit.subreddit.return_value = mock_subreddit
-
-        # Call _find_trending_post
-        result = await agent._find_trending_post()
-
-        # Verify that the second post was returned (first one was skipped)
-        self.assertEqual(result, mock_post2)
+        
+        # Mock the Reddit instance
+        agent_with_session.reddit.subreddit.return_value = mock_subreddit
+        
+        # Test that the method skips the already processed post
+        result = await agent_with_session._find_trending_post()
+        # Should return the second post since the first was already processed
+        self.assertEqual(result.id, 'test_post_id_2')
 
         # Cleanup
         session.close()
-        Base.metadata.drop_all(bind=engine)
+        Base.metadata.drop_all(bind=test_engine)
 
     @patch('app.zazzle_product_designer.ZazzleProductDesigner.create_product')
     async def test_get_product_info(self, mock_create_product):
@@ -425,54 +436,54 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
                 raise
 
     async def test_find_reddit_post_skips_stickied(self):
-        """Test that _find_trending_post skips stickied posts and returns the first non-stickied post."""
+        """Test that _find_trending_post skips stickied posts."""
         # Setup
-        mock_stickied_post = MagicMock()
-        mock_stickied_post.id = 'test_stickied_post_id'
-        mock_stickied_post.title = 'Test Stickied Post Title'
-        mock_stickied_post.url = 'https://reddit.com/test_stickied'
-        mock_stickied_post.permalink = '/r/test/789'
-        mock_stickied_post.subreddit.display_name = 'test_subreddit'
-        mock_stickied_post.selftext = 'Test Stickied Content'
-        mock_stickied_post.comment_summary = 'Test stickied comment summary'
-        mock_stickied_post.stickied = True
-        mock_stickied_post.created_utc = time.time()
+        mock_post1 = MagicMock()
+        mock_post1.id = 'test_post_id_1'
+        mock_post1.title = 'Test Post Title 1'
+        mock_post1.url = 'https://reddit.com/test1'
+        mock_post1.permalink = '/r/test/123'
+        mock_post1.subreddit.display_name = 'test_subreddit'
+        mock_post1.selftext = 'Test Content 1'
+        mock_post1.comment_summary = 'Test comment summary 1'
+        mock_post1.created_utc = time.time()
+        mock_post1.stickied = True  # This post is stickied
 
-        mock_normal_post = MagicMock()
-        mock_normal_post.id = 'test_normal_post_id'
-        mock_normal_post.title = 'Test Normal Post Title'
-        mock_normal_post.url = 'https://reddit.com/test_normal'
-        mock_normal_post.permalink = '/r/test/101'
-        mock_normal_post.subreddit.display_name = 'test_subreddit'
-        mock_normal_post.selftext = 'Test Normal Content'
-        mock_normal_post.comment_summary = 'Test normal comment summary'
-        mock_normal_post.stickied = False
-        mock_normal_post.created_utc = time.time()
+        mock_post2 = MagicMock()
+        mock_post2.id = 'test_post_id_2'
+        mock_post2.title = 'Test Post Title 2'
+        mock_post2.url = 'https://reddit.com/test2'
+        mock_post2.permalink = '/r/test/456'
+        mock_post2.subreddit.display_name = 'test_subreddit'
+        mock_post2.selftext = 'Test Content 2'
+        mock_post2.comment_summary = 'Test comment summary 2'
+        mock_post2.created_utc = time.time()
+        mock_post2.stickied = False  # This post is not stickied
 
         # Create a session
+        test_engine = get_test_engine()
         session = SessionLocal()
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=test_engine)
         pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value)
         session.add(pipeline_run)
         session.commit()
 
-        # Create agent with session
-        agent = RedditAgent(pipeline_run_id=pipeline_run.id, session=session)
-
-        # Mock subreddit.hot to return both posts
+        # Mock the subreddit to return our test posts
         mock_subreddit = MagicMock()
-        mock_subreddit.hot.return_value = [mock_stickied_post, mock_normal_post]
-        agent.reddit.subreddit.return_value = mock_subreddit
-
-        # Call _find_trending_post
-        result = await agent._find_trending_post()
-
-        # Verify that only the non-stickied post was returned
-        self.assertEqual(result, mock_normal_post)
+        mock_subreddit.hot.return_value = [mock_post1, mock_post2]
+        
+        # Mock the Reddit instance
+        self.reddit_agent.reddit.subreddit.return_value = mock_subreddit
+        
+        # Test that the method skips the stickied post
+        with patch.object(self.reddit_agent, '_find_trending_post', wraps=self.reddit_agent._find_trending_post):
+            result = await self.reddit_agent._find_trending_post()
+            # Should return the second post since the first was stickied
+            self.assertEqual(result.id, 'test_post_id_2')
 
         # Cleanup
         session.close()
-        Base.metadata.drop_all(bind=engine)
+        Base.metadata.drop_all(bind=test_engine)
 
     def test_pick_subreddit(self):
         """Test that pick_subreddit returns a valid subreddit from the available list."""

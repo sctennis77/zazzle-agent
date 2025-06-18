@@ -10,33 +10,51 @@ logger = logging.getLogger(__name__)
 # Get the absolute path to the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# Check if we're in testing mode
-if os.getenv('TESTING') == 'true':
-    # Use in-memory database for tests
-    DB_URL = 'sqlite:///:memory:'
-    logger.info("Using in-memory database for testing")
-else:
-    # Use file-based database for production
-    DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
-    DB_URL = os.getenv('DATABASE_URL', f'sqlite:///{DB_PATH}')
-    logger.info(f"Using database at: {DB_PATH}")
+def get_database_url():
+    """Get the appropriate database URL based on environment."""
+    if os.getenv('TESTING') == 'true':
+        # Use in-memory database for tests
+        logger.info("Using in-memory database for testing")
+        return 'sqlite:///:memory:'
+    else:
+        # Use file-based database for production
+        DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
+        DB_URL = os.getenv('DATABASE_URL', f'sqlite:///{DB_PATH}')
+        logger.info(f"Using database at: {DB_PATH}")
+        return DB_URL
 
-engine = create_engine(DB_URL, echo=False, future=True)
+def create_database_engine(database_url=None):
+    """Create a database engine with the given URL."""
+    if database_url is None:
+        database_url = get_database_url()
+    
+    engine = create_engine(database_url, echo=False, future=True)
+    
+    # Enable foreign key support for SQLite
+    def _fk_pragma_on_connect(dbapi_con, con_record):
+        dbapi_con.execute('PRAGMA foreign_keys=ON')
 
-# Enable foreign key support for SQLite
-def _fk_pragma_on_connect(dbapi_con, con_record):
-    dbapi_con.execute('PRAGMA foreign_keys=ON')
+    if database_url.startswith('sqlite'):
+        event.listen(engine, 'connect', _fk_pragma_on_connect)
+    
+    return engine
 
-if DB_URL.startswith('sqlite'):
-    event.listen(engine, 'connect', _fk_pragma_on_connect)
+# Create the main engine
+engine = create_database_engine()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_test_engine():
+    """Get a test-specific engine that uses in-memory database."""
+    test_engine = create_database_engine('sqlite:///:memory:')
+    return test_engine
 
 def init_db():
     """Initialize the database by creating all tables."""
     if os.getenv('TESTING') == 'true':
         logger.info("Initializing in-memory test database")
     else:
+        DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
         if not DB_PATH.exists():
             logger.info(f"Creating new database at {DB_PATH}")
         else:
