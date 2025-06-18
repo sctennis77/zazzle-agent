@@ -1,5 +1,24 @@
 # Zazzle Dynamic Product Generator
 
+## ⏰ **Current Status & Resume Note**
+
+**Last Updated:** December 2024  
+**Status:** Local containerized environment fully operational, ready for production deployment  
+**Next Steps:** Resolve OpenAI API quota issue (429 error) to complete end-to-end testing
+
+### **When Resuming:**
+1. **Check OpenAI API key/quota** - Current pipeline fails with "429 Too Many Requests"
+2. **Run pipeline test** - Verify affiliate links work correctly after fixing `.env` comment issue
+3. **Complete production deployment** - All infrastructure is ready, just need API quota resolved
+
+### **Recent Fixes:**
+- ✅ Fixed Zazzle affiliate ID issue (removed comment from `.env` file)
+- ✅ Containerized environment fully operational
+- ✅ Database connection issues resolved
+- ✅ All services healthy and communicating
+
+---
+
 ## Project Summary
 
 This project automates the creation of Zazzle products based on trending Reddit posts. It features a robust pipeline that:
