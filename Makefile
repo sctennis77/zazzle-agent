@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent
 
 help:
 	@echo "Available targets:"
@@ -49,6 +49,9 @@ help:
 	@echo "Logging & Debugging:"
 	@echo "  make logs-tail        - Tail the application logs"
 	@echo "  make logs-clear       - Clear application logs"
+	@echo ""
+	@echo "Interaction Agent:"
+	@echo "  make test-interaction-agent - Test the Reddit interaction agent"
 
 venv:
 	$(PYTHON) -m venv $(VENV_NAME)
@@ -242,6 +245,10 @@ logs-clear:
 	@rm -f app.log
 	@rm -f *.log
 	@echo "Logs cleared"
+
+test-interaction-agent:
+	@echo "Testing Reddit interaction agent..."
+	. $(VENV_NAME)/bin/activate && $(PYTHON) test_interaction_agent.py
 
 %::
 	@: 

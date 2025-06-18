@@ -36,6 +36,7 @@ class RedditPost(Base):
 
     pipeline_run = relationship('PipelineRun', back_populates='reddit_posts')
     products = relationship('ProductInfo', back_populates='reddit_post', cascade='all, delete-orphan')
+    interaction_actions = relationship('InteractionAgentAction', back_populates='reddit_post', cascade='all, delete-orphan')
 
 class ProductInfo(Base):
     __tablename__ = 'product_infos'
@@ -54,6 +55,7 @@ class ProductInfo(Base):
 
     pipeline_run = relationship('PipelineRun', back_populates='products')
     reddit_post = relationship('RedditPost', back_populates='products')
+    interaction_actions = relationship('InteractionAgentAction', back_populates='product_info', cascade='all, delete-orphan')
 
 class ErrorLog(Base):
     __tablename__ = 'error_logs'
@@ -67,4 +69,22 @@ class ErrorLog(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     severity = Column(String(16), default='ERROR', index=True)  # ERROR, WARNING, INFO
 
-    pipeline_run = relationship('PipelineRun', back_populates='errors') 
+    pipeline_run = relationship('PipelineRun', back_populates='errors')
+
+class InteractionAgentAction(Base):
+    __tablename__ = 'interaction_agent_actions'
+    id = Column(Integer, primary_key=True)
+    product_info_id = Column(Integer, ForeignKey('product_infos.id', ondelete='CASCADE'), nullable=False, index=True)
+    reddit_post_id = Column(Integer, ForeignKey('reddit_posts.id', ondelete='CASCADE'), nullable=False, index=True)
+    action_type = Column(String(32), index=True)  # upvote, downvote, reply
+    target_type = Column(String(32), index=True)  # post, comment
+    target_id = Column(String(32), index=True)  # Reddit post/comment ID
+    content = Column(Text, nullable=True)  # For replies
+    subreddit = Column(String(64), index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    success = Column(String(8), default='pending', index=True)  # pending, success, failed
+    error_message = Column(Text, nullable=True)
+    context_data = Column(JSON, nullable=True)  # Additional context data
+
+    product_info = relationship('ProductInfo', back_populates='interaction_actions')
+    reddit_post = relationship('RedditPost', back_populates='interaction_actions') 
