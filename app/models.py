@@ -569,4 +569,18 @@ class AffiliateLinker:
             product_url += '&'
             
         # Add tracking code and affiliate ID
-        return f"{product_url}rf={self.zazzle_affiliate_id}&tc={self.zazzle_tracking_code}" 
+        return f"{product_url}rf={self.zazzle_affiliate_id}&tc={self.zazzle_tracking_code}"
+
+class InteractionActionType(Enum):
+    UPVOTE = "upvote"
+    DOWNVOTE = "downvote"
+    REPLY = "reply"
+
+class InteractionTargetType(Enum):
+    POST = "post"
+    COMMENT = "comment"
+
+class InteractionActionStatus(Enum):
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed" 

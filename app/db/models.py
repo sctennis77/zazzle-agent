@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime, timezone
+from app.models import InteractionActionType, InteractionTargetType, InteractionActionStatus
 
 Base = declarative_base()
 
@@ -82,9 +83,33 @@ class InteractionAgentAction(Base):
     content = Column(Text, nullable=True)  # For replies
     subreddit = Column(String(64), index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-    success = Column(String(8), default='pending', index=True)  # pending, success, failed
+    success = Column(String(8), default=InteractionActionStatus.PENDING.value, index=True)  # pending, success, failed
     error_message = Column(Text, nullable=True)
     context_data = Column(JSON, nullable=True)  # Additional context data
 
     product_info = relationship('ProductInfo', back_populates='interaction_actions')
-    reddit_post = relationship('RedditPost', back_populates='interaction_actions') 
+    reddit_post = relationship('RedditPost', back_populates='interaction_actions')
+
+    @property
+    def action_type_enum(self) -> InteractionActionType:
+        return InteractionActionType(self.action_type)
+
+    @action_type_enum.setter
+    def action_type_enum(self, value: InteractionActionType):
+        self.action_type = value.value
+
+    @property
+    def target_type_enum(self) -> InteractionTargetType:
+        return InteractionTargetType(self.target_type)
+
+    @target_type_enum.setter
+    def target_type_enum(self, value: InteractionTargetType):
+        self.target_type = value.value
+
+    @property
+    def success_enum(self) -> InteractionActionStatus:
+        return InteractionActionStatus(self.success)
+
+    @success_enum.setter
+    def success_enum(self, value: InteractionActionStatus):
+        self.success = value.value 

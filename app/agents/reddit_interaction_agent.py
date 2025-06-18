@@ -14,7 +14,10 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 from app.clients.reddit_client import RedditClient
 from app.db.models import ProductInfo, RedditPost, InteractionAgentAction
-from app.models import GeneratedProductSchema, ProductInfoSchema, PipelineRunSchema, RedditPostSchema
+from app.models import (
+    GeneratedProductSchema, ProductInfoSchema, PipelineRunSchema, RedditPostSchema,
+    InteractionActionType, InteractionTargetType, InteractionActionStatus
+)
 from app.utils.logging_config import get_logger
 from app.db.database import SessionLocal
 
@@ -44,14 +47,14 @@ class RedditInteractionAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "upvote",
+                    "name": InteractionActionType.UPVOTE.value,
                     "description": "Upvote a Reddit post or comment",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "target_type": {
                                 "type": "string",
-                                "enum": ["post", "comment"],
+                                "enum": [InteractionTargetType.POST.value, InteractionTargetType.COMMENT.value],
                                 "description": "Whether to upvote a post or comment"
                             },
                             "target_id": {
@@ -70,14 +73,14 @@ class RedditInteractionAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "downvote",
+                    "name": InteractionActionType.DOWNVOTE.value,
                     "description": "Downvote a Reddit post or comment",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "target_type": {
                                 "type": "string",
-                                "enum": ["post", "comment"],
+                                "enum": [InteractionTargetType.POST.value, InteractionTargetType.COMMENT.value],
                                 "description": "Whether to downvote a post or comment"
                             },
                             "target_id": {
@@ -96,14 +99,14 @@ class RedditInteractionAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "reply",
+                    "name": InteractionActionType.REPLY.value,
                     "description": "Reply to a Reddit post or comment",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "target_type": {
                                 "type": "string",
-                                "enum": ["post", "comment"],
+                                "enum": [InteractionTargetType.POST.value, InteractionTargetType.COMMENT.value],
                                 "description": "Whether to reply to a post or comment"
                             },
                             "target_id": {
@@ -227,39 +230,31 @@ class RedditInteractionAgent:
             Dict containing the result of the action
         """
         try:
-            # Create action record
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
                 reddit_post_id=reddit_post_id,
-                action_type='upvote',
+                action_type=InteractionActionType.UPVOTE.value,
                 target_type=target_type,
                 target_id=target_id,
                 subreddit=subreddit,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.PENDING.value
             )
             self.session.add(action)
-            
-            # Execute the action
-            if target_type == 'post':
+            if target_type == InteractionTargetType.POST.value:
                 result = self.reddit_client.upvote_post(target_id)
             else:
                 result = self.reddit_client.upvote_comment(target_id)
-            
-            # Update action record
-            action.success = 'success'
+            action.success = InteractionActionStatus.SUCCESS.value
             action.context_data = result
             self.session.commit()
-            
             logger.info(f"Successfully upvoted {target_type} {target_id} in r/{subreddit}")
             return result
-            
         except Exception as e:
-            # Update action record with error
             if 'action' in locals():
-                action.success = 'failed'
+                action.success = InteractionActionStatus.FAILED.value
                 action.error_message = str(e)
                 self.session.commit()
-            
             logger.error(f"Error upvoting {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
@@ -278,39 +273,31 @@ class RedditInteractionAgent:
             Dict containing the result of the action
         """
         try:
-            # Create action record
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
                 reddit_post_id=reddit_post_id,
-                action_type='downvote',
+                action_type=InteractionActionType.DOWNVOTE.value,
                 target_type=target_type,
                 target_id=target_id,
                 subreddit=subreddit,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.PENDING.value
             )
             self.session.add(action)
-            
-            # Execute the action
-            if target_type == 'post':
+            if target_type == InteractionTargetType.POST.value:
                 result = self.reddit_client.downvote_post(target_id)
             else:
                 result = self.reddit_client.downvote_comment(target_id)
-            
-            # Update action record
-            action.success = 'success'
+            action.success = InteractionActionStatus.SUCCESS.value
             action.context_data = result
             self.session.commit()
-            
             logger.info(f"Successfully downvoted {target_type} {target_id} in r/{subreddit}")
             return result
-            
         except Exception as e:
-            # Update action record with error
             if 'action' in locals():
-                action.success = 'failed'
+                action.success = InteractionActionStatus.FAILED.value
                 action.error_message = str(e)
                 self.session.commit()
-            
             logger.error(f"Error downvoting {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
@@ -330,40 +317,32 @@ class RedditInteractionAgent:
             Dict containing the result of the action
         """
         try:
-            # Create action record
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
                 reddit_post_id=reddit_post_id,
-                action_type='reply',
+                action_type=InteractionActionType.REPLY.value,
                 target_type=target_type,
                 target_id=target_id,
                 content=content,
                 subreddit=subreddit,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.PENDING.value
             )
             self.session.add(action)
-            
-            # Execute the action
-            if target_type == 'post':
+            if target_type == InteractionTargetType.POST.value:
                 result = self.reddit_client.comment_on_post(target_id, content)
             else:
                 result = self.reddit_client.reply_to_comment(target_id, content)
-            
-            # Update action record
-            action.success = 'success'
+            action.success = InteractionActionStatus.SUCCESS.value
             action.context_data = result
             self.session.commit()
-            
             logger.info(f"Successfully replied to {target_type} {target_id} in r/{subreddit}")
             return result
-            
         except Exception as e:
-            # Update action record with error
             if 'action' in locals():
-                action.success = 'failed'
+                action.success = InteractionActionStatus.FAILED.value
                 action.error_message = str(e)
                 self.session.commit()
-            
             logger.error(f"Error replying to {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
