@@ -9,7 +9,7 @@ import praw
 from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DesignInstructions
 import pytest
 from unittest import IsolatedAsyncioTestCase
-from app.db.database import get_test_engine, SessionLocal, Base
+from app.db.database import SessionLocal, Base, engine
 from app.db.models import PipelineRun, RedditPost
 from datetime import datetime, timezone
 from app.pipeline_status import PipelineStatus
@@ -19,12 +19,10 @@ import time
 @pytest.fixture(autouse=True)
 def clean_db():
     """Ensure a clean database state before each test by dropping and recreating all tables."""
-    # Use test-specific engine to avoid affecting production database
-    test_engine = get_test_engine()
-    Base.metadata.drop_all(bind=test_engine)
-    Base.metadata.create_all(bind=test_engine)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.drop_all(bind=engine)
 
 class TestRedditInteractionAgent(IsolatedAsyncioTestCase):
     """Test cases for the Reddit Interaction Agent."""

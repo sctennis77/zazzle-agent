@@ -236,6 +236,10 @@ class Pipeline:
                 error_msg = f"No products were generated. pipeline_run_id: {pipeline_run.id}"
                 raise Exception(error_msg)
 
+            # Convert single product to list for consistency
+            if not isinstance(products, list):
+                products = [products]
+
             # Generate affiliate links for all products
             products_with_links = await self.affiliate_linker.generate_links_batch(products)
             if not products_with_links:

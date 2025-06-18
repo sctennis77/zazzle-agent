@@ -617,7 +617,24 @@ class RedditAgent:
             logger.error(f"Error in find_and_create_product: {str(e)}")
             return None
 
-    async def get_product_info(self, design_instructions: DesignInstructions) -> Optional[ProductInfo]:
+    async def get_product_info(self) -> List[ProductInfo]:
+        """
+        Get product information from Reddit content.
+        
+        Returns:
+            List[ProductInfo]: List of product information objects
+        """
+        try:
+            # Find a trending post and create a product
+            product_info = await self.find_and_create_product()
+            if product_info:
+                return [product_info]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting product info: {str(e)}")
+            return []
+
+    async def get_product_info_with_design(self, design_instructions: DesignInstructions) -> Optional[ProductInfo]:
         """
         Create a product using the provided design instructions.
         

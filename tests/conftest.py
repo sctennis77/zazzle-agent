@@ -1,16 +1,12 @@
-import os
 import pytest
+from unittest.mock import patch
 import shutil
 from pathlib import Path
 
-@pytest.fixture(scope="session", autouse=True)
-def set_testing_environment():
-    """Set the TESTING environment variable for all tests to use in-memory database."""
-    os.environ['TESTING'] = 'true'
-    yield
-    # Clean up after all tests
-    if 'TESTING' in os.environ:
-        del os.environ['TESTING']
+@pytest.fixture(autouse=True, scope="session")
+def patch_get_database_url():
+    with patch("app.db.database.get_database_url", return_value="sqlite:///:memory:"):
+        yield
 
 @pytest.fixture(scope="session")
 def test_output_dir(tmp_path_factory):
