@@ -44,6 +44,11 @@ async def startup_event():
     init_db()
     logger.info("Database initialized successfully!")
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker and Kubernetes."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 def model_to_dict(obj):
     if obj is None:
         return None

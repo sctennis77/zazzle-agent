@@ -17,11 +17,17 @@ def get_database_url():
         logger.info("Using in-memory database for testing")
         return 'sqlite:///:memory:'
     else:
-        # Use file-based database for production
-        DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
-        DB_URL = os.getenv('DATABASE_URL', f'sqlite:///{DB_PATH}')
-        logger.info(f"Using database at: {DB_PATH}")
-        return DB_URL
+        # Use the DATABASE_URL environment variable if set, otherwise use default path
+        DB_URL = os.getenv('DATABASE_URL')
+        if DB_URL:
+            logger.info(f"Using database URL from environment: {DB_URL}")
+            return DB_URL
+        else:
+            # Fallback to default path
+            DB_PATH = PROJECT_ROOT / 'zazzle_pipeline.db'
+            DB_URL = f'sqlite:///{DB_PATH}'
+            logger.info(f"Using default database at: {DB_PATH}")
+            return DB_URL
 
 def create_database_engine(database_url=None):
     """Create a database engine with the given URL."""

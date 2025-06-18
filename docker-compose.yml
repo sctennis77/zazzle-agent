@@ -11,7 +11,8 @@ services:
         apk add --no-cache sqlite &&
         mkdir -p /app/data &&
         touch /app/data/zazzle_pipeline.db &&
-        chmod 666 /app/data/zazzle_pipeline.db &&
+        chmod 777 /app/data/zazzle_pipeline.db &&
+        chown 1000:1000 /app/data/zazzle_pipeline.db &&
         tail -f /dev/null
       "
     healthcheck:
@@ -30,7 +31,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///app/data/zazzle_pipeline.db
+      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
@@ -54,7 +55,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://api:8000
     depends_on:
       api:
         condition: service_healthy
