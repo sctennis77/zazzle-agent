@@ -102,6 +102,69 @@ def test_new_tools():
     except Exception as e:
         print(f"❌ generate_non_marketing_reply test failed: {e}")
 
+    print("\n7. Testing generate_marketing_reply...")
+    try:
+        # Test the marketing reply generation
+        reddit_context = "This is a test post about vehicle speed estimation from camera feeds. The OP is asking for help with their physics project."
+        result = agent.generate_marketing_reply(str(product_id), reddit_context)
+        print(f"✅ generate_marketing_reply result: {result[:100]}...")
+        
+        # Check if it's available again (should not be)
+        is_available = agent.is_action_available(product_id, InteractionActionType.GENERATE_MARKETING_REPLY.value)
+        print(f"✅ Marketing reply generation still available: {is_available}")
+        
+    except Exception as e:
+        print(f"❌ generate_marketing_reply test failed: {e}")
+
+    print("\n8. Testing marketing_reply tool...")
+    try:
+        # Test the marketing_reply tool (direct reply with content)
+        test_content = "This is a test marketing reply with product content! Check out our amazing products."
+        result = agent.marketing_reply("post", "1leg4ab", test_content, "Physics", product_id, reddit_post_id)
+        print(f"✅ marketing_reply result: {result}")
+        
+        # Check if it's available again (should not be)
+        is_available = agent.is_action_available(product_id, InteractionActionType.MARKETING_REPLY.value)
+        print(f"✅ Marketing reply still available: {is_available}")
+        
+    except Exception as e:
+        print(f"❌ marketing_reply test failed: {e}")
+
+    print("\n9. Testing non_marketing_reply tool...")
+    try:
+        # Test the non_marketing_reply tool (direct reply with fun content)
+        test_content = "This is a fun, engaging reply without any product promotion! Just being friendly and helpful."
+        result = agent.non_marketing_reply("post", "1leg4ab", test_content, "Physics", product_id, reddit_post_id)
+        print(f"✅ non_marketing_reply result: {result}")
+        
+        # Check remaining count (should be 2 now, since we used 1)
+        available_actions = agent.calculate_available_actions(product_id)
+        remaining = available_actions.get(InteractionActionType.NON_MARKETING_REPLY.value, 0)
+        print(f"✅ Non-marketing replies remaining: {remaining}")
+        
+    except Exception as e:
+        print(f"❌ non_marketing_reply test failed: {e}")
+
+    print("\n10. Testing action limits enforcement...")
+    try:
+        # Try to use marketing_reply again (should fail)
+        test_content = "This should fail because marketing_reply was already used."
+        result = agent.marketing_reply("post", "1leg4ab", test_content, "Physics", product_id, reddit_post_id)
+        if 'error' in result:
+            print(f"✅ marketing_reply limit enforced: {result['error']}")
+        else:
+            print(f"❌ marketing_reply limit not enforced: {result}")
+            
+        # Try to use generate_marketing_reply again (should fail)
+        result = agent.generate_marketing_reply(str(product_id), "test context")
+        if "already generated" in result:
+            print(f"✅ generate_marketing_reply limit enforced: {result[:50]}...")
+        else:
+            print(f"❌ generate_marketing_reply limit not enforced: {result}")
+            
+    except Exception as e:
+        print(f"❌ Action limits test failed: {e}")
+
     print("\n✅ All tests completed!")
 
 

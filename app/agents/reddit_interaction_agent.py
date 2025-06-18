@@ -483,9 +483,9 @@ class RedditInteractionAgent:
             logger.error(f"Error downvoting {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
-    def reply(self, target_type: str, target_id: str, content: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
+    def marketing_reply(self, target_type: str, target_id: str, content: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
         """
-        Reply to a Reddit post or comment.
+        Reply to a Reddit post or comment with product content (marketing reply).
         
         Args:
             target_type: 'post' or 'comment'
@@ -498,15 +498,15 @@ class RedditInteractionAgent:
         Returns:
             Dict containing the result of the action
         """
-        # Check if reply action is still available
-        if not self.is_action_available(product_info_id, InteractionActionType.REPLY.value):
-            return {'error': 'Reply action has already been performed for this product'}
+        # Check if marketing_reply action is still available
+        if not self.is_action_available(product_info_id, InteractionActionType.MARKETING_REPLY.value):
+            return {'error': 'Marketing reply action has already been performed for this product'}
         
         try:
             action = InteractionAgentAction(
                 product_info_id=product_info_id,
                 reddit_post_id=reddit_post_id,
-                action_type=InteractionActionType.REPLY.value,
+                action_type=InteractionActionType.MARKETING_REPLY.value,
                 target_type=target_type,
                 target_id=target_id,
                 content=content,
@@ -522,14 +522,63 @@ class RedditInteractionAgent:
             action.success = InteractionActionStatus.SUCCESS.value
             action.context_data = result
             self.session.commit()
-            logger.info(f"Successfully replied to {target_type} {target_id} in r/{subreddit}")
+            logger.info(f"Successfully marketing replied to {target_type} {target_id} in r/{subreddit}")
             return result
         except Exception as e:
             if 'action' in locals():
                 action.success = InteractionActionStatus.FAILED.value
                 action.error_message = str(e)
                 self.session.commit()
-            logger.error(f"Error replying to {target_type} {target_id}: {str(e)}")
+            logger.error(f"Error marketing replying to {target_type} {target_id}: {str(e)}")
+            return {'error': str(e)}
+
+    def non_marketing_reply(self, target_type: str, target_id: str, content: str, subreddit: str, product_info_id: int, reddit_post_id: int) -> Dict[str, Any]:
+        """
+        Reply to a Reddit post or comment with a fun/engaging, non-marketing reply.
+        
+        Args:
+            target_type: 'post' or 'comment'
+            target_id: Reddit post/comment ID
+            content: Reply content
+            subreddit: Subreddit name
+            product_info_id: Database product info ID
+            reddit_post_id: Database reddit post ID
+            
+        Returns:
+            Dict containing the result of the action
+        """
+        # Check if non_marketing_reply action is still available (limit 3)
+        if not self.is_action_available(product_info_id, InteractionActionType.NON_MARKETING_REPLY.value):
+            return {'error': 'Non-marketing reply action limit reached for this product'}
+        
+        try:
+            action = InteractionAgentAction(
+                product_info_id=product_info_id,
+                reddit_post_id=reddit_post_id,
+                action_type=InteractionActionType.NON_MARKETING_REPLY.value,
+                target_type=target_type,
+                target_id=target_id,
+                content=content,
+                subreddit=subreddit,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.PENDING.value
+            )
+            self.session.add(action)
+            if target_type == InteractionTargetType.POST.value:
+                result = self.reddit_client.comment_on_post(target_id, content)
+            else:
+                result = self.reddit_client.reply_to_comment(target_id, content)
+            action.success = InteractionActionStatus.SUCCESS.value
+            action.context_data = result
+            self.session.commit()
+            logger.info(f"Successfully non-marketing replied to {target_type} {target_id} in r/{subreddit}")
+            return result
+        except Exception as e:
+            if 'action' in locals():
+                action.success = InteractionActionStatus.FAILED.value
+                action.error_message = str(e)
+                self.session.commit()
+            logger.error(f"Error non-marketing replying to {target_type} {target_id}: {str(e)}")
             return {'error': str(e)}
     
     def generate_marketing_reply(self, product_info_id: str, reddit_context: str) -> str:
