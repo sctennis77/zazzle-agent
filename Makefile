@@ -2,7 +2,7 @@ VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status
 
 help:
 	@echo "Available targets:"
@@ -29,6 +29,14 @@ help:
 	@echo "  make alembic-revision - Generate a new Alembic migration revision"
 	@echo "  make alembic-upgrade  - Upgrade the database to the latest migration"
 	@echo "  make alembic-downgrade - Downgrade the database to the previous migration"
+	@echo ""
+	@echo "🆕 Complete Environment Setup:"
+	@echo "  make full_from_fresh_env - Complete fresh setup: clean, install, test, start services"
+	@echo "  make dev_setup          - Quick development setup (preserves existing env)"
+	@echo "  make start-services     - Start API and frontend services"
+	@echo "  make stop-services      - Stop all services"
+	@echo "  make restart-services   - Restart all services"
+	@echo "  make status             - Check system status and health"
 	@echo ""
 	@echo "Database & Monitoring:"
 	@echo "  make check-db         - Check database contents and pipeline runs"
@@ -254,6 +262,171 @@ test-interaction-agent:
 create-test-db:
 	@echo "Creating test database with sample data..."
 	. $(VENV_NAME)/bin/activate && python3 scripts/create_test_db.py
+
+# =====================
+# Complete Fresh Environment Setup
+# =====================
+
+full_from_fresh_env:
+	@echo "🚀 Starting complete fresh environment setup..."
+	@echo "=================================================="
+	@echo "Step 1: Stopping existing services..."
+	@make stop-api
+	@pkill -f "npm run dev" || true
+	@echo "✅ Services stopped"
+	@echo ""
+	@echo "Step 2: Cleaning environment..."
+	@make clean
+	@echo "✅ Environment cleaned"
+	@echo ""
+	@echo "Step 3: Installing dependencies..."
+	@make install
+	@echo "✅ Dependencies installed"
+	@echo ""
+	@echo "Step 4: Running full test suite..."
+	@make test
+	@echo "✅ Tests completed"
+	@echo ""
+	@echo "Step 5: Testing interaction agent..."
+	@make test-interaction-agent
+	@echo "✅ Interaction agent tested"
+	@echo ""
+	@echo "Step 6: Starting API server (background)..."
+	@make run-api &
+	@echo "⏳ Waiting for API to start..."
+	@sleep 10
+	@echo "✅ API server started"
+	@echo ""
+	@echo "Step 7: Starting frontend (background)..."
+	@cd frontend && npm run dev &
+	@echo "⏳ Waiting for frontend to start..."
+	@sleep 5
+	@echo "✅ Frontend started"
+	@echo ""
+	@echo "Step 8: Verifying services..."
+	@echo "🔍 Checking API health..."
+	@curl -s http://localhost:8000/api/generated_products > /dev/null && echo "✅ API responding" || echo "⚠️  API may still be starting"
+	@echo "🔍 Checking frontend..."
+	@curl -s http://localhost:5173 > /dev/null && echo "✅ Frontend responding" || echo "⚠️  Frontend may still be starting"
+	@echo ""
+	@echo "🎉 Fresh environment setup complete!"
+	@echo "=================================================="
+	@echo "📊 Services Status:"
+	@echo "   • API Server: http://localhost:8000"
+	@echo "   • Frontend: http://localhost:5173"
+	@echo "   • Database: zazzle_pipeline.db"
+	@echo ""
+	@echo "🔧 Available commands:"
+	@echo "   • make run-full - Run the complete pipeline"
+	@echo "   • make test - Run tests"
+	@echo "   • make stop-api - Stop API server"
+	@echo "   • make frontend-dev - Start frontend dev server"
+	@echo "   • make test-interaction-agent - Test interaction agent"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "   1. Open http://localhost:5173 in your browser"
+	@echo "   2. Run 'make run-full' to generate a new product"
+	@echo "   3. Use the interaction agent to engage with products"
+	@echo ""
+
+# =====================
+# Quick Development Setup (without full cleanup)
+# =====================
+
+dev_setup:
+	@echo "⚡ Quick development setup..."
+	@echo "=================================================="
+	@echo "Step 1: Installing dependencies (if needed)..."
+	@if [ ! -d "$(VENV_NAME)" ]; then \
+		echo "Creating virtual environment..."; \
+		make install; \
+	else \
+		echo "Virtual environment already exists"; \
+	fi
+	@echo ""
+	@echo "Step 2: Running tests..."
+	@make test
+	@echo "✅ Tests completed"
+	@echo ""
+	@echo "Step 3: Starting services..."
+	@make run-api &
+	@cd frontend && npm run dev &
+	@echo "⏳ Services starting..."
+	@sleep 5
+	@echo "✅ Services started"
+	@echo ""
+	@echo "🎉 Development setup complete!"
+	@echo "   • API: http://localhost:8000"
+	@echo "   • Frontend: http://localhost:5173"
+
+# =====================
+# Service Management
+# =====================
+
+start-services:
+	@echo "🚀 Starting all services..."
+	@make run-api &
+	@cd frontend && npm run dev &
+	@echo "⏳ Services starting..."
+	@sleep 5
+	@echo "✅ All services started"
+	@echo "   • API: http://localhost:8000"
+	@echo "   • Frontend: http://localhost:5173"
+
+stop-services:
+	@echo "🛑 Stopping all services..."
+	@make stop-api
+	@pkill -f "npm run dev" || true
+	@echo "✅ All services stopped"
+
+restart-services:
+	@echo "🔄 Restarting all services..."
+	@make stop-services
+	@sleep 2
+	@make start-services
+
+# =====================
+# Health Check and Status
+# =====================
+
+status:
+	@echo "📊 System Status Check"
+	@echo "=================================================="
+	@echo "🔍 Checking API server..."
+	@if curl -s http://localhost:8000/api/generated_products > /dev/null; then \
+		echo "✅ API Server: RUNNING (http://localhost:8000)"; \
+	else \
+		echo "❌ API Server: NOT RUNNING"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking frontend..."
+	@if curl -s http://localhost:5173 > /dev/null; then \
+		echo "✅ Frontend: RUNNING (http://localhost:5173)"; \
+	else \
+		echo "❌ Frontend: NOT RUNNING"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking database..."
+	@if [ -f "zazzle_pipeline.db" ]; then \
+		echo "✅ Database: EXISTS (zazzle_pipeline.db)"; \
+		ls -lh zazzle_pipeline.db; \
+	else \
+		echo "❌ Database: NOT FOUND"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking virtual environment..."
+	@if [ -d "$(VENV_NAME)" ]; then \
+		echo "✅ Virtual Environment: EXISTS ($(VENV_NAME))"; \
+	else \
+		echo "❌ Virtual Environment: NOT FOUND"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking frontend dependencies..."
+	@if [ -d "frontend/node_modules" ]; then \
+		echo "✅ Frontend Dependencies: INSTALLED"; \
+	else \
+		echo "❌ Frontend Dependencies: NOT INSTALLED"; \
+	fi
 
 %::
 	@: 
