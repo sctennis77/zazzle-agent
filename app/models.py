@@ -576,8 +576,10 @@ class AffiliateLinker:
 class InteractionActionType(Enum):
     UPVOTE = "upvote"
     DOWNVOTE = "downvote"
-    REPLY = "reply"
+    MARKETING_REPLY = "marketing_reply"
+    NON_MARKETING_REPLY = "non_marketing_reply"
     GENERATE_MARKETING_REPLY = "generate_marketing_reply"
+    GENERATE_NON_MARKETING_REPLY = "generate_non_marketing_reply"
     GET_POST_CONTEXT = "get_post_context"
     GET_COMMENT_CONTEXT = "get_comment_context"
 

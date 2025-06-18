@@ -99,28 +99,32 @@ class RedditInteractionAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": InteractionActionType.REPLY.value,
-                    "description": "Reply to a Reddit post or comment",
+                    "name": "marketing_reply",
+                    "description": "Reply to a post or comment with product content (marketing reply, limit 1)",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "target_type": {
-                                "type": "string",
-                                "enum": [InteractionTargetType.POST.value, InteractionTargetType.COMMENT.value],
-                                "description": "Whether to reply to a post or comment"
-                            },
-                            "target_id": {
-                                "type": "string",
-                                "description": "The Reddit post ID or comment ID to reply to"
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "The content of the reply"
-                            },
-                            "subreddit": {
-                                "type": "string",
-                                "description": "The subreddit where the target is located"
-                            }
+                            "target_type": {"type": "string", "description": "'post' or 'comment'"},
+                            "target_id": {"type": "string", "description": "Reddit post/comment ID"},
+                            "content": {"type": "string", "description": "Reply content"},
+                            "subreddit": {"type": "string", "description": "Subreddit name"}
+                        },
+                        "required": ["target_type", "target_id", "content", "subreddit"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "non_marketing_reply",
+                    "description": "Reply to a post or comment with a fun/engaging, non-marketing reply (limit 3)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_type": {"type": "string", "description": "'post' or 'comment'"},
+                            "target_id": {"type": "string", "description": "Reddit post/comment ID"},
+                            "content": {"type": "string", "description": "Reply content"},
+                            "subreddit": {"type": "string", "description": "Subreddit name"}
                         },
                         "required": ["target_type", "target_id", "content", "subreddit"]
                     }
@@ -154,6 +158,27 @@ class RedditInteractionAgent:
                             "product_info_id": {
                                 "type": "string",
                                 "description": "The ID of the product to promote in the reply"
+                            },
+                            "reddit_context": {
+                                "type": "string",
+                                "description": "Context about the Reddit post/comment being replied to"
+                            }
+                        },
+                        "required": ["product_info_id", "reddit_context"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_non_marketing_reply",
+                    "description": "Generate an engaging, fun reply that makes the agent more likeable without promoting products",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "product_info_id": {
+                                "type": "string",
+                                "description": "The ID of the product context (for tracking purposes)"
                             },
                             "reddit_context": {
                                 "type": "string",
@@ -284,12 +309,14 @@ class RedditInteractionAgent:
             
             # Define limits for each action type
             action_limits = {
-                InteractionActionType.UPVOTE.value: 1,      # Only upvote once
-                InteractionActionType.DOWNVOTE.value: 1,    # Only downvote once
-                InteractionActionType.REPLY.value: 1,       # Only reply with content once
-                InteractionActionType.GENERATE_MARKETING_REPLY.value: 1,  # Only generate marketing reply once
-                InteractionActionType.GET_POST_CONTEXT.value: 5,    # Can get context multiple times
-                InteractionActionType.GET_COMMENT_CONTEXT.value: 5  # Can get context multiple times
+                InteractionActionType.UPVOTE.value: 1,
+                InteractionActionType.DOWNVOTE.value: 1,
+                InteractionActionType.MARKETING_REPLY.value: 1,  # Only marketing reply once
+                InteractionActionType.NON_MARKETING_REPLY.value: 3,  # Up to 3 non-marketing replies
+                InteractionActionType.GENERATE_MARKETING_REPLY.value: 1,
+                InteractionActionType.GENERATE_NON_MARKETING_REPLY.value: 1,
+                InteractionActionType.GET_POST_CONTEXT.value: 5,
+                InteractionActionType.GET_COMMENT_CONTEXT.value: 5
             }
             
             # Calculate remaining actions
@@ -743,9 +770,11 @@ class RedditInteractionAgent:
         
         action_descriptions = {
             InteractionActionType.UPVOTE.value: "upvote",
-            InteractionActionType.DOWNVOTE.value: "downvote", 
-            InteractionActionType.REPLY.value: "reply with content",
+            InteractionActionType.DOWNVOTE.value: "downvote",
+            InteractionActionType.MARKETING_REPLY.value: "marketing reply (product content)",
+            InteractionActionType.NON_MARKETING_REPLY.value: "non-marketing reply (fun/engaging)",
             InteractionActionType.GENERATE_MARKETING_REPLY.value: "generate marketing reply",
+            InteractionActionType.GENERATE_NON_MARKETING_REPLY.value: "generate non-marketing reply",
             InteractionActionType.GET_POST_CONTEXT.value: "get post context",
             InteractionActionType.GET_COMMENT_CONTEXT.value: "get comment context"
         }
@@ -805,9 +834,11 @@ class RedditInteractionAgent:
             Available tools:
             - upvote: Upvote a post or comment (only if upvote action is available)
             - downvote: Downvote a post or comment (only if downvote action is available)
-            - reply: Reply to a post or comment (only if reply action is available)
+            - marketing_reply: Reply to a post or comment with product content (only if marketing_reply action is available)
+            - non_marketing_reply: Reply to a post or comment with a fun/engaging, non-marketing reply (only if non_marketing_reply action is available)
             - fetch_generated_product: Get product details with available actions
             - generate_marketing_reply: Generate a witty, in-context reply with product marketing info (only if generate_marketing_reply action is available)
+            - generate_non_marketing_reply: Generate an engaging, fun reply without product promotion (only if generate_non_marketing_reply action is available)
             
             IMPORTANT: Only perform actions that are still available for this product. Check the available actions list above.
             If an action has already been performed, suggest alternative actions or explain why it's not available.
@@ -877,8 +908,17 @@ Use the available tools to interact with Reddit content. Be strategic about when
                                 product_info_id,
                                 reddit_post_id
                             )
-                        elif function_name == 'reply':
-                            result = self.reply(
+                        elif function_name == 'marketing_reply':
+                            result = self.marketing_reply(
+                                args['target_type'], 
+                                args['target_id'], 
+                                args['content'],
+                                args['subreddit'],
+                                product_info_id,
+                                reddit_post_id
+                            )
+                        elif function_name == 'non_marketing_reply':
+                            result = self.non_marketing_reply(
                                 args['target_type'], 
                                 args['target_id'], 
                                 args['content'],
@@ -890,6 +930,8 @@ Use the available tools to interact with Reddit content. Be strategic about when
                             result = self.fetch_generated_product(args['product_id'])
                         elif function_name == 'generate_marketing_reply':
                             result = self.generate_marketing_reply(args['product_info_id'], args['reddit_context'])
+                        elif function_name == 'generate_non_marketing_reply':
+                            result = self.generate_non_marketing_reply(args['product_info_id'], args['reddit_context'])
                         elif function_name == 'get_post_context':
                             result = self.get_post_context(args['post_id'], product_info_id, reddit_post_id)
                         elif function_name == 'get_comment_context':
@@ -917,3 +959,115 @@ Use the available tools to interact with Reddit content. Be strategic about when
         """Close the database session."""
         if self.session:
             self.session.close()
+
+    def generate_non_marketing_reply(self, product_info_id: str, reddit_context: str) -> str:
+        """
+        Generate an engaging, fun reply that makes the agent more likeable without promoting products.
+        """
+        from app.models import InteractionActionType, InteractionActionStatus, InteractionTargetType
+        
+        # Check if generate_non_marketing_reply action is still available
+        if not self.is_action_available(int(product_info_id), InteractionActionType.GENERATE_NON_MARKETING_REPLY.value):
+            return "I've already shared my thoughts on this! Let me engage in other ways! 🐕"
+        
+        try:
+            # Fetch product from database for context
+            product = self.session.query(ProductInfo).filter_by(id=product_info_id).first()
+            if not product:
+                # Log failed action
+                action = InteractionAgentAction(
+                    product_info_id=product_info_id,
+                    reddit_post_id=product.reddit_post_id if product else None,
+                    action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
+                    target_type=InteractionTargetType.POST.value,
+                    target_id=None,
+                    content=None,
+                    subreddit=product.reddit_post.subreddit if product and product.reddit_post else None,
+                    timestamp=datetime.now(timezone.utc),
+                    success=InteractionActionStatus.FAILED.value,
+                    error_message="Product not found",
+                    context_data={"reddit_context": reddit_context}
+                )
+                self.session.add(action)
+                self.session.commit()
+                return "I'd love to chat, but I can't find the right context right now! 🐕"
+            
+            # Create prompt for non-marketing reply
+            prompt = f"""
+            You are a friendly, engaging Reddit user who loves to participate in discussions. 
+            You want to be likeable and contribute positively to the conversation.
+            
+            Reddit Context: {reddit_context}
+            
+            Product Theme (for context only, DO NOT promote): {product.theme}
+            Subreddit: r/{product.reddit_post.subreddit if product.reddit_post else 'unknown'}
+            
+            Generate a fun, engaging reply that:
+            1. Shows genuine interest in the topic
+            2. Adds value to the discussion
+            3. Uses humor or wit when appropriate
+            4. Makes you seem likeable and approachable
+            5. Does NOT mention or promote any products
+            6. Feels natural and conversational
+            7. Uses emojis sparingly but effectively
+            8. Relates to the product theme if relevant, but doesn't promote it
+            
+            Keep it under 200 words and make it feel like a real person's comment.
+            """
+            
+            # Generate reply using OpenAI
+            response = self.openai.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a friendly, engaging Reddit user who loves to participate in discussions. You want to be likeable and contribute positively to conversations."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.8
+            )
+            
+            reply_text = response.choices[0].message.content.strip()
+            
+            # Ensure no product promotion in the reply
+            if product.affiliate_link and product.affiliate_link in reply_text:
+                reply_text = reply_text.replace(product.affiliate_link, "")
+            if product.theme and f"Check out this {product.theme}" in reply_text:
+                reply_text = reply_text.replace(f"Check out this {product.theme}", "")
+            
+            # Log successful action
+            action = InteractionAgentAction(
+                product_info_id=product.id,
+                reddit_post_id=product.reddit_post_id,
+                action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
+                target_type=InteractionTargetType.POST.value,
+                target_id=None,
+                content=reply_text,
+                subreddit=product.reddit_post.subreddit if product.reddit_post else None,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.SUCCESS.value,
+                error_message=None,
+                context_data={"reddit_context": reddit_context}
+            )
+            self.session.add(action)
+            self.session.commit()
+            return reply_text
+            
+        except Exception as e:
+            logger.error(f"Error generating non-marketing reply: {str(e)}")
+            # Log failed action
+            action = InteractionAgentAction(
+                product_info_id=product_info_id,
+                reddit_post_id=product.reddit_post_id if 'product' in locals() and product else None,
+                action_type=InteractionActionType.GENERATE_NON_MARKETING_REPLY.value,
+                target_type=InteractionTargetType.POST.value,
+                target_id=None,
+                content=None,
+                subreddit=product.reddit_post.subreddit if 'product' in locals() and product and product.reddit_post else None,
+                timestamp=datetime.now(timezone.utc),
+                success=InteractionActionStatus.FAILED.value,
+                error_message=str(e),
+                context_data={"reddit_context": reddit_context}
+            )
+            self.session.add(action)
+            self.session.commit()
+            return "Woof! I'd love to chat, but I'm having a moment. Maybe next time! 🐕✨"

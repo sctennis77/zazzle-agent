@@ -13,7 +13,7 @@ from app.db.models import ProductInfo
 # Hardcode the test database URL
 os.environ['DATABASE_URL'] = 'sqlite:///test_interaction_agent.db'
 os.environ['REDDIT_MODE'] = 'dryrun'
-os.environ['OPENAI_API_KEY'] = 'test-key'
+# Use the real OpenAI API key from environment instead of overriding
 
 
 def get_test_product_data():
@@ -87,6 +87,20 @@ def test_new_tools():
         
     except Exception as e:
         print(f"❌ Available actions test failed: {e}")
+
+    print("\n6. Testing generate_non_marketing_reply...")
+    try:
+        # Test the new non-marketing reply generation
+        reddit_context = "This is a test post about vehicle speed estimation from camera feeds. The OP is asking for help with their physics project."
+        result = agent.generate_non_marketing_reply(str(product_id), reddit_context)
+        print(f"✅ generate_non_marketing_reply result: {result[:100]}...")
+        
+        # Check if it's available again (should not be)
+        is_available = agent.is_action_available(product_id, InteractionActionType.GENERATE_NON_MARKETING_REPLY.value)
+        print(f"✅ Non-marketing reply still available: {is_available}")
+        
+    except Exception as e:
+        print(f"❌ generate_non_marketing_reply test failed: {e}")
 
     print("\n✅ All tests completed!")
 
