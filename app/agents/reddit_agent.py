@@ -791,9 +791,6 @@ class RedditAgent:
         """
         reddit_post_id = None
         if self.session and self.pipeline_run_id:
-            logger.warning(
-                f"[DEBUG] In save_reddit_context_to_db: self.session is set (type: {type(self.session)})"
-            )
             try:
                 orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
                 self.session.add(orm_post)
@@ -805,9 +802,7 @@ class RedditAgent:
                 self.session.rollback()
                 return None
         else:
-            logger.warning(
-                f"[DEBUG] In save_reddit_context_to_db: self.session is None"
-            )
+            logger.warning("No session or pipeline_run_id available for saving RedditPost")
         return reddit_post_id
 
     async def _find_trending_post(self, tries: int = 3, limit: int = 50):
@@ -816,9 +811,6 @@ class RedditAgent:
         Skips posts that are stickied, too old, or already present in the database (by post_id).
         Returns the first valid post or None if none are found.
         """
-        logger.warning(
-            f"[DEBUG] At start of _find_trending_post: self.session is {'set' if self.session else 'None'} (type: {type(self.session)})"
-        )
         logger.info(
             f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
         )
@@ -830,28 +822,17 @@ class RedditAgent:
                         f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )
                     if submission.stickied:
-                        print("Skipping: stickied")
                         continue
                     if (
                         datetime.now(timezone.utc)
                         - datetime.fromtimestamp(submission.created_utc, timezone.utc)
                     ).days > 2:
-                        print("Skipping: too old")
                         continue
                     if not submission.selftext:
-                        print("Skipping: no selftext")
                         continue
 
                     # Debug: Print all post_ids in the DB and session info
                     if self.session:
-                        all_posts = self.session.query(RedditPost).all()
-                        logger.info(
-                            f"[DEBUG] All post_ids in DB: {[repr(p.post_id) for p in all_posts]}"
-                        )
-                        logger.info(
-                            f"[DEBUG] Checking for post_id: {repr(submission.id)}"
-                        )
-                        logger.info(f"[DEBUG] Session info: {self.session}")
                         existing_post = (
                             self.session.query(RedditPost)
                             .filter_by(post_id=submission.id)
@@ -893,7 +874,6 @@ class RedditAgent:
                         comment_summary = "No comments available."
                     # Add comment summary to submission
                     submission.comment_summary = comment_summary
-                    print("Returning submission:", submission.title)
                     return submission
                 # If we reach here, no suitable post was found in this attempt
                 logger.info(
@@ -902,5 +882,4 @@ class RedditAgent:
             return None
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
-            print(f"Exception in _find_trending_post: {e}")
             return None

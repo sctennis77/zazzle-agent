@@ -87,13 +87,10 @@ class ImgurClient:
         save_dir.mkdir(parents=True, exist_ok=True)
         file_path = save_dir / filename
         abs_path = file_path.resolve()
-        print(f"DEBUG: file_path={file_path}")
-        print(f"DEBUG: abs_path={abs_path}")
         try:
             with open(abs_path, "wb") as f:
                 f.write(image_data)
             logger.info(f"Image saved locally: {abs_path}")
-            print(f"DEBUG: returning abs_path={abs_path}")
             return str(abs_path)
         except IOError as e:
             logger.error(f"Error saving image locally to {abs_path}: {e}")

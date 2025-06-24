@@ -166,6 +166,6 @@ def get_product_template(product_type: str) -> Optional[ZazzleTemplateConfig]:
         ...     print(f"Found template: {template.product_type}")
     """
     for template in ALL_TEMPLATES:
-        if template.product_type.lower() == product_type.lower():
+        if template.product_type == product_type:
             return template
     return None

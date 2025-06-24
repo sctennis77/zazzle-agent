@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaExpand, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
+import { FaExpand } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {

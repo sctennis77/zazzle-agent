@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaReddit, FaExternalLinkAlt, FaCalendarAlt, FaTag, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
+import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
