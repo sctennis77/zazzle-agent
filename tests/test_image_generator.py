@@ -67,15 +67,25 @@ class TestImageGenerator(IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         """Set up test fixtures."""
-        # Mock OpenAI client
+        # Patch OpenAI client
         self.mock_openai = patch("openai.OpenAI").start()
         self.mock_openai_instance = MagicMock()
         self.mock_openai.return_value = self.mock_openai_instance
 
-        # Mock ImgurClient
+        # Patch ImgurClient
         self.mock_imgur = patch("app.clients.imgur_client.ImgurClient").start()
         self.mock_imgur_instance = MagicMock()
         self.mock_imgur.return_value = self.mock_imgur_instance
+
+        # Patch ImgurClient methods to prevent real HTTP requests
+        self.mock_imgur_save = patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png").start()
+        self.mock_imgur_upload = patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")).start()
+
+        # Patch OpenAI usage tracker methods
+        self.usage_patcher1 = patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None)
+        self.usage_patcher2 = patch("app.utils.openai_usage_tracker.OpenAIUsageTracker._log_usage_summary", lambda *a, **kw: None)
+        self.usage_patcher1.start()
+        self.usage_patcher2.start()
 
         self.image_generator = ImageGenerator()
 
@@ -100,26 +110,26 @@ class TestImageGenerator(IsolatedAsyncioTestCase):
         # Test DALL-E 2
         image_generator = ImageGenerator(model="dall-e-2")
         prompt_info = image_generator.get_prompt_info()
-        assert prompt_info["version"] == "1.0.0"
+        assert prompt_info["version"] == "1.0.1"
         assert (
-            "Create a square (1:1) image optimized for a 3-inch circular"
+            "picture books and your 1024x1024 image size"
             in prompt_info["prompt"]
         )
         assert (
-            "Style should be inspired by impressionist painters"
+            "Style and composition inspired by impressionist painters"
             in prompt_info["prompt"]
         )
 
         # Test DALL-E 3
         image_generator = ImageGenerator(model="dall-e-3")
         prompt_info = image_generator.get_prompt_info()
-        assert prompt_info["version"] == "1.0.0"
+        assert prompt_info["version"] == "1.0.1"
         assert (
-            "Create a square (1:1) image optimized picture books"
+            "image optimized for picture books and your 1024x1024 image size"
             in prompt_info["prompt"]
         )
         assert (
-            "Style should be inspired by impressionist painters"
+            "Style and composition inspired by impressionist painters"
             in prompt_info["prompt"]
         )
 
@@ -283,34 +293,29 @@ import pytest
 async def test_generate_image_success(
     model, default_size, expected_prompt_base, custom_size
 ):
-    image_generator = ImageGenerator(model=model)
-    mock_openai_instance = MagicMock()
-    image_generator.client = mock_openai_instance
-    mock_imgur_save = patch(
-        "app.clients.imgur_client.ImgurClient.save_image_locally",
-        return_value="test.png",
-    ).start()
-    mock_imgur_upload = patch(
-        "app.clients.imgur_client.ImgurClient.upload_image",
-        return_value=("https://i.imgur.com/test.png", "test.png"),
-    ).start()
-    mock_openai_instance.images.generate.return_value = MagicMock(
-        data=[MagicMock(b64_json="Zm9vYmFy")]
-    )
-    imgur_url, local_path = await image_generator.generate_image("test prompt")
-    expected_prompt = f"{expected_prompt_base} test prompt"
-    mock_openai_instance.images.generate.assert_called_once_with(
-        model=model,
-        prompt=expected_prompt,
-        size=default_size,
-        n=1,
-        response_format="b64_json",
-    )
-    mock_imgur_save.assert_called_once_with(
-        base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
-    )
-    mock_imgur_upload.assert_called_once_with(ANY)
-    patch.stopall()
+    with patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png") as mock_imgur_save, \
+         patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")) as mock_imgur_upload, \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None), \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker._log_usage_summary", lambda *a, **kw: None):
+        image_generator = ImageGenerator(model=model)
+        mock_openai_instance = MagicMock()
+        image_generator.client = mock_openai_instance
+        mock_openai_instance.images.generate.return_value = MagicMock(
+            data=[MagicMock(b64_json="Zm9vYmFy")]
+        )
+        imgur_url, local_path = await image_generator.generate_image("test prompt")
+        expected_prompt = f"{expected_prompt_base} test prompt"
+        mock_openai_instance.images.generate.assert_called_once_with(
+            model=model,
+            prompt=expected_prompt,
+            size=default_size,
+            n=1,
+            response_format="b64_json",
+        )
+        mock_imgur_save.assert_called_once_with(
+            base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
+        )
+        mock_imgur_upload.assert_called_once_with(ANY)
 
 
 @pytest.mark.asyncio
@@ -334,34 +339,29 @@ async def test_generate_image_success(
 async def test_generate_image_custom_size(
     model, default_size, expected_prompt_base, custom_size
 ):
-    image_generator = ImageGenerator(model=model)
-    mock_openai_instance = MagicMock()
-    image_generator.client = mock_openai_instance
-    mock_imgur_save = patch(
-        "app.clients.imgur_client.ImgurClient.save_image_locally",
-        return_value="test.png",
-    ).start()
-    mock_imgur_upload = patch(
-        "app.clients.imgur_client.ImgurClient.upload_image",
-        return_value=("https://i.imgur.com/test.png", "test.png"),
-    ).start()
-    mock_openai_instance.images.generate.return_value = MagicMock(
-        data=[MagicMock(b64_json="Zm9vYmFy")]
-    )
-    await image_generator.generate_image("test prompt", size=custom_size)
-    expected_prompt = f"{expected_prompt_base} test prompt"
-    mock_openai_instance.images.generate.assert_called_once_with(
-        model=model,
-        prompt=expected_prompt,
-        size=custom_size,
-        n=1,
-        response_format="b64_json",
-    )
-    mock_imgur_save.assert_called_once_with(
-        base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
-    )
-    mock_imgur_upload.assert_called_once_with(ANY)
-    patch.stopall()
+    with patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png") as mock_imgur_save, \
+         patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")) as mock_imgur_upload, \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None), \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker._log_usage_summary", lambda *a, **kw: None):
+        image_generator = ImageGenerator(model=model)
+        mock_openai_instance = MagicMock()
+        image_generator.client = mock_openai_instance
+        mock_openai_instance.images.generate.return_value = MagicMock(
+            data=[MagicMock(b64_json="Zm9vYmFy")]
+        )
+        await image_generator.generate_image("test prompt", size=custom_size)
+        expected_prompt = f"{expected_prompt_base} test prompt"
+        mock_openai_instance.images.generate.assert_called_once_with(
+            model=model,
+            prompt=expected_prompt,
+            size=custom_size,
+            n=1,
+            response_format="b64_json",
+        )
+        mock_imgur_save.assert_called_once_with(
+            base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
+        )
+        mock_imgur_upload.assert_called_once_with(ANY)
 
 
 @pytest.mark.asyncio
@@ -380,18 +380,23 @@ async def test_generate_image_custom_size(
 async def test_generate_image_failure(
     model, default_size, expected_prompt_base, custom_size
 ):
-    image_generator = ImageGenerator(model=model)
-    mock_openai_instance = MagicMock()
-    image_generator.client = mock_openai_instance
-    mock_imgur_save = patch(
-        "app.clients.imgur_client.ImgurClient.save_image_locally",
-        return_value="test.png",
-    ).start()
-    mock_imgur_upload = patch(
-        "app.clients.imgur_client.ImgurClient.upload_image",
-        return_value=("https://i.imgur.com/test.png", "test.png"),
-    ).start()
-    mock_openai_instance.images.generate.side_effect = Exception("API Error")
-    with pytest.raises(Exception):
-        await image_generator.generate_image("test prompt")
-    patch.stopall()
+    with patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png"), \
+         patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")), \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None), \
+         patch("app.utils.openai_usage_tracker.OpenAIUsageTracker._log_usage_summary", lambda *a, **kw: None):
+        image_generator = ImageGenerator(model=model)
+        mock_openai_instance = MagicMock()
+        image_generator.client = mock_openai_instance
+        mock_openai_instance.images.generate.side_effect = Exception("API Error")
+        with pytest.raises(Exception):
+            await image_generator.generate_image("test prompt")
+
+
+# Patch OpenAI usage tracker for all tests in this module
+def pytest_runtest_setup(item):
+    patcher1 = patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None)
+    patcher2 = patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_usage", lambda *a, **kw: None)
+    patcher1.start()
+    patcher2.start()
+    item.addfinalizer(patcher1.stop)
+    item.addfinalizer(patcher2.stop)
