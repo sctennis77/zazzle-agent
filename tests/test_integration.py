@@ -300,8 +300,9 @@ class TestIntegrationAsync:
             await run_full_pipeline(config)
 
         # Verify the mocks were called correctly
-        mock_reddit_agent.assert_called_once()
-        mock_reddit_agent_instance.get_product_info.assert_called_once()
+        # With subreddit cycling, RedditAgent will be called multiple times (once per subreddit attempt)
+        assert mock_reddit_agent.call_count >= 1
+        assert mock_reddit_agent_instance.get_product_info.call_count >= 1
         mock_save_to_csv.assert_not_called()
 
 

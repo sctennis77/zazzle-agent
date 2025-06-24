@@ -140,8 +140,9 @@ async def test_run_full_pipeline_no_product_generated():
             )
             with pytest.raises(Exception) as exc_info:
                 await run_full_pipeline(config)
-            assert "No products were generated" in str(exc_info.value)
-            assert "pipeline_run_id" in str(exc_info.value)
+            # With subreddit cycling, the error message now includes subreddit information
+            assert "Failed to generate products after trying" in str(exc_info.value)
+            assert "subreddits" in str(exc_info.value)
             mock_save.assert_not_called()
 
 
@@ -167,12 +168,14 @@ async def test_run_full_pipeline_error_handling():
             # Verify that the error is raised
             with pytest.raises(Exception) as exc_info:
                 await run_full_pipeline(config)
-            assert str(exc_info.value) == "Test error"
-            # Verify the mock was called
-            mock_agent.get_product_info.assert_called_once()
+            # With subreddit cycling, the error message now includes subreddit information
+            assert "Failed to generate products after trying" in str(exc_info.value)
+            assert "subreddits" in str(exc_info.value)
+            # Verify the mock was called multiple times (once per subreddit attempt)
+            assert mock_agent.get_product_info.call_count >= 1
             mock_save.assert_not_called()
-            # Verify RedditAgent was initialized (no arguments expected)
-            mock_reddit_agent_class.assert_called_once()
+            # Verify RedditAgent was initialized multiple times (once per subreddit attempt)
+            assert mock_reddit_agent_class.call_count >= 1
 
 
 @pytest.mark.asyncio

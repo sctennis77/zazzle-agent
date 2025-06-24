@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import random
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
@@ -118,14 +119,16 @@ def session_scope():
 
 async def run_full_pipeline(
     config: Optional[PipelineConfig] = None, 
-    subreddit_name: Optional[str] = None
+    subreddit_name: Optional[str] = None,
+    max_subreddit_attempts: int = 5
 ) -> List[ProductInfo]:
     """
-    Run the complete product generation pipeline.
+    Run the complete product generation pipeline with subreddit cycling.
 
     Args:
         config (PipelineConfig): The pipeline configuration object. Defaults to a config with model 'dall-e-3'.
-        subreddit_name (Optional[str]): The subreddit to use. If None, a random subreddit will be selected.
+        subreddit_name (Optional[str]): The subreddit to use. If None, random subreddits will be selected.
+        max_subreddit_attempts (int): Maximum number of subreddits to try before giving up.
 
     Returns:
         List[ProductInfo]: List of generated product information.
@@ -138,79 +141,110 @@ async def run_full_pipeline(
             prompt_version="1.0.0",
         )
 
-    # Determine which subreddit to use
-    if subreddit_name is None:
-        subreddit_name = pick_subreddit()
-        logger.info(f"Selected subreddit: {subreddit_name}")
-    else:
+    # Track attempted subreddits to avoid duplicates
+    attempted_subreddits = set()
+    
+    # If a specific subreddit is provided, validate it and use it first
+    if subreddit_name:
         validate_subreddit(subreddit_name)
+        attempted_subreddits.add(subreddit_name)
         logger.info(f"Using specified subreddit: {subreddit_name}")
+    else:
+        subreddit_name = pick_subreddit()
+        attempted_subreddits.add(subreddit_name)
+        logger.info(f"Selected subreddit: {subreddit_name}")
 
-    try:
-        with session_scope() as session:
-            # Create pipeline run
-            pipeline_run = PipelineRun(
-                status=PipelineStatus.STARTED.value, start_time=datetime.utcnow()
-            )
-            session.add(pipeline_run)
-            session.commit()
+    for attempt in range(max_subreddit_attempts):
+        try:
+            logger.info(f"Attempting subreddit {attempt + 1}/{max_subreddit_attempts}: {subreddit_name}")
+            
+            with session_scope() as session:
+                # Create pipeline run
+                pipeline_run = PipelineRun(
+                    status=PipelineStatus.STARTED.value, start_time=datetime.utcnow()
+                )
+                session.add(pipeline_run)
+                session.commit()
 
-            # Initialize components
-            reddit_agent = RedditAgent(
-                config,
-                pipeline_run_id=pipeline_run.id,
-                session=session,
-                subreddit_name=subreddit_name,
-            )
-            content_generator = ContentGenerator()
-            image_generator = ImageGenerator(model=config.model)
-            zazzle_designer = ZazzleProductDesigner()
-            affiliate_linker = ZazzleAffiliateLinker(
-                zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
-                zazzle_tracking_code=os.getenv("ZAZZLE_TRACKING_CODE", ""),
-            )
-            imgur_client = ImgurClient()
+                # Initialize components
+                reddit_agent = RedditAgent(
+                    config,
+                    pipeline_run_id=pipeline_run.id,
+                    session=session,
+                    subreddit_name=subreddit_name,
+                )
+                content_generator = ContentGenerator()
+                image_generator = ImageGenerator(model=config.model)
+                zazzle_designer = ZazzleProductDesigner()
+                affiliate_linker = ZazzleAffiliateLinker(
+                    zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
+                    zazzle_tracking_code=os.getenv("ZAZZLE_TRACKING_CODE", ""),
+                )
+                imgur_client = ImgurClient()
 
-            # Create and run pipeline
-            pipeline = Pipeline(
-                reddit_agent=reddit_agent,
-                content_generator=content_generator,
-                image_generator=image_generator,
-                zazzle_designer=zazzle_designer,
-                affiliate_linker=affiliate_linker,
-                imgur_client=imgur_client,
-                config=config,
-                pipeline_run_id=pipeline_run.id,
-                session=session,
-            )
+                # Create and run pipeline
+                pipeline = Pipeline(
+                    reddit_agent=reddit_agent,
+                    content_generator=content_generator,
+                    image_generator=image_generator,
+                    zazzle_designer=zazzle_designer,
+                    affiliate_linker=affiliate_linker,
+                    imgur_client=imgur_client,
+                    config=config,
+                    pipeline_run_id=pipeline_run.id,
+                    session=session,
+                )
 
-            # Run pipeline and get results
-            results = await pipeline.run_pipeline()
-            logger.info(f"Pipeline results: {results}")
+                # Run pipeline and get results
+                results = await pipeline.run_pipeline()
+                logger.info(f"Pipeline results: {results}")
 
-            # Save results to CSV if any products were generated
-            if results:
-                output_dir = os.getenv("OUTPUT_DIR", "outputs")
-                os.makedirs(output_dir, exist_ok=True)
-                output_file = os.path.join(output_dir, "processed_products.csv")
-                save_to_csv(results, output_file)
+                # If we got results, we're done!
+                if results:
+                    # Save results to CSV if any products were generated
+                    output_dir = os.getenv("OUTPUT_DIR", "outputs")
+                    os.makedirs(output_dir, exist_ok=True)
+                    output_file = os.path.join(output_dir, "processed_products.csv")
+                    save_to_csv(results, output_file)
 
-            # Update pipeline run status and end time
-            pipeline_run.status = PipelineStatus.COMPLETED.value
-            pipeline_run.end_time = datetime.utcnow()
-            session.add(pipeline_run)
-            session.commit()
+                    # Update pipeline run status and end time
+                    pipeline_run.status = PipelineStatus.COMPLETED.value
+                    pipeline_run.end_time = datetime.utcnow()
+                    session.add(pipeline_run)
+                    session.commit()
 
-            # Log OpenAI API usage summary
-            log_session_summary()
+                    # Log OpenAI API usage summary
+                    log_session_summary()
 
-            return results
+                    logger.info(f"Successfully generated products from subreddit: {subreddit_name}")
+                    return results
+                else:
+                    logger.warning(f"No products generated from subreddit: {subreddit_name}")
+                    
+        except Exception as e:
+            logger.warning(f"Failed to generate products from subreddit {subreddit_name}: {str(e)}")
+            
+        # If we get here, this subreddit failed. Try the next one
+        if attempt < max_subreddit_attempts - 1:
+            # Pick a new subreddit that we haven't tried yet
+            available_subreddits = [s for s in AVAILABLE_SUBREDDITS if s not in attempted_subreddits]
+            if not available_subreddits:
+                logger.error("No more subreddits available to try")
+                break
+                
+            subreddit_name = random.choice(available_subreddits)
+            attempted_subreddits.add(subreddit_name)
+            logger.info(f"Moving to next subreddit: {subreddit_name}")
+        else:
+            logger.error(f"Failed to generate products after trying {max_subreddit_attempts} subreddits")
+            break
 
-    except Exception as e:
-        logger.error(f"Pipeline failed: {str(e)}")
-        # Log OpenAI API usage summary even on failure
-        log_session_summary()
-        raise
+    # If we get here, all attempts failed
+    error_msg = f"Failed to generate products after trying {len(attempted_subreddits)} subreddits: {list(attempted_subreddits)}"
+    logger.error(error_msg)
+    # Log OpenAI API usage summary even on failure
+    log_session_summary()
+    raise Exception(error_msg)
 
 
 async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2") -> None:

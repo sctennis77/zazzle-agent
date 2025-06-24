@@ -37,12 +37,16 @@ logger = get_logger(__name__)
 # Base prompts for different DALL-E models
 IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-2": {
-        "prompt": "Create a high-quality, detailed image:",
-        "version": "1.0.0",
+        # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
+        # version": "1.0.0"
+        "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful image based on the following description. ",
+        "version": "1.0.1",
     },
     "dall-e-3": {
-        "prompt": "Create a stunning, high-resolution image with excellent composition and detail:",
-        "version": "1.0.0",
+        # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
+        # "version": "1.0.0"
+        "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful image based on the following description. ",
+        "version": "1.0.1",
     },
 }
 
