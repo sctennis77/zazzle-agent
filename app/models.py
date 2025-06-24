@@ -41,6 +41,9 @@ class RedditPostSchema(BaseModel):
     url: str
     permalink: Optional[str] = None
     comment_summary: Optional[str] = None
+    author: Optional[str] = None
+    score: Optional[int] = None
+    num_comments: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -295,6 +298,9 @@ class RedditContext:
         post_content (Optional[str]): Optional content/body of the post
         comments (Optional[List[Dict[str, Any]]]): Optional list of comments on the post
         permalink (Optional[str]): The Reddit post's permalink
+        author (Optional[str]): The Reddit post author
+        score (Optional[int]): The Reddit post score (upvotes - downvotes)
+        num_comments (Optional[int]): Number of comments on the post
     """
 
     post_id: str
@@ -304,6 +310,9 @@ class RedditContext:
     post_content: Optional[str] = None
     comments: Optional[List[Dict[str, Any]]] = None
     permalink: Optional[str] = None
+    author: Optional[str] = None
+    score: Optional[int] = None
+    num_comments: Optional[int] = None
 
     def log(self) -> None:
         """
@@ -314,12 +323,19 @@ class RedditContext:
             - Post URL and subreddit
             - First 100 characters of content (if available)
             - Number of comments (if available)
+            - Author and score (if available)
         """
         logger.info("Reddit Context:")
         logger.info(f"Post ID: {self.post_id}")
         logger.info(f"Title: {self.post_title}")
         logger.info(f"URL: {self.post_url}")
         logger.info(f"Subreddit: {self.subreddit}")
+        if self.author:
+            logger.info(f"Author: {self.author}")
+        if self.score is not None:
+            logger.info(f"Score: {self.score}")
+        if self.num_comments is not None:
+            logger.info(f"Number of comments: {self.num_comments}")
         if self.post_content:
             logger.info(f"Content: {self.post_content[:100]}...")  # Log first 100 chars
         if self.comments:
@@ -336,6 +352,9 @@ class RedditContext:
             subreddit=self.subreddit,
             url=self.post_url,
             permalink=self.permalink,
+            author=self.author,
+            score=self.score,
+            num_comments=self.num_comments,
         )
 
 

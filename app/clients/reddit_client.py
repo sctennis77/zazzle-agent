@@ -536,6 +536,7 @@ class RedditClient:
                 "subreddit": post.subreddit.display_name,
                 "permalink": post.permalink,
                 "url": post.url,
+                "author": str(post.author) if post.author else None,
                 "top_comments": top_comments_data,
             }
             log_operation(

@@ -49,6 +49,9 @@ def reddit_context_to_db(
         subreddit=reddit_context.subreddit,
         url=reddit_context.post_url,
         permalink=getattr(reddit_context, "permalink", None),
+        author=getattr(reddit_context, "author", None),
+        score=getattr(reddit_context, "score", None),
+        num_comments=getattr(reddit_context, "num_comments", None),
         comment_summary=(
             reddit_context.comments[0]["text"]
             if reddit_context.comments
@@ -66,6 +69,10 @@ def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:
         post_url=orm_reddit_post.url,
         subreddit=orm_reddit_post.subreddit,
         post_content=orm_reddit_post.content,
+        permalink=orm_reddit_post.permalink,
+        author=orm_reddit_post.author,
+        score=orm_reddit_post.score,
+        num_comments=orm_reddit_post.num_comments,
         comments=[],  # Comments can be loaded separately if needed
     )
 

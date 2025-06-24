@@ -72,6 +72,9 @@ class RedditPost(Base):
     url = Column(Text)
     permalink = Column(Text)
     comment_summary = Column(Text, nullable=True)
+    author = Column(String(64), nullable=True, index=True)  # Reddit post author
+    score = Column(Integer, nullable=True, index=True)  # Reddit post score (upvotes - downvotes)
+    num_comments = Column(Integer, nullable=True, index=True)  # Number of comments on the post
 
     pipeline_run = relationship("PipelineRun", back_populates="reddit_posts")
     products = relationship(

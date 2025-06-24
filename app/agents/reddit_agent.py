@@ -660,6 +660,10 @@ class RedditAgent:
                     if hasattr(trending_post, "selftext")
                     else None
                 ),
+                permalink=trending_post.permalink,
+                author=str(trending_post.author) if trending_post.author else None,
+                score=trending_post.score,
+                num_comments=trending_post.num_comments,
                 comments=[
                     {
                         "text": getattr(

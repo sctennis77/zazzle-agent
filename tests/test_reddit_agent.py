@@ -262,6 +262,9 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             subreddit="test_subreddit",
             url="https://reddit.com/test1",
             permalink="/r/test/123",
+            author="test_user",
+            score=100,
+            num_comments=25,
         )
         session.add(reddit_post)
         session.commit()

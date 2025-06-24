@@ -39,6 +39,9 @@ def create_test_data():
         subreddit="test",
         url="https://reddit.com/test",
         permalink="/r/test/test123",
+        author="test_user",
+        score=100,
+        num_comments=25,
     )
     session.add(reddit_post)
 
