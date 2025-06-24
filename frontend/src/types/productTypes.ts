@@ -40,6 +40,9 @@ export interface RedditPost {
   url: string;
   permalink: string;
   comment_summary?: string;
+  author?: string;
+  score?: number;
+  num_comments?: number;
 }
 
 export interface GeneratedProduct {

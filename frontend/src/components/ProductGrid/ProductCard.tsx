@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaExpand } from 'react-icons/fa';
+import { FaExpand, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {
@@ -45,10 +45,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </button>
           </div>
         </div>
-        <div className="flex flex-col flex-1 p-5">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 text-center cursor-pointer hover:text-blue-600 transition-colors flex-1">
-            {product.reddit_post.title}
+        
+        <div className="flex flex-col flex-1 px-5 pb-5">
+          <h3 className="text-base font-medium text-gray-800 mb-3 text-center cursor-pointer flex-1 leading-relaxed italic">
+            {product.product_info.theme}
           </h3>
+          
           <div className="text-sm text-gray-500 text-center mt-auto">
             {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
               year: 'numeric',
