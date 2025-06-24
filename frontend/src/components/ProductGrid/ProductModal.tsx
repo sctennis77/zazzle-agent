@@ -67,32 +67,36 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
                   {product.product_info.theme}
                 </h3>
-                
-                {/* Post Author - First piece of information */}
-                {product.reddit_post.author && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
-                    <FaUser size={14} />
+                {/* New: Post meta line */}
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 mb-1">
+                  <span>Posted by</span>
+                  {product.reddit_post.author ? (
                     <span className="font-mono text-blue-600">u/{product.reddit_post.author}</span>
-                  </div>
-                )}
-                
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <FaTag size={14} />
-                  <span className="capitalize">Generated {product.product_info.product_type} with {product.product_info.model}</span>
+                  ) : (
+                    <span className="italic text-gray-400">[unknown]</span>
+                  )}
+                  <span>on</span>
+                  <span className="font-semibold text-[#FF4500]">r/{product.reddit_post.subreddit}</span>
+                  <span>at</span>
+                  <span className="font-mono text-gray-700">
+                    {product.reddit_post && product.pipeline_run && product.pipeline_run.end_time ?
+                      new Date(product.pipeline_run.end_time).toLocaleString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                      }) : 'Unknown'}
+                  </span>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <FaCalendarAlt size={14} />
-                <span>
-                  Generated on {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
+                {/* New: Illustration meta line */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mb-2">
+                  <span>Illustrated by <span className="font-semibold text-gray-700">Clouvel</span> with</span>
+                  <span className="font-semibold text-blue-700">{product.product_info.model}</span>
+                  <span>at</span>
+                  <span className="font-mono text-gray-600">
+                    {product.pipeline_run && product.pipeline_run.end_time ?
+                      new Date(product.pipeline_run.end_time).toLocaleString('en-US', {
+                        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                      }) : 'Unknown'}
+                  </span>
+                </div>
               </div>
             </div>
 
