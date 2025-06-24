@@ -528,7 +528,7 @@ deploy-production:
 
 # Always run this after changing Poetry dependencies to keep Docker in sync
 export-requirements:
-	poetry export --without-hashes -f requirements.txt -o requirements.txt
+	poetry run pip freeze > requirements.txt
 
 %::
 	@: 
