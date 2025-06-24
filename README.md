@@ -971,3 +971,42 @@ This will run the full suite and report coverage for the `app/` directory.
 #### Screenshot
 
 ![Daily Progress Update](assets/daily_progress_update_2025_06_13.png) 
+
+## 🐳 Docker Environment: Clean Rebuild & Frontend Update (2024-06-24)
+
+### Clean Docker Rebuild & Database Seeding (Tested)
+
+To fully reset and test the environment, follow these steps:
+
+1. **Stop and Remove All Containers/Volumes:**
+   ```bash
+   docker compose down --volumes --remove-orphans
+   # Optionally, remove any remaining containers/volumes:
+   docker ps -aq | xargs -r docker rm -f
+   docker volume ls -q | xargs -r docker volume rm
+   ```
+2. **Rebuild All Images from Scratch:**
+   ```bash
+   docker compose build --no-cache
+   ```
+3. **Start All Services:**
+   ```bash
+   docker compose up -d
+   ```
+4. **Seed the Database:**
+   ```bash
+   make seed-db
+   ```
+   - The database file (`zazzle_pipeline.db`) is **not wiped** by this process and is preserved unless you manually delete it or its volume.
+
+5. **Check Logs/Health:**
+   ```bash
+   docker compose logs --tail=100
+   # Or visit http://localhost:5173 for the frontend
+   ```
+
+### TypeScript/Frontend Fix
+- Fixed a TypeScript build error by removing an unused `FaImage` import in `ProductModal.tsx`.
+- The product modal and card now display enhanced Reddit post information (author, score, comments, summary, etc.).
+
+--- 

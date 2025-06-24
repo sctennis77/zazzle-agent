@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaReddit, FaExternalLinkAlt, FaCalendarAlt, FaTag, FaImage } from 'react-icons/fa';
+import { FaReddit, FaExternalLinkAlt, FaCalendarAlt, FaTag, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
@@ -18,12 +18,21 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Image Section */}
           <div className="space-y-4">
-            <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100">
+            <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 relative">
               <img
                 src={product.product_info.image_url}
                 alt={product.product_info.theme}
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
               />
+              {/* Subreddit badge moved to bottom left of image */}
+              <a
+                href={product.reddit_post.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute bottom-2 left-2 bg-[#FF4500] text-white text-xs px-2 py-1 rounded-full hover:bg-[#FF4500]/90 transition-colors"
+              >
+                r/{product.reddit_post.subreddit}
+              </a>
             </div>
             
             {/* Action Buttons */}
@@ -58,9 +67,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
                   {product.product_info.theme}
                 </h3>
+                
+                {/* Post Author - First piece of information */}
+                {product.reddit_post.author && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                    <FaUser size={14} />
+                    <span className="font-mono text-blue-600">u/{product.reddit_post.author}</span>
+                  </div>
+                )}
+                
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <FaTag size={14} />
-                  <span className="capitalize">{product.product_info.product_type}</span>
+                  <span className="capitalize">Generated {product.product_info.product_type} with {product.product_info.model}</span>
                 </div>
               </div>
 
@@ -76,11 +94,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   })}
                 </span>
               </div>
-
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <FaImage size={14} />
-                <span>Generated with {product.product_info.model}</span>
-              </div>
             </div>
 
             {/* Reddit Post Content */}
@@ -93,15 +106,36 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
               </div>
             )}
 
-            {/* Comments Summary */}
-            {product.reddit_post.comment_summary && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-gray-900">Community Discussion</h4>
-                <div className="bg-gray-50 rounded-xl p-4 text-gray-700">
-                  <p className="text-sm leading-relaxed">{product.reddit_post.comment_summary}</p>
+            {/* Community Discussion */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-900">Community Discussion</h4>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                {/* Reddit post metadata */}
+                <div className="flex items-center gap-4 text-sm">
+                  {product.reddit_post.score !== undefined && (
+                    <div className="flex items-center gap-1">
+                      <FaThumbsUp size={12} className="text-gray-500" />
+                      <span className="text-gray-600">Score:</span>
+                      <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
+                    </div>
+                  )}
+                  {product.reddit_post.num_comments !== undefined && (
+                    <div className="flex items-center gap-1">
+                      <FaComment size={12} className="text-gray-500" />
+                      <span className="text-gray-600">Comments:</span>
+                      <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
+                    </div>
+                  )}
                 </div>
+                
+                {/* Comments Summary */}
+                {product.reddit_post.comment_summary && (
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Technical Details */}
             <div className="space-y-2">
