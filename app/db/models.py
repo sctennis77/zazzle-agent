@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric
 from sqlalchemy.orm import declarative_base, relationship
 
 from app.models import (
@@ -39,6 +39,21 @@ class PipelineRun(Base):
     errors = relationship(
         "ErrorLog", back_populates="pipeline_run", cascade="all, delete-orphan"
     )
+
+
+class PipelineRunUsage(Base):
+    __tablename__ = "pipeline_run_usages"
+    id = Column(Integer, primary_key=True)
+    pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    idea_model = Column(String(64), nullable=False)
+    image_model = Column(String(64), nullable=False)
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    image_tokens = Column(Integer, default=0)
+    total_cost_usd = Column(Numeric(10, 4), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    pipeline_run = relationship("PipelineRun", backref="usage", uselist=False)
 
 
 class RedditPost(Base):

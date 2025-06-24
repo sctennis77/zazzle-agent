@@ -28,7 +28,7 @@ from app.clients.imgur_client import ImgurClient
 from app.content_generator import ContentGenerator
 from app.db.database import SessionLocal
 from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
-from app.db.models import ErrorLog, PipelineRun
+from app.db.models import ErrorLog, PipelineRun, PipelineRunUsage
 from app.image_generator import ImageGenerator
 from app.models import (
     DesignInstructions,
@@ -41,6 +41,8 @@ from app.pipeline_status import PipelineStatus
 from app.utils.logging_config import get_logger
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
+from app.utils.openai_usage_tracker import get_usage_tracker
+from decimal import Decimal
 
 logger = get_logger(__name__)
 
@@ -304,6 +306,57 @@ class Pipeline:
             # Update pipeline run status
             pipeline_run.status = PipelineStatus.COMPLETED.value
             pipeline_run.end_time = datetime.utcnow()
+            
+            # Track OpenAI usage for this pipeline run
+            try:
+                usage_tracker = get_usage_tracker()
+                usage_summary = usage_tracker.get_session_summary()
+                
+                # Extract usage data
+                total_tokens = usage_summary.get("total_tokens_used", 0)
+                total_cost = usage_summary.get("total_cost_usd", "$0.0000")
+                model_breakdown = usage_summary.get("model_breakdown", {})
+                
+                # Determine models used
+                idea_model = "gpt-3.5-turbo"  # Default
+                image_model = self.config.model if self.config else "dall-e-3"
+                
+                # Find the actual models used from the breakdown
+                for model, data in model_breakdown.items():
+                    if data.get("calls", 0) > 0:
+                        if "gpt" in model.lower():
+                            idea_model = model
+                        elif "dall" in model.lower():
+                            image_model = model
+                
+                # Calculate token breakdown (approximate)
+                prompt_tokens = int(total_tokens * 0.8)  # Assume 80% prompt, 20% completion
+                completion_tokens = total_tokens - prompt_tokens
+                image_tokens = 0  # DALL-E doesn't use tokens in the same way
+                
+                # Parse cost string to decimal
+                cost_str = total_cost.replace("$", "")
+                total_cost_decimal = Decimal(cost_str)
+                
+                # Create usage record
+                pipeline_usage = PipelineRunUsage(
+                    pipeline_run_id=pipeline_run.id,
+                    idea_model=idea_model,
+                    image_model=image_model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    image_tokens=image_tokens,
+                    total_cost_usd=total_cost_decimal
+                )
+                session.add(pipeline_usage)
+                
+                logger.info(f"Tracked OpenAI usage for pipeline run {pipeline_run.id}: "
+                          f"idea_model={idea_model}, image_model={image_model}, "
+                          f"tokens={total_tokens}, cost={total_cost}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to track OpenAI usage for pipeline run {pipeline_run.id}: {str(e)}")
+            
             session.commit()
 
             # Check if pipeline run exists
@@ -317,6 +370,57 @@ class Pipeline:
             logger.error(error_msg)
             pipeline_run.status = PipelineStatus.FAILED.value
             pipeline_run.end_time = datetime.utcnow()
+            
+            # Track OpenAI usage even for failed runs
+            try:
+                usage_tracker = get_usage_tracker()
+                usage_summary = usage_tracker.get_session_summary()
+                
+                # Extract usage data
+                total_tokens = usage_summary.get("total_tokens_used", 0)
+                total_cost = usage_summary.get("total_cost_usd", "$0.0000")
+                model_breakdown = usage_summary.get("model_breakdown", {})
+                
+                # Determine models used
+                idea_model = "gpt-3.5-turbo"  # Default
+                image_model = self.config.model if self.config else "dall-e-3"
+                
+                # Find the actual models used from the breakdown
+                for model, data in model_breakdown.items():
+                    if data.get("calls", 0) > 0:
+                        if "gpt" in model.lower():
+                            idea_model = model
+                        elif "dall" in model.lower():
+                            image_model = model
+                
+                # Calculate token breakdown (approximate)
+                prompt_tokens = int(total_tokens * 0.8)  # Assume 80% prompt, 20% completion
+                completion_tokens = total_tokens - prompt_tokens
+                image_tokens = 0  # DALL-E doesn't use tokens in the same way
+                
+                # Parse cost string to decimal
+                cost_str = total_cost.replace("$", "")
+                total_cost_decimal = Decimal(cost_str)
+                
+                # Create usage record
+                pipeline_usage = PipelineRunUsage(
+                    pipeline_run_id=pipeline_run.id,
+                    idea_model=idea_model,
+                    image_model=image_model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    image_tokens=image_tokens,
+                    total_cost_usd=total_cost_decimal
+                )
+                session.add(pipeline_usage)
+                
+                logger.info(f"Tracked OpenAI usage for failed pipeline run {pipeline_run.id}: "
+                          f"idea_model={idea_model}, image_model={image_model}, "
+                          f"tokens={total_tokens}, cost={total_cost}")
+                
+            except Exception as usage_error:
+                logger.warning(f"Failed to track OpenAI usage for failed pipeline run {pipeline_run.id}: {str(usage_error)}")
+            
             session.commit()
             raise  # Re-raise the exception
         finally:

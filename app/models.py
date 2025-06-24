@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -67,6 +68,27 @@ class PipelineRunSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PipelineRunUsageSchema(BaseModel):
+    id: int
+    pipeline_run_id: int
+    idea_model: str
+    image_model: str
+    prompt_tokens: int
+    completion_tokens: int
+    image_tokens: int
+    total_cost_usd: Decimal
+    created_at: datetime
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def parse_datetime(cls, value):
+        if isinstance(value, str):
+            return datetime.fromisoformat(value)
+        return value
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductInfoSchema(BaseModel):
     id: int
     pipeline_run_id: int
@@ -91,6 +113,7 @@ class GeneratedProductSchema(BaseModel):
     product_info: ProductInfoSchema
     pipeline_run: PipelineRunSchema
     reddit_post: RedditPostSchema
+    usage: Optional[PipelineRunUsageSchema] = None
 
     model_config = ConfigDict(from_attributes=True)
 

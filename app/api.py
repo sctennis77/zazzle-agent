@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost
-from app.models import GeneratedProductSchema, PipelineRunSchema
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage
+from app.models import GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
 from app.pipeline_status import PipelineStatus
@@ -129,16 +129,21 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     product_schema = ProductInfoSchema.model_validate(product_info)
                     pipeline_schema = PipelineRunSchema.model_validate(run)
                     reddit_schema = RedditPostSchema.model_validate(reddit_post)
+                    
+                    # Fetch usage data
+                    usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
+                    usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
 
                     products.append(
                         GeneratedProductSchema(
                             product_info=product_schema,
                             pipeline_run=pipeline_schema,
                             reddit_post=reddit_schema,
+                            usage=usage_schema,
                         )
                     )
                     logger.info(
-                        f"Successfully converted pipeline run {run.id} to schema"
+                        f"Successfully converted pipeline run {run.id} to schema with usage data"
                     )
                 except Exception as e:
                     logger.error(
