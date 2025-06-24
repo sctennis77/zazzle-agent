@@ -1,11 +1,13 @@
 import pytest
+
 from app.zazzle_templates import (
+    ALL_TEMPLATES,
+    ZAZZLE_PRINT_TEMPLATE,
     CustomizableField,
     ZazzleTemplateConfig,
-    ZAZZLE_PRINT_TEMPLATE,
     get_product_template,
-    ALL_TEMPLATES
 )
+
 
 def test_customizable_field():
     """Test CustomizableField creation and properties."""
@@ -15,7 +17,7 @@ def test_customizable_field():
         max_length=100,
         formats=["png", "jpg"],
         max_size_mb=5,
-        options=["option1", "option2"]
+        options=["option1", "option2"],
     )
     assert field.type == "image"
     assert field.description == "A test image field"
@@ -24,14 +26,12 @@ def test_customizable_field():
     assert field.max_size_mb == 5
     assert field.options == ["option1", "option2"]
 
+
 def test_zazzle_template_config():
     """Test ZazzleTemplateConfig creation and properties."""
     fields = {
         "image": CustomizableField(
-            type="image",
-            description="Test image field",
-            formats=["png"],
-            max_size_mb=5
+            type="image", description="Test image field", formats=["png"], max_size_mb=5
         )
     }
     config = ZazzleTemplateConfig(
@@ -39,7 +39,7 @@ def test_zazzle_template_config():
         zazzle_template_id="123",
         original_url="https://example.com",
         zazzle_tracking_code="TEST",
-        customizable_fields=fields
+        customizable_fields=fields,
     )
     assert config.product_type == "Test Product"
     assert config.zazzle_template_id == "123"
@@ -48,12 +48,14 @@ def test_zazzle_template_config():
     assert "image" in config.customizable_fields
     assert config.customizable_fields["image"].type == "image"
 
+
 def test_zazzle_print_template():
     """Test the predefined ZAZZLE_PRINT_TEMPLATE."""
     assert ZAZZLE_PRINT_TEMPLATE.product_type == "Print"
     assert ZAZZLE_PRINT_TEMPLATE.zazzle_template_id == "256344169523425346"
     assert "image" in ZAZZLE_PRINT_TEMPLATE.customizable_fields
     assert ZAZZLE_PRINT_TEMPLATE.customizable_fields["image"].type == "image"
+
 
 def test_get_product_template():
     """Test retrieving templates by product type."""
@@ -68,6 +70,7 @@ def test_get_product_template():
     template = get_product_template("nonexistent")
     assert template is None
 
+
 def test_all_templates():
     """Test that all templates are properly registered."""
     assert ZAZZLE_PRINT_TEMPLATE in ALL_TEMPLATES
@@ -79,4 +82,4 @@ def test_all_templates():
         assert hasattr(template, "original_url")
         assert hasattr(template, "zazzle_tracking_code")
         assert hasattr(template, "customizable_fields")
-        assert isinstance(template.customizable_fields, dict) 
+        assert isinstance(template.customizable_fields, dict)

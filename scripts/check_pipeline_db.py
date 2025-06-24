@@ -1,19 +1,23 @@
-from app.database import SessionLocal
-from app.models import PipelineRun, RedditPost, ProductInfo
 from datetime import datetime
+
+from app.database import SessionLocal
+from app.models import PipelineRun, ProductInfo, RedditPost
+
 
 def check_pipeline_db():
     session = SessionLocal()
     try:
         # Get the most recent pipeline run
-        pipeline_run = session.query(PipelineRun).order_by(PipelineRun.start_time.desc()).first()
+        pipeline_run = (
+            session.query(PipelineRun).order_by(PipelineRun.start_time.desc()).first()
+        )
         print("\n=== Most Recent Pipeline Run ===")
         print(f"ID: {pipeline_run.id}")
         print(f"Status: {pipeline_run.status}")
         print(f"Start Time: {pipeline_run.start_time}")
         print(f"End Time: {pipeline_run.end_time}")
         print(f"Config: {pipeline_run.config}")
-        
+
         # Get associated RedditPost
         reddit_post = session.query(RedditPost).first()
         print("\n=== Reddit Post ===")
@@ -23,7 +27,7 @@ def check_pipeline_db():
         print(f"Subreddit: {reddit_post.subreddit}")
         print(f"Content: {reddit_post.content}")
         print(f"URL: {reddit_post.url}")
-        
+
         # Get associated ProductInfo
         product_info = session.query(ProductInfo).first()
         print("\n=== Product Info ===")
@@ -36,9 +40,10 @@ def check_pipeline_db():
         print(f"Theme: {product_info.theme}")
         print(f"Model: {product_info.model}")
         print(f"Prompt Version: {product_info.prompt_version}")
-        
+
     finally:
         session.close()
 
+
 if __name__ == "__main__":
-    check_pipeline_db() 
+    check_pipeline_db()

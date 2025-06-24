@@ -14,39 +14,48 @@ The module handles:
 - Database persistence and error logging
 """
 
-from typing import List, Optional, Dict, Any
 import asyncio
-from datetime import datetime
-from app.models import ProductIdea, ProductInfo, PipelineConfig, RedditContext, DesignInstructions
-from app.agents.reddit_agent import RedditAgent
-from app.content_generator import ContentGenerator
-from app.image_generator import ImageGenerator
-from app.zazzle_product_designer import ZazzleProductDesigner
-from app.affiliate_linker import ZazzleAffiliateLinker
-from app.clients.imgur_client import ImgurClient
-from app.utils.logging_config import get_logger
-from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
-from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
-from app.db.models import PipelineRun, ErrorLog
-from sqlalchemy.orm import Session
-import os
-from app.db.database import SessionLocal
 import logging
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy.orm import Session
+
+from app.affiliate_linker import ZazzleAffiliateLinker
+from app.agents.reddit_agent import RedditAgent
+from app.clients.imgur_client import ImgurClient
+from app.content_generator import ContentGenerator
+from app.db.database import SessionLocal
+from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
+from app.db.models import ErrorLog, PipelineRun
+from app.image_generator import ImageGenerator
+from app.models import (
+    DesignInstructions,
+    PipelineConfig,
+    ProductIdea,
+    ProductInfo,
+    RedditContext,
+)
 from app.pipeline_status import PipelineStatus
+from app.utils.logging_config import get_logger
+from app.zazzle_product_designer import ZazzleProductDesigner
+from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
 logger = get_logger(__name__)
+
 
 class Pipeline:
     """
     Main pipeline for processing product ideas into product info objects.
-    
+
     This class orchestrates the complete product generation process:
     1. Product idea generation from Reddit
     2. Content generation
     3. Image generation
     4. Product creation
     5. Affiliate link generation
-    
+
     The class supports:
     - Single product idea processing
     - Batch processing of multiple ideas
@@ -54,7 +63,7 @@ class Pipeline:
     - Dependency injection for testing
     - Database persistence and error logging
     """
-    
+
     def __init__(
         self,
         reddit_agent: RedditAgent,
@@ -65,13 +74,13 @@ class Pipeline:
         imgur_client: ImgurClient,
         config: Optional[PipelineConfig] = None,
         pipeline_run_id: int = None,
-        session = None,
-        reddit_post_id: int = None
+        session=None,
+        reddit_post_id: int = None,
     ):
         """
         Initialize the pipeline with its dependencies.
         Optionally accepts pipeline_run_id, session, and reddit_post_id for DB persistence.
-        
+
         Args:
             reddit_agent: Agent for Reddit interaction and product idea generation
             content_generator: Generator for product content
@@ -94,8 +103,8 @@ class Pipeline:
             model="dall-e-3",
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
-            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
-            prompt_version="1.0.0"
+            zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
+            prompt_version="1.0.0",
         )
         self.max_retries = 3
         self.retry_delay = 1  # seconds
@@ -103,11 +112,18 @@ class Pipeline:
         self.session = session
         self.reddit_post_id = reddit_post_id
 
-    def log_error(self, error_message: str, error_type: str = 'SYSTEM_ERROR', component: str = 'PIPELINE', 
-                 stack_trace: str = None, context_data: dict = None, severity: str = 'ERROR'):
+    def log_error(
+        self,
+        error_message: str,
+        error_type: str = "SYSTEM_ERROR",
+        component: str = "PIPELINE",
+        stack_trace: str = None,
+        context_data: dict = None,
+        severity: str = "ERROR",
+    ):
         """
         Log an error to the database if session is available.
-        
+
         Args:
             error_message: The error message to log
             error_type: Type of error (e.g., 'API_ERROR', 'VALIDATION_ERROR', 'SYSTEM_ERROR')
@@ -126,10 +142,10 @@ class Pipeline:
                     stack_trace=stack_trace,
                     context_data=context_data,
                     severity=severity,
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
                 )
                 self.session.add(error_log)
-                
+
                 # Update pipeline run with last error
                 pipeline_run = self.session.query(PipelineRun).get(self.pipeline_run_id)
                 if pipeline_run:
@@ -137,22 +153,30 @@ class Pipeline:
                     pipeline_run.status = PipelineStatus.FAILED.value
                     pipeline_run.end_time = datetime.utcnow()
                     if pipeline_run.start_time:
-                        pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
+                        pipeline_run.duration = int(
+                            (
+                                pipeline_run.end_time - pipeline_run.start_time
+                            ).total_seconds()
+                        )
                 self.session.commit()
-                logger.error(f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})")
+                logger.error(
+                    f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})"
+                )
             except Exception as e:
                 logger.error(f"Failed to log error to database: {str(e)}")
                 self.session.rollback()
                 raise
 
-    async def process_product_idea(self, product_idea: ProductIdea) -> Optional[ProductInfo]:
+    async def process_product_idea(
+        self, product_idea: ProductIdea
+    ) -> Optional[ProductInfo]:
         """
         Process a single product idea through the pipeline.
         Persists ProductIdea as ProductInfo in the DB if session and pipeline_run_id are provided.
-        
+
         Args:
             product_idea: ProductIdea object to process
-        
+
         Returns:
             Optional[ProductInfo]: Processed ProductInfo object if successful, None if failed
         """
@@ -164,7 +188,7 @@ class Pipeline:
             # Generate image
             imgur_url, local_path = await self.image_generator.generate_image(
                 product_idea.image_description,
-                template_id=product_idea.design_instructions.get("template_id")
+                template_id=product_idea.design_instructions.get("template_id"),
             )
             product_idea.design_instructions["image"] = imgur_url
 
@@ -173,7 +197,7 @@ class Pipeline:
                 try:
                     product_info = await self.zazzle_designer.create_product(
                         design_instructions=product_idea.design_instructions,
-                        reddit_context=product_idea.reddit_context
+                        reddit_context=product_idea.reddit_context,
                     )
                     if product_info:
                         break
@@ -192,7 +216,9 @@ class Pipeline:
                 raise Exception(error_msg)
 
             # Generate affiliate link
-            products_with_links = await self.affiliate_linker.generate_links_batch([product_info])
+            products_with_links = await self.affiliate_linker.generate_links_batch(
+                [product_info]
+            )
             if not products_with_links:
                 error_msg = "Failed to generate affiliate links"
                 self.log_error(error_msg)
@@ -210,7 +236,7 @@ class Pipeline:
     async def run_pipeline(self) -> List[ProductInfo]:
         """
         Run the full pipeline to generate products from Reddit content.
-        
+
         Returns:
             List[ProductInfo]: List of successfully generated products
         """
@@ -225,7 +251,9 @@ class Pipeline:
                     raise ValueError(f"Pipeline run {self.pipeline_run_id} not found")
             else:
                 # Create a new pipeline run
-                pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value, start_time=datetime.utcnow())
+                pipeline_run = PipelineRun(
+                    status=PipelineStatus.STARTED.value, start_time=datetime.utcnow()
+                )
                 session.add(pipeline_run)
                 session.commit()
                 self.pipeline_run_id = pipeline_run.id
@@ -233,7 +261,9 @@ class Pipeline:
             # Get product info from Reddit
             products = await self.reddit_agent.get_product_info()
             if not products:
-                error_msg = f"No products were generated. pipeline_run_id: {pipeline_run.id}"
+                error_msg = (
+                    f"No products were generated. pipeline_run_id: {pipeline_run.id}"
+                )
                 raise Exception(error_msg)
 
             # Convert single product to list for consistency
@@ -241,7 +271,9 @@ class Pipeline:
                 products = [products]
 
             # Generate affiliate links for all products
-            products_with_links = await self.affiliate_linker.generate_links_batch(products)
+            products_with_links = await self.affiliate_linker.generate_links_batch(
+                products
+            )
             if not products_with_links:
                 error_msg = f"No products were successfully processed with affiliate links pipeline_run_id: {pipeline_run.id}"
                 raise Exception(error_msg)
@@ -258,11 +290,15 @@ class Pipeline:
             # Persist only the first ProductInfo to DB using ORM
             if products_with_links and orm_reddit_post:
                 product_info = products_with_links[0]
-                orm_product_info = product_info_to_db(product_info, pipeline_run.id, self.reddit_post_id)
+                orm_product_info = product_info_to_db(
+                    product_info, pipeline_run.id, self.reddit_post_id
+                )
                 orm_product_info.reddit_post_id = orm_reddit_post.id
                 session.add(orm_product_info)
                 session.commit()
-                logging.debug(f"Persisted ProductInfo with ID: {orm_product_info.id} and RedditPost ID: {orm_reddit_post.id}")
+                logging.debug(
+                    f"Persisted ProductInfo with ID: {orm_product_info.id} and RedditPost ID: {orm_reddit_post.id}"
+                )
 
             # Update pipeline run status
             pipeline_run.status = PipelineStatus.COMPLETED.value
@@ -284,4 +320,4 @@ class Pipeline:
             raise  # Re-raise the exception
         finally:
             logging.debug("Closing session...")
-            session.close() 
+            session.close()

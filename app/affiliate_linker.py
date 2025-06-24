@@ -13,26 +13,32 @@ The module handles:
 
 import logging
 from typing import List, Optional
-from app.models import ProductInfo, AffiliateLinker
+
+from app.models import AffiliateLinker, ProductInfo
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
 class ZazzleAffiliateLinkerError(Exception):
     """Base exception for ZazzleAffiliateLinker errors."""
+
     pass
+
 
 class InvalidProductDataError(ZazzleAffiliateLinkerError):
     """Raised when product data is invalid or missing required fields."""
+
     pass
+
 
 class ZazzleAffiliateLinker:
     """
     Handles generation of Zazzle affiliate links.
-    
+
     This class provides methods to generate affiliate links for individual products
     or batches of products, ensuring required data is present and handling errors.
-    
+
     The class supports:
     - Single product link generation
     - Batch processing of multiple products
@@ -40,29 +46,31 @@ class ZazzleAffiliateLinker:
     - Error handling and logging
     - Custom affiliate ID configuration
     """
-    
+
     def __init__(self, zazzle_affiliate_id: str, zazzle_tracking_code: str):
         """
         Initialize the ZazzleAffiliateLinker.
-        
+
         Args:
             zazzle_affiliate_id: The Zazzle affiliate ID
             zazzle_tracking_code: The tracking code for affiliate links
         """
         self.affiliate_linker = AffiliateLinker(
             zazzle_affiliate_id=zazzle_affiliate_id,
-            zazzle_tracking_code=zazzle_tracking_code
+            zazzle_tracking_code=zazzle_tracking_code,
         )
-        logger.info(f"Initialized ZazzleAffiliateLinker with affiliate ID: {zazzle_affiliate_id}")
+        logger.info(
+            f"Initialized ZazzleAffiliateLinker with affiliate ID: {zazzle_affiliate_id}"
+        )
 
     def _validate_product_data(self, product_id: str, name: str) -> None:
         """
         Validate that product data contains required fields.
-        
+
         Args:
             product_id (str): The product's unique identifier from Zazzle
             name (str): The product's display name
-        
+
         Raises:
             InvalidProductDataError: If product_id or name is empty or None
         """
@@ -74,33 +82,39 @@ class ZazzleAffiliateLinker:
     async def _generate_affiliate_link(self, product: ProductInfo) -> str:
         """
         Generate a Zazzle affiliate link for a product.
-        
+
         Args:
             product (ProductInfo): ProductInfo object containing product details
-        
+
         Returns:
             str: Complete affiliate link URL
-        
+
         Raises:
             InvalidProductDataError: If product data is invalid or missing required fields
             ZazzleAffiliateLinkerError: For other errors during link generation
         """
         self._validate_product_data(product.product_id, product.name)
         try:
-            affiliate_link = self.affiliate_linker.compose_affiliate_link(product.product_url)
-            logger.info(f"Generated affiliate link for {product.name} ({product.product_id})")
+            affiliate_link = self.affiliate_linker.compose_affiliate_link(
+                product.product_url
+            )
+            logger.info(
+                f"Generated affiliate link for {product.name} ({product.product_id})"
+            )
             return affiliate_link
         except Exception as e:
             logger.error(f"Error generating affiliate link: {e}")
             raise ZazzleAffiliateLinkerError(f"Failed to generate affiliate link: {e}")
 
-    async def generate_links_batch(self, products: List[ProductInfo]) -> List[ProductInfo]:
+    async def generate_links_batch(
+        self, products: List[ProductInfo]
+    ) -> List[ProductInfo]:
         """
         Generate affiliate links for a batch of products.
-        
+
         Args:
             products: List of ProductInfo objects to generate links for
-            
+
         Returns:
             List[ProductInfo]: List of products with affiliate links added
         """
@@ -109,6 +123,8 @@ class ZazzleAffiliateLinker:
                 affiliate_link = await self._generate_affiliate_link(product)
                 product.affiliate_link = affiliate_link
             except Exception as e:
-                logger.error(f"Failed to generate affiliate link for {product.name}: {str(e)}")
+                logger.error(
+                    f"Failed to generate affiliate link for {product.name}: {str(e)}"
+                )
                 product.affiliate_link = None
-        return products 
+        return products

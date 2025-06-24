@@ -1,27 +1,31 @@
 VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
+POETRY=poetry
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps
 
 help:
 	@echo "Available targets:"
-	@echo "  make venv         - Create a Python virtual environment"
-	@echo "  make install      - Install dependencies into venv"
-	@echo "  make test         - Run the test suite with coverage"
+	@echo "  make install-poetry  - Install Poetry dependency manager"
+	@echo "  make install-deps    - Install project dependencies with Poetry"
+	@echo "  make format          - Format code with black and isort"
+	@echo "  make lint            - Lint code with flake8"
+	@echo "  make type-check      - Run type checking with mypy"
+	@echo "  make test            - Run the test suite with coverage"
 	@echo "  make test-pattern <test_path> - Run a specific test suite or file. Example: make test-pattern tests/test_file.py"
-	@echo "  make run-full     - Run the complete product generation pipeline"
+	@echo "  make run-full        - Run the complete product generation pipeline"
 	@echo "  make run-full SUBREDDIT=<subreddit> - Run pipeline with specific subreddit (e.g., SUBREDDIT=golf)"
-	@echo "  make clean        - Remove venv and outputs"
-	@echo "  make docker-build - Build Docker image (tests must pass first)"
-	@echo "  make docker-run   - Run Docker container"
-	@echo "  make scrape       - Run only the scraping part of the program"
+	@echo "  make clean           - Remove Poetry cache and outputs"
+	@echo "  make docker-build    - Build Docker image (tests must pass first)"
+	@echo "  make docker-run      - Run Docker container"
+	@echo "  make scrape          - Run only the scraping part of the program"
 	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
-	@echo "  make run-api      - Start the FastAPI server"
-	@echo "  make stop-api     - Stop the FastAPI server"
-	@echo "  make frontend-dev - Start the frontend development server"
+	@echo "  make run-api         - Start the FastAPI server"
+	@echo "  make stop-api        - Stop the FastAPI server"
+	@echo "  make frontend-dev    - Start the frontend development server"
 	@echo "  make test-interaction-agent - Test the Reddit interaction agent"
-	@echo "  make create-test-db - Create test database with sample data"
+	@echo "  make create-test-db  - Create test database with sample data"
 	@echo ""
 	@echo "Complete Environment Setup:"
 	@echo "  make full_from_fresh_env - Complete fresh setup with cleanup, install, test, and service startup"
@@ -47,14 +51,37 @@ help:
 	@echo ""
 	@echo "For more information, see docs/DEPLOYMENT_GUIDE.md"
 
-venv:
-	$(PYTHON) -m venv $(VENV_NAME)
+install-poetry:
+	@echo "Installing Poetry..."
+	curl -sSL https://install.python-poetry.org | python3 -
+	@echo "Please add Poetry to your PATH: export PATH=\"/Users/samuelclark/.local/bin:\$$PATH\""
 
-install: venv
-	. $(VENV_NAME)/bin/activate && $(PIP) install --upgrade pip && $(PIP) install -r requirements.txt
+install-deps:
+	@echo "Installing dependencies with Poetry..."
+	$(POETRY) install
+
+format:
+	@echo "Formatting code with black and isort..."
+	$(POETRY) run black .
+	$(POETRY) run isort .
+
+lint:
+	@echo "Linting code with flake8..."
+	$(POETRY) run flake8 app/ tests/
+
+type-check:
+	@echo "Running type checking with mypy..."
+	$(POETRY) run mypy app/
+
+# Legacy venv target for backward compatibility
+venv:
+	@echo "This project now uses Poetry. Run 'make install-deps' instead."
+
+# Legacy install target for backward compatibility
+install: install-deps
 
 test:
-	. $(VENV_NAME)/bin/activate && TESTING=true $(PYTHON) -m pytest tests/ --cov=app
+	$(POETRY) run pytest tests/ --cov=app
 
 test-pattern:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
@@ -62,16 +89,17 @@ test-pattern:
 		echo "Example: make test-pattern tests/test_file.py"; \
 		exit 1; \
 	fi
-	. $(VENV_NAME)/bin/activate && TESTING=true $(PYTHON) -m pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
+	$(POETRY) run pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
 run-full:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 run-generate-image:
-	source .env && . $(VENV_NAME)/bin/activate && $(PYTHON) -m app.main --mode image --prompt "$(IMAGE_PROMPT)" --model "$(MODEL)"
+	source .env && $(POETRY) run python -m app.main --mode image --prompt "$(IMAGE_PROMPT)" --model "$(MODEL)"
 
 clean:
-	rm -rf $(VENV_NAME) outputs/ .coverage
+	$(POETRY) cache clear --all pypi
+	rm -rf outputs/ .coverage
 
 # Docker targets
 
@@ -82,7 +110,7 @@ docker-run:
 	docker run -v $(PWD)/outputs:/app/outputs zazzle-affiliate-agent 
 
 scrape:
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.product_scraper 
+	$(POETRY) run python -m app.product_scraper 
 
 run-api:
 	@echo "Stopping any existing API instances..."
@@ -94,7 +122,7 @@ run-api:
 	@echo "Waiting for port 8000 to be released..."
 	@while lsof -i :8000 > /dev/null; do sleep 1; done
 	@echo "Starting API server..."
-	. $(VENV_NAME)/bin/activate && $(PYTHON) -m app.api
+	$(POETRY) run python -m app.api
 
 stop-api:
 	@echo "Stopping API server..."
@@ -145,33 +173,33 @@ frontend-clean:
 # Alembic commands
 alembic-init:
 	@echo "Initializing Alembic for database migrations."
-	alembic init alembic
+	$(POETRY) run alembic init alembic
 
 alembic-revision:
 	@echo "Generating a new Alembic migration revision."
-	alembic revision --autogenerate -m "add comment_summary to RedditPost and remove CommentSummary table"
+	$(POETRY) run alembic revision --autogenerate -m "add comment_summary to RedditPost and remove CommentSummary table"
 
 alembic-upgrade:
 	@echo "Upgrading the database to the latest migration."
-	alembic upgrade head
+	$(POETRY) run alembic upgrade head
 
 alembic-downgrade:
 	@echo "Downgrading the database to the previous migration."
-	alembic downgrade -1 
+	$(POETRY) run alembic downgrade -1 
 
 # Database & Monitoring targets
 
 check-db:
 	@echo "Checking database contents..."
-	. $(VENV_NAME)/bin/activate && python3 -m scripts.check_db
+	$(POETRY) run python3 -m scripts.check_db
 
 check-pipeline-db:
 	@echo "Checking pipeline database status..."
-	. $(VENV_NAME)/bin/activate && python3 -m scripts.check_pipeline_db
+	$(POETRY) run python3 -m scripts.check_pipeline_db
 
 get-last-run:
 	@echo "Getting last pipeline run details..."
-	. $(VENV_NAME)/bin/activate && python3 -m scripts.get_last_run
+	$(POETRY) run python3 -m scripts.get_last_run
 
 backup-db:
 	@echo "Creating database backup..."
@@ -200,29 +228,29 @@ reset-db:
 
 health-check:
 	@echo "Running comprehensive health check..."
-	. $(VENV_NAME)/bin/activate && python3 -m scripts.health_check
+	$(POETRY) run python3 -m scripts.health_check
 
 # Pipeline Management targets
 
 run-pipeline-debug:
 	@echo "Running pipeline with debug logging..."
-	source .env && . $(VENV_NAME)/bin/activate && LOG_LEVEL=DEBUG $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 run-pipeline-dry-run:
 	@echo "Running pipeline in dry-run mode (no products created)..."
-	source .env && . $(VENV_NAME)/bin/activate && DRY_RUN=true $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 run-pipeline-single:
 	@echo "Running pipeline for single product..."
-	source .env && . $(VENV_NAME)/bin/activate && SINGLE_PRODUCT=true $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 run-pipeline-batch:
 	@echo "Running pipeline for batch processing..."
-	source .env && . $(VENV_NAME)/bin/activate && BATCH_SIZE=5 $(PYTHON) -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
+	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
 monitor-pipeline:
 	@echo "Starting pipeline monitor..."
-	. $(VENV_NAME)/bin/activate && python3 -m scripts.pipeline_monitor
+	$(POETRY) run python3 -m scripts.pipeline_monitor
 
 # Logging & Debugging targets
 
@@ -242,11 +270,11 @@ logs-clear:
 
 test-interaction-agent:
 	@echo "Testing Reddit interaction agent..."
-	. $(VENV_NAME)/bin/activate && $(PYTHON) test_interaction_agent.py
+	$(POETRY) run python test_interaction_agent.py
 
 create-test-db:
 	@echo "Creating test database with sample data..."
-	. $(VENV_NAME)/bin/activate && python3 scripts/create_test_db.py
+	$(POETRY) run python3 scripts/create_test_db.py
 
 # =====================
 # Complete Fresh Environment Setup

@@ -1,9 +1,17 @@
-import pytest
+import os
 from unittest.mock import Mock, patch
+
+import pytest
+
 from app.distribution.base import DistributionChannel
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-from app.models import ProductInfo, RedditContext, DistributionStatus, DistributionMetadata
-import os
+from app.models import (
+    DistributionMetadata,
+    DistributionStatus,
+    ProductInfo,
+    RedditContext,
+)
+
 
 @pytest.fixture
 def mock_product():
@@ -22,10 +30,11 @@ def mock_product():
             post_id="post123",
             post_title="Test Post Title",
             post_url="https://reddit.com/r/testsubreddit/comments/post123",
-            subreddit="testsubreddit"
+            subreddit="testsubreddit",
         ),
-        design_instructions={"key": "value"}
+        design_instructions={"key": "value"},
     )
+
 
 class TestDistributionChannel:
     def test_abstract_methods(self):
@@ -35,44 +44,46 @@ class TestDistributionChannel:
 
     def test_subclass_implementation(self):
         """Test that subclasses must implement required methods"""
+
         class IncompleteChannel(DistributionChannel):
             pass
 
         with pytest.raises(TypeError):
             IncompleteChannel()
 
+
 class TestRedditDistributionChannel:
-    @patch('os.getenv')
+    @patch("os.getenv")
     def test_initialization(self, mock_getenv):
         """Test RedditDistributionChannel initialization"""
         mock_getenv.return_value = "test_value"
         channel = RedditDistributionChannel()
         assert isinstance(channel, DistributionChannel)
 
-    @patch('os.getenv')
+    @patch("os.getenv")
     def test_publish(self, mock_getenv, mock_product):
         """Test publishing a product to Reddit"""
         mock_getenv.return_value = "test_value"
         channel = RedditDistributionChannel()
-        
+
         metadata = channel.publish(mock_product)
         assert metadata is not None
         assert metadata.status == DistributionStatus.PUBLISHED
         assert metadata.channel == "reddit"
         assert metadata.channel_url is not None
 
-    @patch('os.getenv')
+    @patch("os.getenv")
     def test_get_publication_url(self, mock_getenv, mock_product):
         """Test getting the publication URL"""
         mock_getenv.return_value = "test_value"
         channel = RedditDistributionChannel()
-        
+
         url = channel.get_publication_url(mock_product)
         assert url is not None
         assert isinstance(url, str)
         assert url.startswith("https://reddit.com")
 
-    @patch('os.getenv')
+    @patch("os.getenv")
     def test_create_metadata(self, mock_getenv, mock_product):
         """Test creating distribution metadata."""
         mock_getenv.return_value = "test_value"
@@ -82,6 +93,8 @@ class TestRedditDistributionChannel:
         assert metadata.status == DistributionStatus.PUBLISHED
         assert metadata.channel == "reddit"
         # Test error metadata
-        metadata = channel._create_metadata(DistributionStatus.FAILED, error_message="Test error")
+        metadata = channel._create_metadata(
+            DistributionStatus.FAILED, error_message="Test error"
+        )
         assert metadata.status == DistributionStatus.FAILED
-        assert metadata.error_message == "Test error" 
+        assert metadata.error_message == "Test error"

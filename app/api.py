@@ -1,21 +1,22 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
-from app.db.database import get_db, SessionLocal, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost
-from app.pipeline_status import PipelineStatus
-from app.models import (
-    RedditPostSchema, PipelineRunSchema, ProductInfoSchema, GeneratedProductSchema,
-    RedditContext, ProductInfo as ProductInfoDataClass
-)
-from app.utils.logging_config import setup_logging
 import logging
 import os
-import uvicorn
 import traceback
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.db.database import SessionLocal, get_db, init_db
+from app.db.models import PipelineRun, ProductInfo, RedditPost
+from app.models import GeneratedProductSchema, PipelineRunSchema
+from app.models import ProductInfo as ProductInfoDataClass
+from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
+from app.pipeline_status import PipelineStatus
+from app.utils.logging_config import setup_logging
 
 # Setup logging
 setup_logging()
@@ -30,12 +31,13 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
-        "http://localhost:5176"
+        "http://localhost:5176",
     ],  # Allow all common Vite dev ports
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -44,15 +46,18 @@ async def startup_event():
     init_db()
     logger.info("Database initialized successfully!")
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Docker and Kubernetes."""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
+
 def model_to_dict(obj):
     if obj is None:
         return None
     return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
 
 def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
     """
@@ -64,18 +69,22 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
     """
     try:
         logger.info("Fetching successful pipeline runs...")
-        pipeline_runs = db.query(PipelineRun).filter_by(status=PipelineStatus.COMPLETED.value).all()
+        pipeline_runs = (
+            db.query(PipelineRun).filter_by(status=PipelineStatus.COMPLETED.value).all()
+        )
         logger.info(f"Found {len(pipeline_runs)} completed pipeline runs.")
         products = []
         for run in pipeline_runs:
             try:
                 logger.info(f"Processing pipeline run {run.id}")
-                product_info = db.query(ProductInfo).filter_by(pipeline_run_id=run.id).first()
+                product_info = (
+                    db.query(ProductInfo).filter_by(pipeline_run_id=run.id).first()
+                )
                 if not product_info:
                     logger.warning(f"No product info found for pipeline run {run.id}")
                     continue
                 logger.info(f"Found product info: {product_info.id}")
-                
+
                 reddit_post = run.reddit_posts[0] if run.reddit_posts else None
                 if not reddit_post:
                     logger.warning(f"No reddit post found for pipeline run {run.id}")
@@ -90,7 +99,11 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     subreddit=reddit_post.subreddit,
                     post_content=reddit_post.content,
                     permalink=reddit_post.permalink,
-                    comments=[{'text':reddit_post.comment_summary}] if reddit_post.comment_summary else [] or []
+                    comments=(
+                        [{"text": reddit_post.comment_summary}]
+                        if reddit_post.comment_summary
+                        else [] or []
+                    ),
                 )
 
                 product_info_data = ProductInfoDataClass(
@@ -105,8 +118,10 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     model=product_info.model,
                     prompt_version=product_info.prompt_version,
                     reddit_context=reddit_context,
-                    design_instructions={"description": product_info.design_description},
-                    affiliate_link=product_info.affiliate_link
+                    design_instructions={
+                        "description": product_info.design_description
+                    },
+                    affiliate_link=product_info.affiliate_link,
                 )
 
                 # Convert to Pydantic schemas using model_validate
@@ -114,15 +129,21 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     product_schema = ProductInfoSchema.model_validate(product_info)
                     pipeline_schema = PipelineRunSchema.model_validate(run)
                     reddit_schema = RedditPostSchema.model_validate(reddit_post)
-                    
-                    products.append(GeneratedProductSchema(
-                        product_info=product_schema,
-                        pipeline_run=pipeline_schema,
-                        reddit_post=reddit_schema
-                    ))
-                    logger.info(f"Successfully converted pipeline run {run.id} to schema")
+
+                    products.append(
+                        GeneratedProductSchema(
+                            product_info=product_schema,
+                            pipeline_run=pipeline_schema,
+                            reddit_post=reddit_schema,
+                        )
+                    )
+                    logger.info(
+                        f"Successfully converted pipeline run {run.id} to schema"
+                    )
                 except Exception as e:
-                    logger.error(f"Error converting pipeline run {run.id} to schema: {str(e)}")
+                    logger.error(
+                        f"Error converting pipeline run {run.id} to schema: {str(e)}"
+                    )
                     logger.error(traceback.format_exc())
                     continue
             except Exception as e:
@@ -136,15 +157,16 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
         logger.error(traceback.format_exc())
         raise
 
+
 @app.get("/api/generated_products", response_model=List[GeneratedProductSchema])
 async def get_generated_products():
     """
     API endpoint to retrieve all successful pipeline runs and their related data.
-    
+
     Returns:
         List[GeneratedProductSchema]: A list of Pydantic models containing product information,
         pipeline run details, and associated Reddit post data.
-        
+
     Raises:
         HTTPException: If there is an error fetching the data from the database or
             converting the data to Pydantic models.
@@ -155,15 +177,19 @@ async def get_generated_products():
         products = fetch_successful_pipeline_runs(db)
         try:
             # Convert ORM models to Pydantic schemas
-            result = [GeneratedProductSchema.model_validate(product) for product in products]
-            logger.info(f"Successfully converted {len(result)} products to response format")
+            result = [
+                GeneratedProductSchema.model_validate(product) for product in products
+            ]
+            logger.info(
+                f"Successfully converted {len(result)} products to response format"
+            )
             return result
         except Exception as e:
             logger.error(f"Error converting models to Pydantic schemas: {str(e)}")
             logger.error(traceback.format_exc())
             raise HTTPException(
                 status_code=500,
-                detail=f"Error converting data to response format: {str(e)}"
+                detail=f"Error converting data to response format: {str(e)}",
             )
     except Exception as e:
         logger.error(f"Error in get_generated_products: {str(e)}")
@@ -171,6 +197,7 @@ async def get_generated_products():
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     logger.info("Starting API server...")

@@ -13,16 +13,17 @@ The module provides:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
 
 @dataclass
 class CustomizableField:
     """
     Represents a customizable field in a Zazzle product template.
-    
+
     This class defines the properties and constraints of a field that can be
     customized in a Zazzle product template, such as images, text, or colors.
-    
+
     Attributes:
         type (str): The type of field (e.g., 'image', 'text', 'color')
         description (str): A human-readable description of the field's purpose
@@ -31,6 +32,7 @@ class CustomizableField:
         max_size_mb (Optional[int]): Optional maximum file size in megabytes for media fields
         options (Optional[List[str]]): Optional list of valid options for selection fields
     """
+
     type: str
     description: str
     max_length: Optional[int] = None
@@ -41,38 +43,39 @@ class CustomizableField:
     def validate_value(self, value: Any) -> bool:
         """
         Validate a value against the field's constraints.
-        
+
         Args:
             value (Any): The value to validate
-            
+
         Returns:
             bool: True if the value is valid, False otherwise
-            
+
         Note:
             Validation rules:
             - For text fields: checks length against max_length
             - For image fields: checks format and size
             - For selection fields: checks if value is in options
         """
-        if self.type == 'text' and self.max_length:
+        if self.type == "text" and self.max_length:
             return len(str(value)) <= self.max_length
-        elif self.type == 'image':
+        elif self.type == "image":
             if not isinstance(value, str):
                 return False
             # Add image validation logic here
             return True
-        elif self.type == 'selection' and self.options:
+        elif self.type == "selection" and self.options:
             return value in self.options
         return True
+
 
 @dataclass
 class ZazzleTemplateConfig:
     """
     Configuration for a Zazzle product template.
-    
+
     This class defines the complete configuration for a Zazzle product template,
     including its type, identifiers, and customizable fields.
-    
+
     Attributes:
         product_type (str): The type of product (e.g., 'Sticker', 'T-Shirt')
         zazzle_template_id (str): The unique identifier for the Zazzle template
@@ -80,6 +83,7 @@ class ZazzleTemplateConfig:
         zazzle_tracking_code (str): The tracking code for affiliate links
         customizable_fields (Dict[str, CustomizableField]): Dictionary mapping field names to their configurations
     """
+
     product_type: str
     zazzle_template_id: str
     original_url: str
@@ -89,13 +93,13 @@ class ZazzleTemplateConfig:
     def validate_fields(self, field_values: Dict[str, Any]) -> bool:
         """
         Validate all field values against their configurations.
-        
+
         Args:
             field_values (Dict[str, Any]): Dictionary of field names and their values
-            
+
         Returns:
             bool: True if all values are valid, False otherwise
-            
+
         Note:
             Checks each field value against its corresponding CustomizableField
             configuration using the validate_value method.
@@ -106,6 +110,7 @@ class ZazzleTemplateConfig:
             if not self.customizable_fields[field_name].validate_value(value):
                 return False
         return True
+
 
 # TODO improve logic for multiple templates
 # Define the Zazzle Sticker Template
@@ -119,9 +124,9 @@ ZAZZLE_STICKER_TEMPLATE = ZazzleTemplateConfig(
             type="image",
             description="Custom image to be displayed on the sticker",
             formats=["png", "jpg", "jpeg"],
-            max_size_mb=5
+            max_size_mb=5,
         ),
-    }
+    },
 )
 
 ZAZZLE_PRINT_TEMPLATE = ZazzleTemplateConfig(
@@ -134,26 +139,27 @@ ZAZZLE_PRINT_TEMPLATE = ZazzleTemplateConfig(
             type="image",
             description="Custom image to be displayed on the print",
             formats=["png", "jpg", "jpeg"],
-            max_size_mb=5
+            max_size_mb=5,
         ),
-    }
+    },
 )
 
 
 # List of all available templates
 ALL_TEMPLATES: List[ZazzleTemplateConfig] = [ZAZZLE_PRINT_TEMPLATE]
 
+
 def get_product_template(product_type: str) -> Optional[ZazzleTemplateConfig]:
     """
     Retrieves a product template by type.
-    
+
     Args:
         product_type (str): The type of product to find (case-insensitive)
-        
+
     Returns:
         Optional[ZazzleTemplateConfig]: The matching template configuration if found,
             None otherwise
-        
+
     Example:
         >>> template = get_product_template("sticker")
         >>> if template:
@@ -162,4 +168,4 @@ def get_product_template(product_type: str) -> Optional[ZazzleTemplateConfig]:
     for template in ALL_TEMPLATES:
         if template.product_type.lower() == product_type.lower():
             return template
-    return None 
+    return None

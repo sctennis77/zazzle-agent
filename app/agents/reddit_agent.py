@@ -5,60 +5,117 @@ This module defines the RedditAgent, which automates content distribution, produ
 image creation, and engagement on Reddit. It integrates with OpenAI, PRAW, and Zazzle product workflows.
 """
 
+import json
+
 # Remove the base import since we're not inheriting from it anymore
 # from .base import ChannelAgent
 import logging
 import os
-import time
 import random
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional
-from app.models import ProductInfo, RedditContext, ProductIdea, PipelineConfig, DistributionStatus, DistributionMetadata, DesignInstructions
-from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-import praw
-from app.zazzle_product_designer import ZazzleProductDesigner
-import openai
-import json
-from app.image_generator import ImageGenerator
-from app.utils.logging_config import get_logger
+import time
 from dataclasses import asdict
-from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+import openai
+import praw
+from sqlalchemy.orm import Session
+
+from app.clients.reddit_client import RedditClient
 from app.db.mappers import reddit_context_to_db
 from app.db.models import RedditPost
-from sqlalchemy.orm import Session
-from app.clients.reddit_client import RedditClient
+from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
+from app.image_generator import ImageGenerator
+from app.models import (
+    DesignInstructions,
+    DistributionMetadata,
+    DistributionStatus,
+    PipelineConfig,
+    ProductIdea,
+    ProductInfo,
+    RedditContext,
+)
 from app.pipeline_status import PipelineStatus
+from app.utils.logging_config import get_logger
+from app.zazzle_product_designer import ZazzleProductDesigner
+from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
 logger = get_logger(__name__)
 
 # Available subreddits for the agent to work with
 AVAILABLE_SUBREDDITS = [
     # Nature & Outdoors (High visual appeal, engaged communities)
-    "nature", "earthporn", "landscapephotography", "hiking", "camping", "gardening", "plants", "succulents",
-    
+    "nature",
+    "earthporn",
+    "landscapephotography",
+    "hiking",
+    "camping",
+    "gardening",
+    "plants",
+    "succulents",
     # Space & Science (Fascinating visuals, tech-savvy audience)
-    "space", "astrophotography", "nasa", "science", "physics", "chemistry", "biology",
-    
+    "space",
+    "astrophotography",
+    "nasa",
+    "science",
+    "physics",
+    "chemistry",
+    "biology",
     # Sports & Recreation (Passionate communities, great visuals)
-    "golf", "soccer", "basketball", "tennis", "baseball", "hockey", "fishing", "surfing", "skiing", "rockclimbing",
-    
+    "golf",
+    "soccer",
+    "basketball",
+    "tennis",
+    "baseball",
+    "hockey",
+    "fishing",
+    "surfing",
+    "skiing",
+    "rockclimbing",
     # Animals & Pets (Universal appeal, emotional connection)
-    "aww", "cats", "dogs", "puppies", "kittens", "wildlife", "birding", "aquariums",
-    
+    "aww",
+    "cats",
+    "dogs",
+    "puppies",
+    "kittens",
+    "wildlife",
+    "birding",
+    "aquariums",
     # Food & Cooking (Visual appeal, lifestyle audience)
-    "food", "foodporn", "cooking", "baking", "coffee", "tea", "wine",
-    
+    "food",
+    "foodporn",
+    "cooking",
+    "baking",
+    "coffee",
+    "tea",
+    "wine",
     # Art & Design (Creative communities, design appreciation)
-    "art", "design", "architecture", "interiordesign", "streetart", "digitalart",
-    
+    "art",
+    "design",
+    "architecture",
+    "interiordesign",
+    "streetart",
+    "digitalart",
     # Technology & Gaming (Tech-savvy, purchasing power)
-    "programming", "gaming", "pcgaming", "retrogaming", "cyberpunk", "futurology",
-    
+    "programming",
+    "gaming",
+    "pcgaming",
+    "retrogaming",
+    "cyberpunk",
+    "futurology",
     # Travel & Culture (Diverse visuals, adventurous audience)
-    "travel", "backpacking", "photography", "cityporn", "history",
-    
+    "travel",
+    "backpacking",
+    "photography",
+    "cityporn",
+    "history",
     # Lifestyle & Wellness (Health-conscious, purchasing power)
-    "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan"
+    "fitness",
+    "yoga",
+    "meditation",
+    "minimalism",
+    "sustainability",
+    "vegan",
 ]
 
 # Detailed criteria for each subreddit selection
@@ -67,349 +124,343 @@ SUBREDDIT_CRITERIA = {
     "nature": {
         "image_generation": "Excellent - Diverse landscapes, wildlife, natural phenomena provide rich visual content",
         "engagement": "High - Nature enthusiasts are passionate and likely to purchase nature-themed products",
-        "purchase_likelihood": "Very High - Nature lovers often buy decor, clothing, and accessories"
+        "purchase_likelihood": "Very High - Nature lovers often buy decor, clothing, and accessories",
     },
     "earthporn": {
         "image_generation": "Outstanding - Stunning landscape photography with dramatic lighting and composition",
         "engagement": "Very High - Photography enthusiasts with appreciation for visual art",
-        "purchase_likelihood": "High - Likely to buy prints, wall art, and photography-related products"
+        "purchase_likelihood": "High - Likely to buy prints, wall art, and photography-related products",
     },
     "landscapephotography": {
         "image_generation": "Excellent - Professional quality landscape images with artistic composition",
         "engagement": "High - Photography community with technical knowledge and appreciation",
-        "purchase_likelihood": "High - Photography enthusiasts often purchase related products"
+        "purchase_likelihood": "High - Photography enthusiasts often purchase related products",
     },
     "hiking": {
         "image_generation": "Very Good - Trail views, mountain vistas, outdoor adventure scenes",
         "engagement": "High - Active outdoor community with strong passion for nature",
-        "purchase_likelihood": "Very High - Hikers buy gear, clothing, and outdoor-themed products"
+        "purchase_likelihood": "Very High - Hikers buy gear, clothing, and outdoor-themed products",
     },
     "camping": {
         "image_generation": "Good - Campfire scenes, tent setups, wilderness camping",
         "engagement": "High - Outdoor enthusiasts with strong community bonds",
-        "purchase_likelihood": "Very High - Campers regularly buy outdoor gear and accessories"
+        "purchase_likelihood": "Very High - Campers regularly buy outdoor gear and accessories",
     },
     "gardening": {
         "image_generation": "Very Good - Beautiful gardens, flowers, plants, garden design",
         "engagement": "High - Gardening community with strong passion and knowledge",
-        "purchase_likelihood": "High - Gardeners buy tools, decor, and garden-themed products"
+        "purchase_likelihood": "High - Gardeners buy tools, decor, and garden-themed products",
     },
     "plants": {
         "image_generation": "Excellent - Diverse plant species, indoor/outdoor plants, botanical beauty",
         "engagement": "Very High - Plant enthusiasts with strong community and knowledge sharing",
-        "purchase_likelihood": "Very High - Plant lovers buy planters, decor, and plant-related items"
+        "purchase_likelihood": "Very High - Plant lovers buy planters, decor, and plant-related items",
     },
     "succulents": {
         "image_generation": "Very Good - Unique succulent varieties, arrangements, minimalist beauty",
         "engagement": "High - Dedicated succulent community with strong passion",
-        "purchase_likelihood": "High - Succulent enthusiasts buy planters and related products"
+        "purchase_likelihood": "High - Succulent enthusiasts buy planters and related products",
     },
-    
     # Space & Science
     "space": {
         "image_generation": "Outstanding - Nebulae, galaxies, planets, space phenomena with stunning visuals",
         "engagement": "Very High - Space enthusiasts with strong interest and knowledge",
-        "purchase_likelihood": "High - Space fans buy posters, clothing, and space-themed products"
+        "purchase_likelihood": "High - Space fans buy posters, clothing, and space-themed products",
     },
     "astrophotography": {
         "image_generation": "Exceptional - Professional space photography with incredible detail and beauty",
         "engagement": "Very High - Photography and space enthusiasts with technical expertise",
-        "purchase_likelihood": "High - Likely to purchase prints and space-themed decor"
+        "purchase_likelihood": "High - Likely to purchase prints and space-themed decor",
     },
     "nasa": {
         "image_generation": "Excellent - Official NASA imagery, spacecraft, astronauts, mission photos",
         "engagement": "Very High - Space and science enthusiasts with strong interest",
-        "purchase_likelihood": "High - NASA fans buy official merchandise and space-themed products"
+        "purchase_likelihood": "High - NASA fans buy official merchandise and space-themed products",
     },
     "science": {
         "image_generation": "Good - Scientific concepts, experiments, research visuals",
         "engagement": "High - Science enthusiasts with strong intellectual curiosity",
-        "purchase_likelihood": "Medium-High - Science fans buy educational and themed products"
+        "purchase_likelihood": "Medium-High - Science fans buy educational and themed products",
     },
     "physics": {
         "image_generation": "Good - Physics concepts, diagrams, experimental setups",
         "engagement": "High - Physics enthusiasts with strong technical knowledge",
-        "purchase_likelihood": "Medium-High - Physics fans buy educational and themed products"
+        "purchase_likelihood": "Medium-High - Physics fans buy educational and themed products",
     },
     "chemistry": {
         "image_generation": "Good - Chemical reactions, lab setups, molecular structures",
         "engagement": "High - Chemistry enthusiasts with strong interest in science",
-        "purchase_likelihood": "Medium-High - Chemistry fans buy educational and themed products"
+        "purchase_likelihood": "Medium-High - Chemistry fans buy educational and themed products",
     },
     "biology": {
         "image_generation": "Very Good - Microscopic life, ecosystems, biological diversity",
         "engagement": "High - Biology enthusiasts with strong interest in life sciences",
-        "purchase_likelihood": "Medium-High - Biology fans buy educational and themed products"
+        "purchase_likelihood": "Medium-High - Biology fans buy educational and themed products",
     },
-    
     # Sports & Recreation
     "golf": {
         "image_generation": "Good - Golf courses, equipment, players, scenic golf settings",
         "engagement": "Very High - Golf enthusiasts with strong passion and purchasing power",
-        "purchase_likelihood": "Very High - Golfers buy equipment, clothing, and golf-themed products"
+        "purchase_likelihood": "Very High - Golfers buy equipment, clothing, and golf-themed products",
     },
     "soccer": {
         "image_generation": "Good - Stadiums, players, action shots, team colors",
         "engagement": "Very High - Global soccer community with massive following",
-        "purchase_likelihood": "Very High - Soccer fans buy jerseys, memorabilia, and team products"
+        "purchase_likelihood": "Very High - Soccer fans buy jerseys, memorabilia, and team products",
     },
     "basketball": {
         "image_generation": "Good - Courts, players, action shots, team colors",
         "engagement": "Very High - Basketball community with strong passion",
-        "purchase_likelihood": "Very High - Basketball fans buy jerseys, memorabilia, and team products"
+        "purchase_likelihood": "Very High - Basketball fans buy jerseys, memorabilia, and team products",
     },
     "tennis": {
         "image_generation": "Good - Courts, players, equipment, tennis settings",
         "engagement": "High - Tennis enthusiasts with strong community",
-        "purchase_likelihood": "High - Tennis players buy equipment, clothing, and tennis products"
+        "purchase_likelihood": "High - Tennis players buy equipment, clothing, and tennis products",
     },
     "baseball": {
         "image_generation": "Good - Stadiums, players, fields, team colors",
         "engagement": "Very High - Baseball community with strong tradition and passion",
-        "purchase_likelihood": "Very High - Baseball fans buy memorabilia, jerseys, and team products"
+        "purchase_likelihood": "Very High - Baseball fans buy memorabilia, jerseys, and team products",
     },
     "hockey": {
         "image_generation": "Good - Rinks, players, equipment, team colors",
         "engagement": "High - Hockey community with strong passion",
-        "purchase_likelihood": "High - Hockey fans buy jerseys, memorabilia, and team products"
+        "purchase_likelihood": "High - Hockey fans buy jerseys, memorabilia, and team products",
     },
     "fishing": {
         "image_generation": "Very Good - Fishing scenes, water, boats, fish, outdoor settings",
         "engagement": "High - Fishing enthusiasts with strong community",
-        "purchase_likelihood": "Very High - Fishermen buy equipment, clothing, and fishing products"
+        "purchase_likelihood": "Very High - Fishermen buy equipment, clothing, and fishing products",
     },
     "surfing": {
         "image_generation": "Excellent - Ocean waves, surfers, beach scenes, coastal beauty",
         "engagement": "High - Surfing community with strong passion for ocean",
-        "purchase_likelihood": "High - Surfers buy equipment, clothing, and ocean-themed products"
+        "purchase_likelihood": "High - Surfers buy equipment, clothing, and ocean-themed products",
     },
     "skiing": {
         "image_generation": "Excellent - Snow-covered mountains, skiers, winter sports",
         "engagement": "High - Skiing community with strong passion for winter sports",
-        "purchase_likelihood": "High - Skiers buy equipment, clothing, and winter-themed products"
+        "purchase_likelihood": "High - Skiers buy equipment, clothing, and winter-themed products",
     },
     "rockclimbing": {
         "image_generation": "Very Good - Cliffs, climbers, outdoor adventure, scenic views",
         "engagement": "High - Climbing community with strong passion for adventure",
-        "purchase_likelihood": "High - Climbers buy equipment, clothing, and adventure products"
+        "purchase_likelihood": "High - Climbers buy equipment, clothing, and adventure products",
     },
-    
     # Animals & Pets
     "aww": {
         "image_generation": "Excellent - Cute animals, pets, heartwarming moments",
         "engagement": "Very High - Universal appeal, massive community",
-        "purchase_likelihood": "Very High - Pet owners buy pet-related products and cute animal items"
+        "purchase_likelihood": "Very High - Pet owners buy pet-related products and cute animal items",
     },
     "cats": {
         "image_generation": "Excellent - Cat photos, behaviors, cute moments",
         "engagement": "Very High - Cat lovers with strong community and passion",
-        "purchase_likelihood": "Very High - Cat owners buy cat-themed products and accessories"
+        "purchase_likelihood": "Very High - Cat owners buy cat-themed products and accessories",
     },
     "dogs": {
         "image_generation": "Excellent - Dog photos, behaviors, cute moments",
         "engagement": "Very High - Dog lovers with strong community and passion",
-        "purchase_likelihood": "Very High - Dog owners buy dog-themed products and accessories"
+        "purchase_likelihood": "Very High - Dog owners buy dog-themed products and accessories",
     },
     "puppies": {
         "image_generation": "Excellent - Puppy photos, cute moments, playful scenes",
         "engagement": "Very High - Universal appeal, emotional connection",
-        "purchase_likelihood": "Very High - Puppy owners buy pet products and cute items"
+        "purchase_likelihood": "Very High - Puppy owners buy pet products and cute items",
     },
     "kittens": {
         "image_generation": "Excellent - Kitten photos, cute moments, playful scenes",
         "engagement": "Very High - Universal appeal, emotional connection",
-        "purchase_likelihood": "Very High - Kitten owners buy pet products and cute items"
+        "purchase_likelihood": "Very High - Kitten owners buy pet products and cute items",
     },
     "wildlife": {
         "image_generation": "Excellent - Wild animals, natural behaviors, diverse species",
         "engagement": "High - Wildlife enthusiasts with strong interest in nature",
-        "purchase_likelihood": "High - Wildlife fans buy nature-themed products and decor"
+        "purchase_likelihood": "High - Wildlife fans buy nature-themed products and decor",
     },
     "birding": {
         "image_generation": "Very Good - Bird species, natural habitats, bird behaviors",
         "engagement": "High - Birding community with strong passion and knowledge",
-        "purchase_likelihood": "High - Birders buy equipment, guides, and bird-themed products"
+        "purchase_likelihood": "High - Birders buy equipment, guides, and bird-themed products",
     },
     "aquariums": {
         "image_generation": "Very Good - Fish, aquatic plants, tank setups, underwater scenes",
         "engagement": "High - Aquarium enthusiasts with strong community",
-        "purchase_likelihood": "High - Aquarium owners buy equipment, decor, and fish products"
+        "purchase_likelihood": "High - Aquarium owners buy equipment, decor, and fish products",
     },
-    
     # Food & Cooking
     "food": {
         "image_generation": "Excellent - Diverse cuisines, cooking, presentation, food photography",
         "engagement": "Very High - Food lovers with strong community and passion",
-        "purchase_likelihood": "High - Food enthusiasts buy kitchen products and food-themed items"
+        "purchase_likelihood": "High - Food enthusiasts buy kitchen products and food-themed items",
     },
     "foodporn": {
         "image_generation": "Outstanding - High-quality food photography, presentation, culinary art",
         "engagement": "Very High - Food photography enthusiasts with appreciation for visual appeal",
-        "purchase_likelihood": "High - Likely to buy kitchen products and food-themed decor"
+        "purchase_likelihood": "High - Likely to buy kitchen products and food-themed decor",
     },
     "cooking": {
         "image_generation": "Good - Cooking processes, ingredients, kitchen scenes",
         "engagement": "Very High - Cooking enthusiasts with strong community",
-        "purchase_likelihood": "Very High - Cooks buy kitchen equipment and cooking products"
+        "purchase_likelihood": "Very High - Cooks buy kitchen equipment and cooking products",
     },
     "baking": {
         "image_generation": "Very Good - Baked goods, pastries, desserts, baking process",
         "engagement": "High - Baking enthusiasts with strong passion",
-        "purchase_likelihood": "High - Bakers buy baking equipment and kitchen products"
+        "purchase_likelihood": "High - Bakers buy baking equipment and kitchen products",
     },
     "coffee": {
         "image_generation": "Very Good - Coffee drinks, cafes, brewing, coffee culture",
         "engagement": "High - Coffee enthusiasts with strong community",
-        "purchase_likelihood": "High - Coffee lovers buy brewing equipment and coffee products"
+        "purchase_likelihood": "High - Coffee lovers buy brewing equipment and coffee products",
     },
     "tea": {
         "image_generation": "Good - Tea varieties, brewing, tea culture, relaxation",
         "engagement": "High - Tea enthusiasts with strong community",
-        "purchase_likelihood": "High - Tea lovers buy brewing equipment and tea products"
+        "purchase_likelihood": "High - Tea lovers buy brewing equipment and tea products",
     },
     "wine": {
         "image_generation": "Good - Wine bottles, vineyards, wine culture, tasting",
         "engagement": "High - Wine enthusiasts with strong community and purchasing power",
-        "purchase_likelihood": "High - Wine lovers buy wine accessories and wine-themed products"
+        "purchase_likelihood": "High - Wine lovers buy wine accessories and wine-themed products",
     },
-    
     # Art & Design
     "art": {
         "image_generation": "Excellent - Diverse art styles, creativity, artistic expression",
         "engagement": "Very High - Art enthusiasts with strong appreciation for creativity",
-        "purchase_likelihood": "High - Art lovers buy art supplies and artistic products"
+        "purchase_likelihood": "High - Art lovers buy art supplies and artistic products",
     },
     "design": {
         "image_generation": "Very Good - Design concepts, layouts, visual design",
         "engagement": "High - Design professionals and enthusiasts",
-        "purchase_likelihood": "High - Designers buy design tools and design-themed products"
+        "purchase_likelihood": "High - Designers buy design tools and design-themed products",
     },
     "architecture": {
         "image_generation": "Excellent - Buildings, structures, architectural beauty",
         "engagement": "High - Architecture enthusiasts with strong appreciation",
-        "purchase_likelihood": "Medium-High - Architecture fans buy architectural products and decor"
+        "purchase_likelihood": "Medium-High - Architecture fans buy architectural products and decor",
     },
     "interiordesign": {
         "image_generation": "Very Good - Room designs, furniture, decor, home aesthetics",
         "engagement": "High - Interior design enthusiasts with strong interest",
-        "purchase_likelihood": "High - Design enthusiasts buy home decor and design products"
+        "purchase_likelihood": "High - Design enthusiasts buy home decor and design products",
     },
     "streetart": {
         "image_generation": "Excellent - Urban art, murals, graffiti, street culture",
         "engagement": "High - Street art enthusiasts with strong appreciation",
-        "purchase_likelihood": "Medium-High - Street art fans buy urban-themed products"
+        "purchase_likelihood": "Medium-High - Street art fans buy urban-themed products",
     },
     "digitalart": {
         "image_generation": "Very Good - Digital artwork, digital painting, digital design",
         "engagement": "High - Digital artists and enthusiasts",
-        "purchase_likelihood": "High - Digital artists buy digital tools and art products"
+        "purchase_likelihood": "High - Digital artists buy digital tools and art products",
     },
-    
     # Technology & Gaming
     "programming": {
         "image_generation": "Good - Code, technology concepts, programming themes",
         "engagement": "Very High - Programmers with strong community and purchasing power",
-        "purchase_likelihood": "High - Programmers buy tech products and programming-themed items"
+        "purchase_likelihood": "High - Programmers buy tech products and programming-themed items",
     },
     "gaming": {
         "image_generation": "Good - Game characters, scenes, gaming culture",
         "engagement": "Very High - Gaming community with massive following",
-        "purchase_likelihood": "Very High - Gamers buy gaming products and merchandise"
+        "purchase_likelihood": "Very High - Gamers buy gaming products and merchandise",
     },
     "pcgaming": {
         "image_generation": "Good - PC setups, gaming hardware, gaming culture",
         "engagement": "Very High - PC gaming community with strong purchasing power",
-        "purchase_likelihood": "Very High - PC gamers buy hardware and gaming products"
+        "purchase_likelihood": "Very High - PC gamers buy hardware and gaming products",
     },
     "retrogaming": {
         "image_generation": "Good - Retro games, classic consoles, nostalgic gaming",
         "engagement": "High - Retro gaming enthusiasts with strong nostalgia",
-        "purchase_likelihood": "High - Retro gamers buy vintage and retro-themed products"
+        "purchase_likelihood": "High - Retro gamers buy vintage and retro-themed products",
     },
     "cyberpunk": {
         "image_generation": "Excellent - Futuristic aesthetics, neon, cyberpunk themes",
         "engagement": "High - Cyberpunk enthusiasts with strong aesthetic appreciation",
-        "purchase_likelihood": "High - Cyberpunk fans buy themed products and decor"
+        "purchase_likelihood": "High - Cyberpunk fans buy themed products and decor",
     },
     "futurology": {
         "image_generation": "Good - Future concepts, technology, innovation themes",
         "engagement": "High - Future enthusiasts with strong interest in technology",
-        "purchase_likelihood": "Medium-High - Future enthusiasts buy tech and innovation products"
+        "purchase_likelihood": "Medium-High - Future enthusiasts buy tech and innovation products",
     },
-    
     # Travel & Culture
     "travel": {
         "image_generation": "Excellent - Travel destinations, cultures, landscapes, experiences",
         "engagement": "Very High - Travel enthusiasts with strong passion for exploration",
-        "purchase_likelihood": "High - Travelers buy travel products and destination-themed items"
+        "purchase_likelihood": "High - Travelers buy travel products and destination-themed items",
     },
     "backpacking": {
         "image_generation": "Very Good - Backpacking scenes, trails, outdoor adventure",
         "engagement": "High - Backpacking community with strong passion for adventure",
-        "purchase_likelihood": "High - Backpackers buy outdoor gear and travel products"
+        "purchase_likelihood": "High - Backpackers buy outdoor gear and travel products",
     },
     "photography": {
         "image_generation": "Excellent - Diverse photography styles, techniques, subjects",
         "engagement": "Very High - Photography enthusiasts with strong technical knowledge",
-        "purchase_likelihood": "High - Photographers buy equipment and photography products"
+        "purchase_likelihood": "High - Photographers buy equipment and photography products",
     },
     "cityporn": {
         "image_generation": "Excellent - Urban landscapes, cityscapes, architecture",
         "engagement": "High - Urban photography enthusiasts with appreciation for cities",
-        "purchase_likelihood": "Medium-High - City enthusiasts buy urban-themed products"
+        "purchase_likelihood": "Medium-High - City enthusiasts buy urban-themed products",
     },
     "history": {
         "image_generation": "Good - Historical artifacts, events, historical themes",
         "engagement": "High - History enthusiasts with strong interest in the past",
-        "purchase_likelihood": "Medium-High - History fans buy historical and educational products"
+        "purchase_likelihood": "Medium-High - History fans buy historical and educational products",
     },
-    
     # Lifestyle & Wellness
     "fitness": {
         "image_generation": "Good - Exercise, fitness, health, active lifestyle",
         "engagement": "Very High - Fitness enthusiasts with strong community",
-        "purchase_likelihood": "Very High - Fitness enthusiasts buy equipment and fitness products"
+        "purchase_likelihood": "Very High - Fitness enthusiasts buy equipment and fitness products",
     },
     "yoga": {
         "image_generation": "Very Good - Yoga poses, meditation, wellness, tranquility",
         "engagement": "High - Yoga community with strong passion for wellness",
-        "purchase_likelihood": "High - Yogis buy yoga equipment and wellness products"
+        "purchase_likelihood": "High - Yogis buy yoga equipment and wellness products",
     },
     "meditation": {
         "image_generation": "Good - Meditation, mindfulness, peace, tranquility",
         "engagement": "High - Meditation community with strong interest in wellness",
-        "purchase_likelihood": "High - Meditators buy wellness products and meditation items"
+        "purchase_likelihood": "High - Meditators buy wellness products and meditation items",
     },
     "minimalism": {
         "image_generation": "Good - Clean design, simplicity, minimalist aesthetics",
         "engagement": "High - Minimalist community with appreciation for simplicity",
-        "purchase_likelihood": "High - Minimalists buy quality, simple products"
+        "purchase_likelihood": "High - Minimalists buy quality, simple products",
     },
     "sustainability": {
         "image_generation": "Good - Eco-friendly concepts, nature, sustainable living",
         "engagement": "High - Sustainability enthusiasts with strong environmental values",
-        "purchase_likelihood": "High - Sustainability advocates buy eco-friendly products"
+        "purchase_likelihood": "High - Sustainability advocates buy eco-friendly products",
     },
     "vegan": {
         "image_generation": "Good - Plant-based food, vegan lifestyle, animal welfare",
         "engagement": "High - Vegan community with strong values and passion",
-        "purchase_likelihood": "High - Vegans buy plant-based and ethical products"
-    }
+        "purchase_likelihood": "High - Vegans buy plant-based and ethical products",
+    },
 }
+
 
 def pick_subreddit() -> str:
     """
     Pick a random subreddit from the available subreddits list.
-    
+
     Returns:
         str: A randomly selected subreddit name
     """
     return random.choice(AVAILABLE_SUBREDDITS)
 
+
 class RedditAgent:
     """
     Reddit agent for product idea generation and creation.
-    
+
     This agent focuses on finding trending posts, generating product ideas,
     creating images, and designing products on Zazzle. Interaction logic
     has been moved to RedditInteractionAgent.
@@ -421,11 +472,11 @@ class RedditAgent:
         pipeline_run_id: int = None,
         session: Session = None,
         reddit_post_id: int = None,
-        subreddit_name: str = 'golf'
+        subreddit_name: str = "golf",
     ):
         """
         Initialize the Reddit agent with configuration and database session.
-        
+
         Args:
             config: Pipeline configuration
             pipeline_run_id: ID of the current pipeline run
@@ -437,45 +488,47 @@ class RedditAgent:
             model="dall-e-3",
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
-            zazzle_affiliate_id=os.getenv('ZAZZLE_AFFILIATE_ID', ''),
-            prompt_version="1.0.0"
+            zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
+            prompt_version="1.0.0",
         )
         self.pipeline_run_id = pipeline_run_id
         self.session = session
         self.reddit_post_id = reddit_post_id
         # Initialize Reddit client
         self.reddit = praw.Reddit(
-            client_id=os.getenv('REDDIT_CLIENT_ID'),
-            client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-            user_agent=os.getenv('REDDIT_USER_AGENT', 'zazzle-agent/1.0'),
-            username=os.getenv('REDDIT_USERNAME'),
-            password=os.getenv('REDDIT_PASSWORD')
+            client_id=os.getenv("REDDIT_CLIENT_ID"),
+            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+            user_agent=os.getenv("REDDIT_USER_AGENT", "zazzle-agent/1.0"),
+            username=os.getenv("REDDIT_USERNAME"),
+            password=os.getenv("REDDIT_PASSWORD"),
         )
         self.subreddit_name = subreddit_name
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
         self.openai = openai
         self.image_generator = ImageGenerator(model=self.config.model)
         self.product_designer = ZazzleProductDesigner()
-        if not hasattr(self, 'daily_stats'):
+        if not hasattr(self, "daily_stats"):
             self.daily_stats = {
-                'posts': 0,
-                'comments': 0,
-                'upvotes': 0,
-                'affiliate_posts': 0,
-                'organic_posts': 0,
-                'last_action_time': None
+                "posts": 0,
+                "comments": 0,
+                "upvotes": 0,
+                "affiliate_posts": 0,
+                "organic_posts": 0,
+                "last_action_time": None,
             }
 
-    def _determine_product_idea(self, reddit_context: RedditContext) -> Optional[ProductIdea]:
+    def _determine_product_idea(
+        self, reddit_context: RedditContext
+    ) -> Optional[ProductIdea]:
         """
         Determine product idea from Reddit post context using OpenAI.
-        
+
         Args:
             reddit_context: RedditContext object with post details
-        
+
         Returns:
             ProductIdea object or None if generation fails
-            
+
         Raises:
             ValueError: If theme is 'default theme' or image description is empty
         """
@@ -485,9 +538,15 @@ class RedditAgent:
             response = self.openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well."},
-                    {"role": "user", "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]"}
-                ]
+                    {
+                        "role": "system",
+                        "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
+                    },
+                ],
             )
 
             # Log the raw response for debugging
@@ -495,15 +554,15 @@ class RedditAgent:
 
             # Parse response to get theme and image description
             content = response.choices[0].message.content or ""
-            lines = content.split('\n')
+            lines = content.split("\n")
             logger.info(f"OpenAI Response: {lines}")
             theme = None
             image_description = None
             for line in lines:
-                if line.startswith('Theme:'):
-                    theme = line.replace('Theme:', '').strip().strip('"')
-                elif line.startswith('Image Description:'):
-                    image_description = line.replace('Image Description:', '').strip()
+                if line.startswith("Theme:"):
+                    theme = line.replace("Theme:", "").strip().strip('"')
+                elif line.startswith("Image Description:"):
+                    image_description = line.replace("Image Description:", "").strip()
 
             # Treat empty strings as missing
             if not theme or not theme.strip():
@@ -515,7 +574,7 @@ class RedditAgent:
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
-            if theme.lower() == 'default theme':
+            if theme.lower() == "default theme":
                 error_msg = "Invalid theme: 'default theme' is not allowed"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -524,13 +583,10 @@ class RedditAgent:
             product_idea = ProductIdea(
                 theme=theme,
                 image_description=image_description,
-                design_instructions={
-                    "image": None,
-                    "theme": theme
-                },
+                design_instructions={"image": None, "theme": theme},
                 reddit_context=reddit_context,
                 model=self.config.model,
-                prompt_version=self.config.prompt_version
+                prompt_version=self.config.prompt_version,
             )
 
             return product_idea
@@ -561,8 +617,12 @@ class RedditAgent:
             logger.info(f"Title: {trending_post.title}")
             logger.info(f"URL: {trending_post.url}")
             logger.info(f"Subreddit: {trending_post.subreddit.display_name}")
-            logger.info(f"Content: {trending_post.selftext if hasattr(trending_post, 'selftext') else 'No content'}")
-            logger.info(f"Comment Summary: {getattr(trending_post, 'comment_summary', 'No comment summary')}")
+            logger.info(
+                f"Content: {trending_post.selftext if hasattr(trending_post, 'selftext') else 'No content'}"
+            )
+            logger.info(
+                f"Comment Summary: {getattr(trending_post, 'comment_summary', 'No comment summary')}"
+            )
 
             # Create RedditContext from the post
             reddit_context = RedditContext(
@@ -570,8 +630,18 @@ class RedditAgent:
                 post_title=trending_post.title,
                 post_url=f"https://reddit.com{trending_post.permalink}",
                 subreddit=trending_post.subreddit.display_name,
-                post_content=trending_post.selftext if hasattr(trending_post, 'selftext') else None,
-                comments=[{'text': getattr(trending_post, 'comment_summary', 'No comment summary')}]
+                post_content=(
+                    trending_post.selftext
+                    if hasattr(trending_post, "selftext")
+                    else None
+                ),
+                comments=[
+                    {
+                        "text": getattr(
+                            trending_post, "comment_summary", "No comment summary"
+                        )
+                    }
+                ],
             )
 
             # Determine product idea from post (synchronous call)
@@ -579,16 +649,21 @@ class RedditAgent:
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
                 return None
-            if not product_idea.theme or product_idea.theme.lower() == 'default theme':
+            if not product_idea.theme or product_idea.theme.lower() == "default theme":
                 raise ValueError("No valid theme was generated from the Reddit context")
             logger.info(f"Product Idea: {product_idea}")
-            if not product_idea.image_description or not product_idea.image_description.strip():
-                logger.error("Image prompt (image_description) is empty. Aborting image generation.")
+            if (
+                not product_idea.image_description
+                or not product_idea.image_description.strip()
+            ):
+                logger.error(
+                    "Image prompt (image_description) is empty. Aborting image generation."
+                )
                 raise ValueError("Image prompt (image_description) cannot be empty.")
             try:
                 imgur_url, local_path = await self.image_generator.generate_image(
                     product_idea.image_description,
-                    template_id=self.config.zazzle_template_id
+                    template_id=self.config.zazzle_template_id,
                 )
             except Exception as e:
                 logger.error(f"Failed to generate image: {str(e)}")
@@ -600,12 +675,11 @@ class RedditAgent:
                 product_type=ZAZZLE_PRINT_TEMPLATE.product_type,
                 template_id=self.config.zazzle_template_id,
                 model=self.config.model,
-                prompt_version=self.config.prompt_version
+                prompt_version=self.config.prompt_version,
             )
             logger.info(f"Design Instructions: {design_instructions}")
             product_info = await self.product_designer.create_product(
-                design_instructions=design_instructions,
-                reddit_context=reddit_context
+                design_instructions=design_instructions, reddit_context=reddit_context
             )
             if not product_info:
                 logger.warning("Failed to create product")
@@ -620,7 +694,7 @@ class RedditAgent:
     async def get_product_info(self) -> List[ProductInfo]:
         """
         Get product information from Reddit content.
-        
+
         Returns:
             List[ProductInfo]: List of product information objects
         """
@@ -634,43 +708,46 @@ class RedditAgent:
             logger.error(f"Error getting product info: {str(e)}")
             return []
 
-    async def get_product_info_with_design(self, design_instructions: DesignInstructions) -> Optional[ProductInfo]:
+    async def get_product_info_with_design(
+        self, design_instructions: DesignInstructions
+    ) -> Optional[ProductInfo]:
         """
         Create a product using the provided design instructions.
-        
+
         Args:
             design_instructions: The design instructions for creating the product
-            
+
         Returns:
             ProductInfo object if successful, None otherwise
         """
         try:
-            logger.info(f"Creating product with design instructions: {design_instructions}")
-            
+            logger.info(
+                f"Creating product with design instructions: {design_instructions}"
+            )
+
             # Create a basic RedditContext for the product
             reddit_context = RedditContext(
-                post_id='manual_creation',
-                post_title='Manual Product Creation',
-                post_url='https://reddit.com/manual',
-                subreddit='manual'
+                post_id="manual_creation",
+                post_title="Manual Product Creation",
+                post_url="https://reddit.com/manual",
+                subreddit="manual",
             )
-            
+
             # Create the product using the product designer
             product_info = await self.product_designer.create_product(
-                design_instructions=design_instructions,
-                reddit_context=reddit_context
+                design_instructions=design_instructions, reddit_context=reddit_context
             )
-            
+
             if not product_info:
                 logger.warning("Failed to create product")
                 return None
-                
+
             if isinstance(product_info, dict):
                 product_info = ProductInfo.from_dict(product_info)
-                
+
             logger.info(f"Successfully created product: {product_info.product_id}")
             return product_info
-            
+
         except Exception as e:
             logger.error(f"Error in get_product_info: {str(e)}")
             return None
@@ -678,14 +755,16 @@ class RedditAgent:
     def save_reddit_context_to_db(self, reddit_context) -> Optional[int]:
         """
         Persist a RedditContext as RedditPost in the DB and return the DB ID.
-        
+
         Returns:
             int: The ID of the persisted RedditPost if successful
             None: If persistence fails or no session/pipeline_run_id is provided
         """
         reddit_post_id = None
         if self.session and self.pipeline_run_id:
-            logger.warning(f"[DEBUG] In save_reddit_context_to_db: self.session is set (type: {type(self.session)})")
+            logger.warning(
+                f"[DEBUG] In save_reddit_context_to_db: self.session is set (type: {type(self.session)})"
+            )
             try:
                 orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
                 self.session.add(orm_post)
@@ -697,7 +776,9 @@ class RedditAgent:
                 self.session.rollback()
                 return None
         else:
-            logger.warning(f"[DEBUG] In save_reddit_context_to_db: self.session is None")
+            logger.warning(
+                f"[DEBUG] In save_reddit_context_to_db: self.session is None"
+            )
         return reddit_post_id
 
     async def _find_trending_post(self, tries: int = 3, limit: int = 50):
@@ -706,58 +787,91 @@ class RedditAgent:
         Skips posts that are stickied, too old, or already present in the database (by post_id).
         Returns the first valid post or None if none are found.
         """
-        logger.warning(f"[DEBUG] At start of _find_trending_post: self.session is {'set' if self.session else 'None'} (type: {type(self.session)})")
-        logger.info(f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}")
+        logger.warning(
+            f"[DEBUG] At start of _find_trending_post: self.session is {'set' if self.session else 'None'} (type: {type(self.session)})"
+        )
+        logger.info(
+            f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
+        )
         try:
             for attempt in range(tries):
                 subreddit = self.reddit.subreddit(self.subreddit_name)
                 for submission in subreddit.hot(limit=limit):
-                    logger.info(f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)")
+                    logger.info(
+                        f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
+                    )
                     if submission.stickied:
-                        print('Skipping: stickied')
+                        print("Skipping: stickied")
                         continue
-                    if (datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days > 2:
-                        print('Skipping: too old')
+                    if (
+                        datetime.now(timezone.utc)
+                        - datetime.fromtimestamp(submission.created_utc, timezone.utc)
+                    ).days > 2:
+                        print("Skipping: too old")
                         continue
                     if not submission.selftext:
-                        print('Skipping: no selftext')
+                        print("Skipping: no selftext")
                         continue
 
                     # Debug: Print all post_ids in the DB and session info
                     if self.session:
                         all_posts = self.session.query(RedditPost).all()
-                        logger.info(f"[DEBUG] All post_ids in DB: {[repr(p.post_id) for p in all_posts]}")
-                        logger.info(f"[DEBUG] Checking for post_id: {repr(submission.id)}")
+                        logger.info(
+                            f"[DEBUG] All post_ids in DB: {[repr(p.post_id) for p in all_posts]}"
+                        )
+                        logger.info(
+                            f"[DEBUG] Checking for post_id: {repr(submission.id)}"
+                        )
                         logger.info(f"[DEBUG] Session info: {self.session}")
-                        existing_post = self.session.query(RedditPost).filter_by(post_id=submission.id).first()
+                        existing_post = (
+                            self.session.query(RedditPost)
+                            .filter_by(post_id=submission.id)
+                            .first()
+                        )
                         if existing_post:
-                            logger.info(f"Skipping post {submission.id}: already processed")
+                            logger.info(
+                                f"Skipping post {submission.id}: already processed"
+                            )
                             continue
-                    
+
                     # Get top comments and generate summary
-                    submission.comments.replace_more(limit=0)  # Load top-level comments only
+                    submission.comments.replace_more(
+                        limit=0
+                    )  # Load top-level comments only
                     top_comments = submission.comments.list()[:5]  # Get top 5 comments
-                    comment_texts = [comment.body for comment in top_comments if hasattr(comment, 'body')]
+                    comment_texts = [
+                        comment.body
+                        for comment in top_comments
+                        if hasattr(comment, "body")
+                    ]
                     if comment_texts:
                         # Use GPT to summarize comments
                         response = self.openai.chat.completions.create(
                             model="gpt-4",
                             messages=[
-                                {"role": "system", "content": "Summarize the key points from these Reddit comments in 1-2 sentences."},
-                                {"role": "user", "content": f"Comments:\n{chr(10).join(comment_texts)}"}
-                            ]
+                                {
+                                    "role": "system",
+                                    "content": "Summarize the key points from these Reddit comments in 1-2 sentences.",
+                                },
+                                {
+                                    "role": "user",
+                                    "content": f"Comments:\n{chr(10).join(comment_texts)}",
+                                },
+                            ],
                         )
                         comment_summary = response.choices[0].message.content.strip()
                     else:
                         comment_summary = "No comments available."
                     # Add comment summary to submission
                     submission.comment_summary = comment_summary
-                    print('Returning submission:', submission.title)
+                    print("Returning submission:", submission.title)
                     return submission
                 # If we reach here, no suitable post was found in this attempt
-                logger.info(f"No suitable trending post found on attempt {attempt + 1}/{tries}")
+                logger.info(
+                    f"No suitable trending post found on attempt {attempt + 1}/{tries}"
+                )
             return None
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
             print(f"Exception in _find_trending_post: {e}")
-            return None 
+            return None

@@ -1,34 +1,46 @@
-import os
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from app.affiliate_linker import ZazzleAffiliateLinker, ZazzleAffiliateLinkerError, InvalidProductDataError
-from app.models import ProductInfo, RedditContext, ProductIdea
-import logging
-from datetime import datetime
-import json
 import glob
+import json
+import logging
+import os
 import shutil
-from io import StringIO
 import sys
+from datetime import datetime
+from io import StringIO
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.affiliate_linker import (
+    InvalidProductDataError,
+    ZazzleAffiliateLinker,
+    ZazzleAffiliateLinkerError,
+)
+from app.models import ProductIdea, ProductInfo, RedditContext
+
 
 @pytest.fixture(autouse=True)
 def setup():
     # Mock necessary environment variables for tests
-    with patch.dict(os.environ, {
-        'ZAZZLE_AFFILIATE_ID': 'test_affiliate_id',
-        'ZAZZLE_TEMPLATE_ID': 'test_template_id',
-        'ZAZZLE_TRACKING_CODE': 'test_tracking_code'
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "ZAZZLE_AFFILIATE_ID": "test_affiliate_id",
+            "ZAZZLE_TEMPLATE_ID": "test_template_id",
+            "ZAZZLE_TRACKING_CODE": "test_tracking_code",
+        },
+    ):
         yield
+
 
 @pytest.fixture
 def reddit_context():
     return RedditContext(
-        post_id='test_post_id',
-        post_title='Test Post Title',
-        post_url='https://reddit.com/test',
-        subreddit='test_subreddit'
+        post_id="test_post_id",
+        post_title="Test Post Title",
+        post_url="https://reddit.com/test",
+        subreddit="test_subreddit",
     )
+
 
 @pytest.fixture
 def mock_product_info(reddit_context):
@@ -45,8 +57,9 @@ def mock_product_info(reddit_context):
         prompt_version="1.0.0",
         reddit_context=reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
-        image_local_path="/path/to/image.jpg"
+        image_local_path="/path/to/image.jpg",
     )
+
 
 @pytest.fixture
 def mock_product_idea():
@@ -54,29 +67,37 @@ def mock_product_idea():
         title="Test Post",
         url="https://reddit.com/test",
         subreddit="test_subreddit",
-        post_id="test_post_id"
+        post_id="test_post_id",
     )
+
 
 @pytest.mark.asyncio
 class TestZazzleAffiliateLinker:
     @pytest.fixture
     def affiliate_linker(self):
         return ZazzleAffiliateLinker(
-            zazzle_affiliate_id='test_affiliate_id',
-            zazzle_tracking_code='test_tracking_code'
+            zazzle_affiliate_id="test_affiliate_id",
+            zazzle_tracking_code="test_tracking_code",
         )
 
-    async def test_generate_links_batch_success(self, affiliate_linker, mock_product_info):
+    async def test_generate_links_batch_success(
+        self, affiliate_linker, mock_product_info
+    ):
         # Mock the _generate_affiliate_link method
-        affiliate_linker._generate_affiliate_link = AsyncMock(return_value="https://www.zazzle.com/product/test_product_id?rf=test_affiliate_id")
-        
+        affiliate_linker._generate_affiliate_link = AsyncMock(
+            return_value="https://www.zazzle.com/product/test_product_id?rf=test_affiliate_id"
+        )
+
         # Test generating links for a batch of products
         products = [mock_product_info]
         result = await affiliate_linker.generate_links_batch(products)
-        
+
         # Verify the result
         assert len(result) == 1
-        assert result[0].affiliate_link == "https://www.zazzle.com/product/test_product_id?rf=test_affiliate_id"
+        assert (
+            result[0].affiliate_link
+            == "https://www.zazzle.com/product/test_product_id?rf=test_affiliate_id"
+        )
         assert result[0].product_id == mock_product_info.product_id
 
     async def test_generate_links_batch_empty(self, affiliate_linker):
@@ -84,10 +105,14 @@ class TestZazzleAffiliateLinker:
         result = await affiliate_linker.generate_links_batch([])
         assert len(result) == 0
 
-    async def test_generate_links_batch_error(self, affiliate_linker, mock_product_info):
+    async def test_generate_links_batch_error(
+        self, affiliate_linker, mock_product_info
+    ):
         # Mock the _generate_affiliate_link method to raise an error
-        affiliate_linker._generate_affiliate_link = AsyncMock(side_effect=ZazzleAffiliateLinkerError("API Error"))
-        
+        affiliate_linker._generate_affiliate_link = AsyncMock(
+            side_effect=ZazzleAffiliateLinkerError("API Error")
+        )
+
         # Test error handling
         products = [mock_product_info]
         result = await affiliate_linker.generate_links_batch(products)
@@ -107,15 +132,15 @@ class TestZazzleAffiliateLinker:
             model="dall-e-3",
             prompt_version="1.0.0",
             reddit_context=RedditContext(
-                post_id='test_post_id',
-                post_title='Test Post Title',
-                post_url='https://reddit.com/test',
-                subreddit='test_subreddit'
+                post_id="test_post_id",
+                post_title="Test Post Title",
+                post_url="https://reddit.com/test",
+                subreddit="test_subreddit",
             ),
             design_instructions={"image": "https://example.com/image.jpg"},
-            image_local_path="/path/to/image.jpg"
+            image_local_path="/path/to/image.jpg",
         )
-        
+
         products = [invalid_product]
         result = await affiliate_linker.generate_links_batch(products)
         assert result[0].affiliate_link is None
@@ -127,19 +152,24 @@ class TestZazzleAffiliateLinker:
         expected_url = f"{mock_product_info.product_url}?rf=test_affiliate_id&tc=test_tracking_code"
         assert result == expected_url
 
-    async def test_generate_affiliate_link_error(self, affiliate_linker, mock_product_info):
+    async def test_generate_affiliate_link_error(
+        self, affiliate_linker, mock_product_info
+    ):
         # Mock the _generate_affiliate_link method to raise an error
-        affiliate_linker._generate_affiliate_link = AsyncMock(side_effect=ZazzleAffiliateLinkerError("API Error"))
-        
+        affiliate_linker._generate_affiliate_link = AsyncMock(
+            side_effect=ZazzleAffiliateLinkerError("API Error")
+        )
+
         # Test error handling
         with pytest.raises(ZazzleAffiliateLinkerError):
             await affiliate_linker._generate_affiliate_link(mock_product_info)
+
 
 def test_generate_affiliate_link():
     """Test generating a single affiliate link."""
     linker = ZazzleAffiliateLinker(
         zazzle_affiliate_id="test_affiliate_id",
-        zazzle_tracking_code="test_tracking_code"
+        zazzle_tracking_code="test_tracking_code",
     )
     product = ProductInfo(
         product_id="test123",
@@ -156,11 +186,12 @@ def test_generate_affiliate_link():
             post_id="test_post",
             post_title="Test Post",
             post_url="https://reddit.com/test_post",
-            subreddit="test_subreddit"
+            subreddit="test_subreddit",
         ),
-        design_instructions={"image": "https://example.com/image.jpg"}
+        design_instructions={"image": "https://example.com/image.jpg"},
     )
     expected_link = f"{product.product_url}?rf=test_affiliate_id&tc=test_tracking_code"
     import asyncio
+
     result = asyncio.run(linker._generate_affiliate_link(product))
-    assert result == expected_link 
+    assert result == expected_link
