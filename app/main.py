@@ -49,7 +49,7 @@ else:
     logger.warning("OPENAI_API_KEY not loaded.")
 
 
-def ensure_output_dir(output_dir: str = "outputs"):
+def ensure_output_dir(output_dir: str = "outputs") -> None:
     """Ensure the output directory exists."""
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(os.path.join(output_dir, "screenshots"), exist_ok=True)
@@ -57,7 +57,7 @@ def ensure_output_dir(output_dir: str = "outputs"):
     logger.info("Ensured outputs directory exists")
 
 
-def save_to_csv(products, output_file="processed_products.csv"):
+def save_to_csv(products: List[ProductInfo], output_file: str = "processed_products.csv") -> None:
     """Save product information to a CSV file."""
     if not isinstance(products, list):
         products = [products]
@@ -83,7 +83,7 @@ def save_to_csv(products, output_file="processed_products.csv"):
         writer.writerows(product_dicts)
 
 
-def log_product_info(product_info: ProductInfo):
+def log_product_info(product_info: ProductInfo) -> None:
     """Log product information in a readable format."""
     logger.info("\nGenerated Product Info:")
     logger.info(f"Theme: {product_info.theme}")
@@ -116,7 +116,8 @@ def session_scope():
 
 
 async def run_full_pipeline(
-    config: PipelineConfig = None, subreddit_name: Optional[str] = None
+    config: Optional[PipelineConfig] = None, 
+    subreddit_name: Optional[str] = None
 ) -> List[ProductInfo]:
     """
     Run the complete product generation pipeline.
@@ -211,7 +212,7 @@ async def run_full_pipeline(
         raise
 
 
-async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2"):
+async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2") -> None:
     """Run the image generation pipeline with a given prompt."""
     image_generator = ImageGenerator(model=model)
     try:
@@ -234,11 +235,12 @@ def validate_subreddit(subreddit_name: str) -> None:
     """
     if subreddit_name not in AVAILABLE_SUBREDDITS:
         raise ValueError(
-            f"Subreddit '{subreddit_name}' is not available. Available subreddits: {AVAILABLE_SUBREDDITS}"
+            f"Subreddit '{subreddit_name}' is not available. "
+            f"Available subreddits: {AVAILABLE_SUBREDDITS}"
         )
 
 
-async def main():
+async def main() -> None:
     """Main entry point for the application."""
     try:
         # Initialize the database

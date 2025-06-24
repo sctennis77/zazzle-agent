@@ -11,8 +11,7 @@ The module handles:
 - Error handling and logging
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
 from app.models import AffiliateLinker, ProductInfo
 from app.utils.logging_config import get_logger
@@ -60,7 +59,8 @@ class ZazzleAffiliateLinker:
             zazzle_tracking_code=zazzle_tracking_code,
         )
         logger.info(
-            f"Initialized ZazzleAffiliateLinker with affiliate ID: {zazzle_affiliate_id}"
+            f"Initialized ZazzleAffiliateLinker with affiliate ID: "
+            f"{zazzle_affiliate_id}"
         )
 
     def _validate_product_data(self, product_id: str, name: str) -> None:
@@ -99,12 +99,15 @@ class ZazzleAffiliateLinker:
                 product.product_url
             )
             logger.info(
-                f"Generated affiliate link for {product.name} ({product.product_id})"
+                f"Generated affiliate link for {product.name} "
+                f"({product.product_id})"
             )
             return affiliate_link
         except Exception as e:
             logger.error(f"Error generating affiliate link: {e}")
-            raise ZazzleAffiliateLinkerError(f"Failed to generate affiliate link: {e}")
+            raise ZazzleAffiliateLinkerError(
+                f"Failed to generate affiliate link: {e}"
+            )
 
     async def generate_links_batch(
         self, products: List[ProductInfo]
@@ -124,7 +127,8 @@ class ZazzleAffiliateLinker:
                 product.affiliate_link = affiliate_link
             except Exception as e:
                 logger.error(
-                    f"Failed to generate affiliate link for {product.name}: {str(e)}"
+                    f"Failed to generate affiliate link for {product.name}: "
+                    f"{str(e)}"
                 )
                 product.affiliate_link = None
         return products

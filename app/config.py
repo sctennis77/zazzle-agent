@@ -1,5 +1,7 @@
 import os
 
+from app.affiliate_linker import AffiliateLinker
+
 # Initialize affiliate linker
 affiliate_linker = AffiliateLinker(
     zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),

@@ -6,6 +6,9 @@ and interacting with users on various platforms (e.g., Reddit, Twitter).
 """
 
 from abc import ABC, abstractmethod
+from typing import Any, Optional
+
+from app.models import ProductInfo
 
 
 class ChannelAgent(ABC):
@@ -17,7 +20,7 @@ class ChannelAgent(ABC):
     """
 
     @abstractmethod
-    def post_content(self, product, content):
+    def post_content(self, product: ProductInfo, content: str) -> None:
         """
         Post content related to a product on the channel.
 
@@ -28,7 +31,7 @@ class ChannelAgent(ABC):
         pass
 
     @abstractmethod
-    def interact_with_users(self, product, context=None):
+    def interact_with_users(self, product: ProductInfo, context: Optional[Any] = None) -> None:
         """
         Interact with users on the channel regarding a product.
 
