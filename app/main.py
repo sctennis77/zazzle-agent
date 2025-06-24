@@ -27,6 +27,7 @@ from app.models import PipelineConfig, ProductInfo
 from app.pipeline import Pipeline
 from app.pipeline_status import PipelineStatus
 from app.utils.logging_config import setup_logging
+from app.utils.openai_usage_tracker import log_session_summary
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE, get_product_template
 
@@ -200,15 +201,15 @@ async def run_full_pipeline(
             session.add(pipeline_run)
             session.commit()
 
+            # Log OpenAI API usage summary
+            log_session_summary()
+
             return results
 
     except Exception as e:
-        logger.error(f"Error in full pipeline: {str(e)}")
-        if "pipeline_run" in locals():
-            pipeline_run.status = PipelineStatus.FAILED.value
-            pipeline_run.end_time = datetime.utcnow()
-            session.add(pipeline_run)
-            session.commit()
+        logger.error(f"Pipeline failed: {str(e)}")
+        # Log OpenAI API usage summary even on failure
+        log_session_summary()
         raise
 
 

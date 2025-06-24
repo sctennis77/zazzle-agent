@@ -28,30 +28,27 @@ from openai.types.images_response import ImagesResponse
 from app.clients.imgur_client import ImgurClient
 from app.models import ProductIdea, ProductInfo
 from app.utils.logging_config import get_logger
+from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
 
 load_dotenv()
 
 logger = get_logger(__name__)
 
-# Base prompts for image generation with versioning
+# Base prompts for different DALL-E models
 IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-2": {
-        # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 1.5 inch diameter round image on Zazzle.",
-        # version": "1.0.0"
-        "prompt": "Create a square (1:1) image optimized for a 3-inch circular or 3x3-inch square sticker. Center the composition so it works well when cropped to a circle. Use at least 1024x1024 resolution. Keep key elements (like text or faces) within the central 2.75-inch area to allow for bleed and trimming. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Create a image for the following description:",
+        "prompt": "Create a high-quality, detailed image:",
         "version": "1.0.0",
     },
     "dall-e-3": {
-        # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
-        # "version": "1.0.0"
-        "prompt": "Create a square (1:1) image optimized picture books. You're working with 1024x1024 image size so design accordingly. Keep key elements like faces within the central area. Style should be inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature when possible. Never include text in the image. Create a image for the following description:",
+        "prompt": "Create a stunning, high-resolution image with excellent composition and detail:",
         "version": "1.0.0",
     },
 }
 
 
 class ImageGenerationError(Exception):
-    """Custom exception for image generation errors."""
+    """Exception raised for errors in image generation."""
 
     pass
 
@@ -118,6 +115,32 @@ class ImageGenerator:
         """
         return IMAGE_GENERATION_BASE_PROMPTS[self.model]
 
+    @track_openai_call(model="dall-e-3", operation="image")
+    def _generate_dalle_image(self, prompt: str, size: str) -> ImagesResponse:
+        """
+        Generate an image using DALL-E with tracking.
+
+        Args:
+            prompt (str): The text prompt for image generation
+            size (str): The size of the image to generate
+
+        Returns:
+            ImagesResponse: Response from DALL-E API containing generated image data
+
+        Raises:
+            ImageGenerationError: If DALL-E API call fails
+        """
+        try:
+            return self.client.images.generate(
+                model=self.model,
+                prompt=prompt,
+                size=size,
+                n=1,
+                response_format="b64_json",
+            )
+        except Exception as e:
+            raise ImageGenerationError(f"DALL-E API call failed: {str(e)}") from e
+
     async def generate_image(
         self, prompt: str, size: Optional[str] = None, template_id: Optional[str] = None
     ) -> Tuple[str, str]:
@@ -153,13 +176,9 @@ class ImageGenerator:
             base_prompt = IMAGE_GENERATION_BASE_PROMPTS[self.model]["prompt"]
             full_prompt = f"{base_prompt} {prompt}"
 
-            response = self.client.images.generate(
-                model=self.model,
-                prompt=full_prompt,
-                size=size,
-                n=1,
-                response_format="b64_json",
-            )
+            # Generate image with tracking
+            response = self._generate_dalle_image(full_prompt, size)
+            
             image_data_b64 = response.data[0].b64_json
             if not image_data_b64:
                 raise ImageGenerationError("DALL-E did not return base64 image data.")
@@ -172,31 +191,6 @@ class ImageGenerator:
             error_msg = f"Failed to generate or store image: {str(e)}"
             logger.error(error_msg)
             raise ImageGenerationError(error_msg) from e
-
-    def _generate_dalle_image(self, prompt: str, size: str) -> ImagesResponse:
-        """
-        Generate an image using DALL-E.
-
-        Args:
-            prompt (str): The text prompt for image generation
-            size (str): The size of the image to generate
-
-        Returns:
-            ImagesResponse: Response from DALL-E API containing generated image data
-
-        Raises:
-            ImageGenerationError: If DALL-E API call fails
-        """
-        try:
-            return self.client.images.generate(
-                model=self.model,
-                prompt=prompt,
-                size=size,
-                n=1,
-                response_format="b64_json",
-            )
-        except Exception as e:
-            raise ImageGenerationError(f"DALL-E API call failed: {str(e)}") from e
 
     async def _process_and_store_image(
         self, response: ImagesResponse, template_id: Optional[str], size: str
@@ -298,10 +292,33 @@ class ImageGenerator:
                     design_instructions=idea.design_instructions,
                     image_local_path=local_path,
                 )
+
                 results.append(product_info)
+                logger.info(f"Successfully generated image for product: {idea.theme}")
 
             except Exception as e:
-                logger.error(f"Error generating image for product idea: {str(e)}")
-                results.append({"error": str(e), "product_idea": idea})
+                error_result = {
+                    "error": str(e),
+                    "product_idea": idea.theme,
+                    "timestamp": datetime.now().isoformat(),
+                }
+                results.append(error_result)
+                logger.error(f"Failed to generate image for product {idea.theme}: {e}")
 
+        # Log session summary after batch processing
+        log_session_summary()
         return results
+
+    async def _generate_image(self, prompt: str, model: str) -> Dict[str, str]:
+        """
+        Generate a single image (for batch processing compatibility).
+
+        Args:
+            prompt (str): The image prompt
+            model (str): The model to use
+
+        Returns:
+            Dict[str, str]: Dictionary with 'url' and 'local_path' keys
+        """
+        imgur_url, local_path = await self.generate_image(prompt)
+        return {"url": imgur_url, "local_path": local_path}

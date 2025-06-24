@@ -26,3 +26,19 @@ Here are some best practices and rules you must follow:
 10. **Avoid Global Variables**: Limit the use of global variables to reduce side effects.
 
 These rules will help you write clean, efficient, and maintainable Python code.
+
+# How to change the OpenAI model for product idea generation in production
+
+To switch between GPT models (e.g., gpt-3.5-turbo and gpt-4) for product idea generation, set the environment variable:
+
+    OPENAI_IDEA_MODEL
+
+- Example for GPT-3.5-turbo (default):
+    OPENAI_IDEA_MODEL=gpt-3.5-turbo
+
+- Example for GPT-4:
+    OPENAI_IDEA_MODEL=gpt-4
+
+This variable is read by the Reddit agent and controls which model is used for idea generation. No code changes are needed—just set the environment variable in your deployment or .env file.
+
+If you ask to change models in production, this is the only step required.

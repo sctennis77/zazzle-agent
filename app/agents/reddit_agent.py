@@ -22,8 +22,10 @@ import praw
 from sqlalchemy.orm import Session
 
 from app.clients.reddit_client import RedditClient
-from app.db.mappers import reddit_context_to_db
-from app.db.models import RedditPost
+from app.clients.imgur_client import ImgurClient
+from app.db.database import SessionLocal
+from app.db.mappers import reddit_context_to_db, product_idea_to_db, product_info_to_db
+from app.db.models import RedditPost, ProductInfo
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
 from app.image_generator import ImageGenerator
 from app.models import (
@@ -37,6 +39,7 @@ from app.models import (
 )
 from app.pipeline_status import PipelineStatus
 from app.utils.logging_config import get_logger
+from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
@@ -517,6 +520,26 @@ class RedditAgent:
                 "last_action_time": None,
             }
 
+    def _get_idea_model(self) -> str:
+        """
+        Get the model to use for product idea generation.
+        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-3.5-turbo.
+        """
+        return os.getenv("OPENAI_IDEA_MODEL", "gpt-3.5-turbo")
+
+    @track_openai_call(model="gpt-3.5-turbo", operation="chat")
+    def _make_openai_call(self, messages: List[Dict[str, str]]) -> str:
+        """
+        Make an OpenAI API call with tracking.
+        Uses the model specified by _get_idea_model().
+        """
+        model = self._get_idea_model()
+        response = self.openai.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+        return response.choices[0].message.content
+
     def _determine_product_idea(
         self, reddit_context: RedditContext
     ) -> Optional[ProductIdea]:
@@ -535,25 +558,24 @@ class RedditAgent:
         try:
             # Use OpenAI to analyze post and generate product idea
             # TODO: need to version these too
-            response = self.openai.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
-                    },
-                ],
-            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well.",
+                },
+                {
+                    "role": "user",
+                    "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
+                },
+            ]
+
+            logger.info(f"Generating product idea for Reddit post: {reddit_context.post_title}")
+            content = self._make_openai_call(messages)
 
             # Log the raw response for debugging
-            logger.info(f"Raw OpenAI Response: {response.choices[0].message.content}")
+            logger.info(f"Raw OpenAI Response: {content}")
 
             # Parse response to get theme and image description
-            content = response.choices[0].message.content or ""
             lines = content.split("\n")
             logger.info(f"OpenAI Response: {lines}")
             theme = None
@@ -589,6 +611,7 @@ class RedditAgent:
                 prompt_version=self.config.prompt_version,
             )
 
+            logger.info(f"Successfully generated product idea: {theme}")
             return product_idea
 
         except ValueError:
