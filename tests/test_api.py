@@ -2,14 +2,13 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 
 from app.api import app, fetch_successful_pipeline_runs
 from app.db.models import PipelineRun, ProductInfo, RedditPost
 
 
-@pytest.mark.asyncio
-async def test_get_generated_products_successful(monkeypatch):
+def test_get_generated_products_successful(monkeypatch):
     # Mock the fetch_successful_pipeline_runs function
     def mock_fetch_successful_pipeline_runs(db):
         return [
@@ -51,18 +50,17 @@ async def test_get_generated_products_successful(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        response = await ac.get("/api/generated_products")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["product_info"]["theme"] == "Test Theme"
-        assert data[0]["pipeline_run"]["status"] == "completed"
-        assert data[0]["reddit_post"]["post_id"] == "test123"
+    client = TestClient(app)
+    response = client.get("/api/generated_products")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["product_info"]["theme"] == "Test Theme"
+    assert data[0]["pipeline_run"]["status"] == "completed"
+    assert data[0]["reddit_post"]["post_id"] == "test123"
 
 
-@pytest.mark.asyncio
-async def test_get_generated_products_empty(monkeypatch):
+def test_get_generated_products_empty(monkeypatch):
     # Mock the fetch_successful_pipeline_runs function to return an empty list
     def mock_fetch_successful_pipeline_runs(db):
         return []
@@ -71,14 +69,13 @@ async def test_get_generated_products_empty(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        response = await ac.get("/api/generated_products")
+    client = TestClient(app)
+    response = client.get("/api/generated_products")
     assert response.status_code == 200
     assert response.json() == []
 
 
-@pytest.mark.asyncio
-async def test_get_generated_products_error_handling(monkeypatch):
+def test_get_generated_products_error_handling(monkeypatch):
     # Mock the fetch_successful_pipeline_runs function to raise an exception
     def mock_fetch_successful_pipeline_runs(db):
         raise Exception("Database error")
@@ -87,9 +84,9 @@ async def test_get_generated_products_error_handling(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        response = await ac.get("/api/generated_products")
-        assert response.status_code == 500
-        data = response.json()
-        assert "detail" in data
-        assert "Database error" in data["detail"]
+    client = TestClient(app)
+    response = client.get("/api/generated_products")
+    assert response.status_code == 500
+    data = response.json()
+    assert "detail" in data
+    assert "Database error" in data["detail"]
