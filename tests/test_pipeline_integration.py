@@ -24,7 +24,7 @@ from app.db.mappers import product_info_to_db
 from app.db.models import PipelineRun
 from app.db.models import ProductInfo as DBProductInfo
 from app.db.models import RedditPost
-from app.image_generator import ImageGenerator
+from app.image_generator import ImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
 from app.models import ProductIdea, ProductInfo, RedditContext
 from app.pipeline import Pipeline
 from app.pipeline_status import PipelineStatus
@@ -63,7 +63,7 @@ def mock_reddit_agent():
                     subreddit="test",
                 ),
                 model="dall-e-3",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
         ]
     )
@@ -103,7 +103,7 @@ def mock_zazzle_designer():
             product_url="https://zazzle.com/test",
             theme="Test Theme",
             model="dall-e-3",
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             reddit_context=RedditContext(
                 post_id="test123",
                 post_title="Test Post",
@@ -189,7 +189,7 @@ async def test_full_pipeline_success(
         product_url="https://example.com/product_1",
         theme="theme1",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=RedditContext(
             post_id="test_post_id",
             post_title="Test Post Title",
@@ -257,7 +257,7 @@ async def test_full_pipeline_success(
         assert db_product.product_url == "https://example.com/product_1"
         assert db_product.template_id == "template123"
         assert db_product.model == "dall-e-3"
-        assert db_product.prompt_version == "1.0.0"
+        assert db_product.prompt_version == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
         assert db_product.product_type == "sticker"
         assert db_product.pipeline_run_id == run.id
         assert db_product.reddit_post_id == post.id
@@ -291,7 +291,7 @@ async def test_pipeline_error_handling(
         product_url="https://example.com/product_1",
         theme="theme1",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=RedditContext(
             post_id="test_post_id",
             post_title="Test Post Title",
@@ -345,7 +345,7 @@ async def test_pipeline_concurrent_operations(
             product_url=f"https://example.com/product_{i}",
             theme=f"Theme {i}",
             model="dall-e-3",
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             reddit_context=RedditContext(
                 post_id=f"test{i}",
                 post_title=f"Test Post {i}",
@@ -402,7 +402,7 @@ async def test_pipeline_rate_limiting(
         product_url="https://zazzle.com/test",
         theme="Test Theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=RedditContext(
             post_id="test123",
             post_title="Test Post",

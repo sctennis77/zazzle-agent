@@ -10,6 +10,7 @@ from app.models import (
     ProductInfo,
     RedditContext,
 )
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 
 def test_product_info_to_csv():
@@ -33,7 +34,7 @@ def test_product_info_to_csv():
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
         affiliate_link="https://example.com/affiliate",
@@ -64,7 +65,7 @@ def test_product_info_to_csv():
             assert row["product_url"] == "https://example.com/product"
             assert row["theme"] == "test_theme"
             assert row["model"] == "dall-e-3"
-            assert row["prompt_version"] == "1.0.0"
+            assert row["prompt_version"] == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
             assert row["affiliate_link"] == "https://example.com/affiliate"
             assert row["image_local_path"] == "/path/to/image.jpg"
 
@@ -80,13 +81,13 @@ def test_pipeline_config():
         model="dall-e-3",
         zazzle_template_id="template123",
         zazzle_tracking_code="tracking456",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
     )
 
     assert config.model == "dall-e-3"
     assert config.zazzle_template_id == "template123"
     assert config.zazzle_tracking_code == "tracking456"
-    assert config.prompt_version == "1.0.0"
+    assert config.prompt_version == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
 
 
 def test_reddit_context():
@@ -123,14 +124,14 @@ def test_product_idea():
         design_instructions={"image": "https://example.com/image.jpg"},
         reddit_context=reddit_context,
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
     )
 
     assert idea.theme == "test_theme"
     assert idea.image_description == "Test image description"
     assert idea.design_instructions["image"] == "https://example.com/image.jpg"
     assert idea.model == "dall-e-3"
-    assert idea.prompt_version == "1.0.0"
+    assert idea.prompt_version == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
     assert idea.reddit_context == reddit_context
 
 

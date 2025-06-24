@@ -16,6 +16,7 @@ from app.affiliate_linker import (
     ZazzleAffiliateLinkerError,
 )
 from app.models import ProductIdea, ProductInfo, RedditContext
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +55,7 @@ def mock_product_info(reddit_context):
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
         image_local_path="/path/to/image.jpg",
@@ -130,7 +131,7 @@ class TestZazzleAffiliateLinker:
             product_url="https://example.com/product",
             theme="test_theme",
             model="dall-e-3",
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             reddit_context=RedditContext(
                 post_id="test_post_id",
                 post_title="Test Post Title",
@@ -181,7 +182,7 @@ def test_generate_affiliate_link():
         zazzle_tracking_code="test_tracking_code",
         theme="test_theme",
         model="dall-e-2",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["version"],
         reddit_context=RedditContext(
             post_id="test_post",
             post_title="Test Post",

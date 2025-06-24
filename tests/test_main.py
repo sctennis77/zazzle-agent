@@ -10,6 +10,7 @@ from app.affiliate_linker import ZazzleAffiliateLinker
 from app.agents.reddit_agent import AVAILABLE_SUBREDDITS, RedditAgent
 from app.content_generator import ContentGenerator
 from app.db.database import Base, engine
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
 from app.main import (
     ensure_output_dir,
     log_product_info,
@@ -49,7 +50,7 @@ def mock_product_info():
         product_url="https://zazzle.com/test_product",
         theme="test theme",
         model="test_model",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=reddit_context,
         design_instructions={
             "content": "Test content",
@@ -105,7 +106,7 @@ async def test_run_full_pipeline_success(mock_product_info):
                 model="dall-e-3",
                 zazzle_template_id="test_template_id",
                 zazzle_tracking_code="test_tracking_code",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
             result = await run_full_pipeline(config)
             assert result == [mock_product_info]
@@ -136,7 +137,7 @@ async def test_run_full_pipeline_no_product_generated():
                 model="dall-e-3",
                 zazzle_template_id="test_template_id",
                 zazzle_tracking_code="test_tracking_code",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
             with pytest.raises(Exception) as exc_info:
                 await run_full_pipeline(config)
@@ -163,7 +164,7 @@ async def test_run_full_pipeline_error_handling():
                 model="dall-e-3",
                 zazzle_template_id="test_template_id",
                 zazzle_tracking_code="test_tracking_code",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
             # Verify that the error is raised
             with pytest.raises(Exception) as exc_info:
@@ -273,7 +274,7 @@ def test_save_to_csv():
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
         image_local_path="/path/to/image.jpg",
@@ -303,7 +304,7 @@ def test_save_to_csv():
             assert row["product_url"] == "https://example.com/product"
             assert row["theme"] == "test_theme"
             assert row["model"] == "dall-e-3"
-            assert row["prompt_version"] == "1.0.0"
+            assert row["prompt_version"] == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
             assert row["image_local_path"] == "/path/to/image.jpg"
 
     finally:
@@ -332,7 +333,7 @@ def test_save_to_csv_missing_fields():
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
         image_local_path="/path/to/image.jpg",
@@ -362,7 +363,7 @@ def test_save_to_csv_missing_fields():
             assert row["product_url"] == "https://example.com/product"
             assert row["theme"] == "test_theme"
             assert row["model"] == "dall-e-3"
-            assert row["prompt_version"] == "1.0.0"
+            assert row["prompt_version"] == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
             assert row["image_local_path"] == "/path/to/image.jpg"
 
     finally:
@@ -398,7 +399,7 @@ async def test_run_full_pipeline_with_specified_subreddit(mock_product_info):
                 model="dall-e-3",
                 zazzle_template_id="test_template_id",
                 zazzle_tracking_code="test_tracking_code",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
             result = await run_full_pipeline(config, subreddit_name="golf")
             assert result == [mock_product_info]
@@ -427,7 +428,7 @@ async def test_run_full_pipeline_with_random_subreddit(mock_product_info):
                 model="dall-e-3",
                 zazzle_template_id="test_template_id",
                 zazzle_tracking_code="test_tracking_code",
-                prompt_version="1.0.0",
+                prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             )
             result = await run_full_pipeline(config, subreddit_name=None)
             assert result == [mock_product_info]

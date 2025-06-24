@@ -27,7 +27,7 @@ from app.db.database import SessionLocal
 from app.db.mappers import reddit_context_to_db, product_idea_to_db, product_info_to_db
 from app.db.models import RedditPost, ProductInfo
 from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-from app.image_generator import ImageGenerator
+from app.image_generator import ImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
 from app.models import (
     DesignInstructions,
     DistributionMetadata,
@@ -487,12 +487,14 @@ class RedditAgent:
             reddit_post_id: ID of the current Reddit post
             subreddit_name: Name of the subreddit to interact with
         """
+        model = config.model if config else "dall-e-3"
+        prompt_version = IMAGE_GENERATION_BASE_PROMPTS[model]["version"]
         self.config = config or PipelineConfig(
-            model="dall-e-3",
+            model=model,
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
-            prompt_version="1.0.0",
+            prompt_version=prompt_version,
         )
         self.pipeline_run_id = pipeline_run_id
         self.session = session

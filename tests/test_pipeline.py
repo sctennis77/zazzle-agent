@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.reddit_agent import RedditAgent
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 # Add DB setup/teardown fixture
 from app.db.database import Base, SessionLocal, engine
@@ -30,7 +31,7 @@ def pipeline():
         zazzle_template_id="template123",
         zazzle_tracking_code="tracking456",
         zazzle_affiliate_id="test_affiliate_id",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
     )
     reddit_agent = MagicMock()
     reddit_agent.get_product_info = AsyncMock()
@@ -73,7 +74,7 @@ def sample_product_idea():
         design_instructions={"image": "https://example.com/image.jpg"},
         reddit_context=reddit_context,
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
     )
 
 
@@ -98,7 +99,7 @@ async def test_process_product_idea(pipeline, sample_product_idea):
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-3",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
         reddit_context=sample_product_idea.reddit_context,
         design_instructions={
             "image": "https://example.com/image.jpg",
@@ -143,7 +144,7 @@ async def test_run_pipeline_batch(pipeline):
             product_url=f"https://example.com/product_{i}",
             theme=f"theme{i+1}",
             model="dall-e-3",
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
             reddit_context=reddit_context,
             design_instructions={
                 "image": f"https://example.com/image{i+1}.jpg",
@@ -232,7 +233,7 @@ async def test_pipeline_uses_correct_model(mock_determine, mock_find_post, mock_
             subreddit="test_subreddit",
         ),
         model="dall-e-2",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["version"],
     )
     # Mock create_product to return a valid ProductInfo
     mock_create_product.return_value = ProductInfo(
@@ -245,7 +246,7 @@ async def test_pipeline_uses_correct_model(mock_determine, mock_find_post, mock_
         product_url="https://example.com/product",
         theme="test_theme",
         model="dall-e-2",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["version"],
         reddit_context=mock_determine.return_value.reddit_context,
         design_instructions={"image": "https://example.com/image.jpg"},
         image_local_path="/tmp/image.jpg",
@@ -259,7 +260,7 @@ async def test_pipeline_uses_correct_model(mock_determine, mock_find_post, mock_
                                                      zazzle_template_id="template123",
                                                      zazzle_tracking_code="tracking456",
                                                      zazzle_affiliate_id="test_affiliate_id",
-                                                     prompt_version="1.0.0")),
+                                                     prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["version"])),
         content_generator=MagicMock(),
         image_generator=MagicMock(),
         zazzle_designer=MagicMock(),
@@ -270,7 +271,7 @@ async def test_pipeline_uses_correct_model(mock_determine, mock_find_post, mock_
             zazzle_template_id="template123",
             zazzle_tracking_code="tracking456",
             zazzle_affiliate_id="test_affiliate_id",
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-2"]["version"],
         ),
     )
     # Run the pipeline

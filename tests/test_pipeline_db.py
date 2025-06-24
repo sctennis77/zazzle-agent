@@ -6,6 +6,7 @@ from app.db.database import Base, SessionLocal, engine
 from app.db.models import PipelineRun
 from app.main import PipelineConfig, run_full_pipeline
 from app.pipeline_status import PipelineStatus
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +30,7 @@ def test_pipeline_run_creates_pipelinerun(monkeypatch):
         model="dall-e-3",
         zazzle_template_id="test_template_id",
         zazzle_tracking_code="test_tracking_code",
-        prompt_version="1.0.0",
+        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
     )
     try:
         asyncio.run(run_full_pipeline(config))
