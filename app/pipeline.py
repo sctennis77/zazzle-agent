@@ -44,7 +44,6 @@ from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
 logger = get_logger(__name__)
 
-
 class Pipeline:
     """
     Main pipeline for processing product ideas into product info objects.
@@ -73,9 +72,9 @@ class Pipeline:
         affiliate_linker: ZazzleAffiliateLinker,
         imgur_client: ImgurClient,
         config: Optional[PipelineConfig] = None,
-        pipeline_run_id: int = None,
-        session=None,
-        reddit_post_id: int = None,
+        pipeline_run_id: Optional[int] = None,
+        session: Optional[Session] = None,
+        reddit_post_id: Optional[int] = None,
     ):
         """
         Initialize the pipeline with its dependencies.
@@ -117,10 +116,10 @@ class Pipeline:
         error_message: str,
         error_type: str = "SYSTEM_ERROR",
         component: str = "PIPELINE",
-        stack_trace: str = None,
-        context_data: dict = None,
+        stack_trace: Optional[str] = None,
+        context_data: Optional[dict] = None,
         severity: str = "ERROR",
-    ):
+    ) -> None:
         """
         Log an error to the database if session is available.
 
@@ -160,7 +159,8 @@ class Pipeline:
                         )
                 self.session.commit()
                 logger.error(
-                    f"Logged error to database: {error_message} (Type: {error_type}, Component: {component})"
+                    f"Logged error to database: {error_message} "
+                    f"(Type: {error_type}, Component: {component})"
                 )
             except Exception as e:
                 logger.error(f"Failed to log error to database: {str(e)}")
@@ -193,6 +193,7 @@ class Pipeline:
             product_idea.design_instructions["image"] = imgur_url
 
             # Create product with retries
+            product_info: Optional[ProductInfo] = None
             for attempt in range(self.max_retries):
                 try:
                     product_info = await self.zazzle_designer.create_product(
