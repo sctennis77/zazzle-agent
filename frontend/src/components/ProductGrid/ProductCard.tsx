@@ -23,7 +23,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <div className="relative w-full h-full">
             <img
               src={product.product_info.image_url}
-              alt={product.product_info.theme}
+              alt={product.product_info.image_title || product.product_info.theme}
               className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 cursor-pointer"
               loading="lazy"
               onClick={handleImageClick}
@@ -47,9 +47,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
         
         <div className="flex flex-col flex-1 px-5 pb-5">
-          <h3 className="text-base font-medium text-gray-800 mb-3 text-center cursor-pointer flex-1 leading-relaxed italic">
+          <h3 className="text-base font-medium text-gray-800 mb-2 text-center cursor-pointer flex-1 leading-relaxed">
             {product.product_info.image_title || product.product_info.theme}
           </h3>
+          
+          {/* Subtle separator */}
+          <div className="flex justify-center mb-2">
+            <div className="w-8 h-px bg-gray-300"></div>
+          </div>
+          
+          {/* Theme Caption */}
+          <div className="pb-2">
+            <p className="text-sm text-gray-600 italic text-center leading-relaxed">
+              {product.product_info.theme}
+            </p>
+          </div>
           
           <div className="text-sm text-gray-500 text-center mt-auto">
             {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
