@@ -14,6 +14,8 @@ The module handles:
 import logging
 from pathlib import Path
 from typing import Optional, Tuple
+import os
+import numpy as np
 
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -53,7 +55,7 @@ class ImageProcessor:
     """
 
     DEFAULT_LOGO_PATH = "frontend/src/assets/logo.png"
-    DEFAULT_STAMP_SIZE = (80, 80)
+    DEFAULT_STAMP_SIZE = (100, 100)
     DEFAULT_SIGNATURE_FONT_SIZE = 48
     DEFAULT_WATERMARK_OPACITY = 0.3
 
@@ -87,81 +89,39 @@ class ImageProcessor:
 
         logger.info(f"Initialized ImageProcessor with logo_path: {self.logo_path}")
 
-    def stamp_image_with_logo(self, image: Image.Image) -> Image.Image:
+    def stamp_image_with_logo(self, image: Image.Image, url: str = None) -> Image.Image:
         """
-        Add a circular logo stamp to the bottom-right corner of the image.
-
+        Add a QR code stamp (with prepped background and advanced styling) to the bottom-right corner of the image.
         Args:
             image (Image.Image): The input PIL image (expected 1024x1024).
-
+            url (str, optional): The URL to encode as a QR code. If None, uses a default test URL.
         Returns:
             Image.Image: The stamped image (new object).
-
-        Raises:
-            ImageProcessingError: If logo loading or processing fails
         """
-        if not self.logo_path or not Path(self.logo_path).exists():
-            logger.warning("No valid logo path available, returning original image")
-            return image.copy()
-
         try:
-            # Copy image to avoid mutating input
-            stamped = image.copy().convert("RGBA")
-            width, height = stamped.size
-
-            # Load the circular logo
-            logo = Image.open(self.logo_path).convert("RGBA")
-
-            # Extract stamp dimensions
-            stamp_width, stamp_height = self.stamp_size
-
-            # Position the stamp flush with the bottom-right (no margin)
-            x = width - stamp_width
-            y = height - stamp_height
-
-            # Cut out the rectangle from the original image
-            stamp_area = stamped.crop((x, y, x + stamp_width, y + stamp_height))
-
-            # Resize logo to fit within the stamp area (with a little padding)
-            logo_size = min(stamp_width, stamp_height) - 8  # 8px padding
-            logo_resized = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
-
-            # Create a new image for the logo overlay
-            logo_overlay = Image.new("RGBA", (stamp_width, stamp_height), (0, 0, 0, 0))
-
-            # Center the logo in the stamp area
-            logo_x = (stamp_width - logo_size) // 2
-            logo_y = (stamp_height - logo_size) // 2
-            logo_overlay.paste(logo_resized, (logo_x, logo_y), logo_resized)
-
-            # Apply transparency to make it watermark-like
-            logo_overlay_data = logo_overlay.getdata()
-            watermark_data = []
-            for pixel in logo_overlay_data:
-                if pixel[3] > 0:
-                    watermark_data.append(
-                        (
-                            pixel[0],
-                            pixel[1],
-                            pixel[2],
-                            int(pixel[3] * self.watermark_opacity),
-                        )
-                    )
-                else:
-                    watermark_data.append(pixel)
-            watermark_overlay = Image.new("RGBA", (stamp_width, stamp_height))
-            watermark_overlay.putdata(watermark_data)
-
-            # Composite the watermark overlay onto the stamp area
-            stamp_area_with_logo = Image.alpha_composite(stamp_area, watermark_overlay)
-
-            # Paste the modified stamp area back into the original image
-            stamped.paste(stamp_area_with_logo, (x, y))
-
-            return stamped.convert(image.mode)
-
+            if url is None:
+                url = "/redirect/test_image_20250625124000_1024x1024.png"
+            # Generate the full-size QR code stamp
+            qr_stamp_full = self.logo_to_qr(None, url)
+            # Resize to stamp size
+            qr_stamp = qr_stamp_full.resize(self.stamp_size, Image.LANCZOS)
+            
+            # Add white border around the QR code stamp
+            border_size = 3  # 3px white border
+            bordered_stamp = Image.new('RGBA', 
+                (self.stamp_size[0] + 2 * border_size, self.stamp_size[1] + 2 * border_size), 
+                (255, 255, 255, 255))  # White background
+            bordered_stamp.paste(qr_stamp, (border_size, border_size), qr_stamp)
+            
+            stamped = image.copy().convert('RGBA')
+            img_width, img_height = stamped.size
+            stamp_width, stamp_height = bordered_stamp.size
+            x = img_width - stamp_width - 20
+            y = img_height - stamp_height - 20
+            stamped.paste(bordered_stamp, (x, y), bordered_stamp)
+            return stamped
         except Exception as e:
-            error_msg = f"Failed to stamp image with logo: {str(e)}"
+            error_msg = f"Failed to stamp image with QR code: {str(e)}"
             logger.error(error_msg)
             raise ImageProcessingError(error_msg) from e
 
@@ -282,62 +242,46 @@ class ImageProcessor:
 
     def logo_to_qr(self, image: Image.Image, url: str, logo_path: str = None) -> Image.Image:
         """
-        Create a QR code with the logo embedded in the center, using advanced styling.
-        The QR code will be stamped in the bottom-right corner of the image.
-
-        Args:
-            image (Image.Image): The input PIL image (expected 1024x1024).
-            url (str): The URL to encode as a QR code.
-            logo_path (str, optional): Path to the logo file. Defaults to self.logo_path.
-
-        Returns:
-            Image.Image: The image with the QR code stamped in the bottom-right.
-
-        Raises:
-            ImageProcessingError: If there's an error processing the image or logo.
+        Generate a full-size QR code image (512x512) with the prepped background and advanced styling.
+        Ignores the input image size, always returns a 512x512 QR code image.
         """
         try:
-            # Use provided logo path or default
-            logo_path = logo_path or self.logo_path
-            
-            # Create QR code with advanced styling
+            prepped_bg_path = os.path.join(os.path.dirname(__file__), '../../scripts/logo_qr_background.png')
+            use_prepped_bg = os.path.exists(prepped_bg_path)
+            QR_SIZE = 512
             qr = qrcode.QRCode(
                 version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction for logo overlay
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
                 box_size=10,
                 border=2
             )
             qr.add_data(url)
             qr.make(fit=True)
-            
-            # Create styled QR code with logo embedded in center
-            qr_image = qr.make_image(
-                image_factory=StyledPilImage,
-                module_drawer=RoundedModuleDrawer(),
-                color_mask=SolidFillColorMask(back_color=(255, 255, 255), front_color=(0, 0, 0)),
-                embedded_image_path=logo_path
-            )
-            
-            # Resize QR code to stamp size
-            qr_image = qr_image.resize(self.stamp_size, Image.Resampling.LANCZOS)
-            
-            # Create a copy of the input image
-            result_image = image.copy()
-            
-            # Calculate position (bottom-right corner)
-            img_width, img_height = result_image.size
-            qr_width, qr_height = qr_image.size
-            x = img_width - qr_width - 20  # 20px margin from edges
-            y = img_height - qr_height - 20
-            
-            # Paste QR code onto the image
-            result_image.paste(qr_image, (x, y))
-            
-            return result_image
-            
+            qr_matrix = qr.get_matrix()
+            modules_count = len(qr_matrix)
+            module_size = QR_SIZE // modules_count
+            if use_prepped_bg:
+                logo_bg = Image.open(prepped_bg_path).convert('RGBA').resize((QR_SIZE, QR_SIZE), Image.LANCZOS)
+            else:
+                logo_bg = Image.open(self.logo_path).convert('RGBA').resize((QR_SIZE, QR_SIZE), Image.LANCZOS)
+            qr_img = Image.new('RGBA', (QR_SIZE, QR_SIZE), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(qr_img)
+            grad_start = np.array([10, 15, 30])
+            grad_end = np.array([20, 30, 60])
+            alpha = 255
+            for y in range(modules_count):
+                for x in range(modules_count):
+                    if qr_matrix[y][x]:
+                        t = y / (modules_count - 1)
+                        color = tuple((grad_start * (1 - t) + grad_end * t).astype(int))
+                        rect = [x * module_size, y * module_size, (x + 1) * module_size, (y + 1) * module_size]
+                        draw.rectangle(rect, fill=color + (alpha,))
+            final_img = logo_bg.copy()
+            final_img.paste(qr_img, (0, 0), qr_img)
+            return final_img
         except Exception as e:
-            logger.error(f"Error creating QR code with logo: {e}")
-            raise ImageProcessingError(f"Failed to create QR code with logo: {e}")
+            logger.error(f"Error creating advanced QR code stamp: {e}")
+            raise ImageProcessingError(f"Failed to create advanced QR code stamp: {e}")
 
     def create_qr_variants(self, image: Image.Image, url: str, logo_path: str = None) -> dict:
         """
@@ -407,4 +351,46 @@ class ImageProcessor:
             
         except Exception as e:
             logger.error(f"Error creating QR variants: {e}")
-            raise ImageProcessingError(f"Failed to create QR variants: {e}") 
+            raise ImageProcessingError(f"Failed to create QR variants: {e}")
+
+# --- TEST FUNCTION FOR INDEPENDENT QR STAMP GENERATION ---
+if __name__ == "__main__":
+    from PIL import Image
+    import numpy as np
+    # Load the prepped background
+    bg_path = os.path.join(os.path.dirname(__file__), '../../scripts/logo_qr_background.png')
+    logo_bg = Image.open(bg_path).convert('RGBA').resize((512, 512), Image.LANCZOS)
+    
+    # Generate QR code matrix
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=2
+    )
+    test_url = "/redirect/test_image_20250625124000_1024x1024.png"
+    qr.add_data(test_url)
+    qr.make(fit=True)
+    qr_matrix = qr.get_matrix()
+    modules_count = len(qr_matrix)
+    module_size = 512 // modules_count
+    
+    # Create QR code image with gradient and partial transparency
+    qr_img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(qr_img)
+    grad_start = np.array([10, 15, 30])   # POC dark navy
+    grad_end = np.array([20, 30, 60])    # POC dark blue
+    alpha = 255  # Fully opaque as in POC
+    for y in range(modules_count):
+        for x in range(modules_count):
+            if qr_matrix[y][x]:
+                t = y / (modules_count - 1)
+                color = tuple((grad_start * (1 - t) + grad_end * t).astype(int))
+                rect = [x * module_size, y * module_size, (x + 1) * module_size, (y + 1) * module_size]
+                draw.rectangle(rect, fill=color + (alpha,))
+    
+    # Composite QR code over the prepped background
+    final_img = logo_bg.copy()
+    final_img.paste(qr_img, (0, 0), qr_img)
+    final_img.save("test_qr_stamp_output.png")
+    print("✅ Saved test_qr_stamp_output.png with full-size QR code and prepped background.") 

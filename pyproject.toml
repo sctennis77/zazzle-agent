@@ -23,7 +23,7 @@ pytest-mock = "^3.12.0"
 Pillow = "^10.0.0"
 schedule = "^1.2.0"
 pytest-cov = "^6.2.1"
-qrcode = {version = "^7.4.2", extras = ["pil", "all"]}
+qrcode = {version = "^8.2", extras = ["pil", "all"]}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

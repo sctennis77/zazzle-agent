@@ -5,6 +5,7 @@ black==24.10.0
 certifi==2025.6.15
 charset-normalizer==3.4.2
 click==8.2.1
+colorama==0.4.6
 coverage==7.9.1
 distro==1.9.0
 fastapi==0.110.3
@@ -37,6 +38,7 @@ pydantic==2.11.7
 pydantic_core==2.33.2
 pyflakes==3.4.0
 Pygments==2.19.2
+pypng==0.20220715.0
 pytest==8.4.1
 pytest-asyncio==1.0.0
 pytest-cov==6.2.1
@@ -44,6 +46,7 @@ pytest-mock==3.14.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 pytz==2025.2
+qrcode==8.2
 requests==2.32.4
 schedule==1.2.2
 six==1.17.0
@@ -58,3 +61,4 @@ update-checker==0.18.0
 urllib3==2.4.0
 uvicorn==0.27.1
 websocket-client==1.8.0
+-e git+https://github.com/sctennis77/zazzle-agent.git@0728c7baa561eea1f544be89f25b18bc60740adf#egg=zazzle_agent
