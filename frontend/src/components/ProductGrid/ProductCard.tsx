@@ -47,29 +47,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
         
         <div className="flex flex-col flex-1 px-5 pb-5">
-          <h3 className="text-base font-medium text-gray-800 mb-2 text-center cursor-pointer flex-1 leading-relaxed">
+          <h3 className="text-base font-medium text-gray-800 text-center cursor-pointer leading-relaxed" style={{ minHeight: '2.5em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {product.product_info.image_title || product.product_info.theme}
           </h3>
-          
-          {/* Subtle separator */}
-          <div className="flex justify-center mb-2">
+          <div className="flex justify-center">
             <div className="w-8 h-px bg-gray-300"></div>
           </div>
-          
           {/* Theme Caption */}
-          <div className="pb-2">
+          <div className="mt-2 pb-2">
             <p className="text-sm text-gray-600 italic text-center leading-relaxed">
               {product.product_info.theme}
             </p>
           </div>
-          
           <div className="text-sm text-gray-500 text-center mt-auto">
             {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
+              day: 'numeric'
             })}
           </div>
         </div>
