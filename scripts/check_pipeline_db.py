@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from app.database import SessionLocal
-from app.models import PipelineRun, ProductInfo, RedditPost
+from app.db.database import SessionLocal
+from app.db.models import PipelineRun, ProductInfo, RedditPost
 
 
 def check_pipeline_db():
