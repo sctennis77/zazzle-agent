@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 def get_database_url():
     """Get the appropriate database URL based on environment."""
     if os.getenv("TESTING") == "true":
-        # Use in-memory database for tests
+        # Use in-memory database for testing
         logger.info("Using in-memory database for testing")
         return "sqlite:///:memory:"
     else:
@@ -26,8 +26,8 @@ def get_database_url():
             logger.info(f"Using database URL from environment: {DB_URL}")
             return DB_URL
         else:
-            # Fallback to default path
-            DB_PATH = PROJECT_ROOT / "zazzle_pipeline.db"
+            # Fallback to default path in data/ directory
+            DB_PATH = PROJECT_ROOT / "data" / "zazzle_pipeline.db"
             DB_URL = f"sqlite:///{DB_PATH}"
             logger.info(f"Using default database at: {DB_PATH}")
             return DB_URL
@@ -67,7 +67,7 @@ def init_db():
     if os.getenv("TESTING") == "true":
         logger.info("Initializing in-memory test database")
     else:
-        DB_PATH = PROJECT_ROOT / "zazzle_pipeline.db"
+        DB_PATH = PROJECT_ROOT / "data" / "zazzle_pipeline.db"
         if not DB_PATH.exists():
             logger.info(f"Creating new database at {DB_PATH}")
         else:
