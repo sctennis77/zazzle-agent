@@ -86,14 +86,17 @@ class ImageGenerator:
     }
     DEFAULT_SIZE = {"dall-e-2": "256x256", "dall-e-3": "1024x1024"}
     VALID_MODELS = {"dall-e-2", "dall-e-3"}
+    DEFAULT_STYLES = {"dall-e-3": "vivid", "dall-e-2": "vivid"}
 
-    def __init__(self, model: str = "dall-e-2") -> None:
+    def __init__(self, model: str = "dall-e-2", style: Optional[str] = None) -> None:
         """
         Initialize the image generator with OpenAI and Imgur clients.
 
         Args:
             model (str): The DALL-E model to use. Must be one of VALID_MODELS.
                 Defaults to "dall-e-2".
+            style (str, optional): The style to use for image generation (e.g., "vivid", "natural").
+                Defaults to the model's default style.
 
         Raises:
             ValueError: If OPENAI_API_KEY is not set or if model is invalid
@@ -110,7 +113,8 @@ class ImageGenerator:
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
         self.model = model
-        logger.info(f"Initialized ImageGenerator with model: {model}")
+        self.style = style or self.DEFAULT_STYLES[model]
+        logger.info(f"Initialized ImageGenerator with model: {model} and style: {self.style}")
 
     def get_prompt_info(self) -> Dict[str, str]:
         """
@@ -142,6 +146,7 @@ class ImageGenerator:
                 prompt=prompt,
                 size=size,
                 n=1,
+                style=self.style,
                 response_format="b64_json",
             )
         except Exception as e:
