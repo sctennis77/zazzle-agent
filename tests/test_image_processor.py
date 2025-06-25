@@ -78,7 +78,7 @@ class TestImageProcessor:
         
         assert result is not self.test_image  # Should return a new image
         assert result.size == self.test_image.size
-        assert result.mode == self.test_image.mode
+        assert result.mode == "RGBA"  # Stamp function now returns RGBA for transparency
 
     def test_stamp_image_with_logo_no_logo_path(self):
         """Test logo stamping when no logo path is available."""
@@ -100,8 +100,10 @@ class TestImageProcessor:
         try:
             processor = ImageProcessor(logo_path=temp_file_path)
             
-            with pytest.raises(ImageProcessingError):
-                processor.stamp_image_with_logo(self.test_image)
+            # Should not raise an exception, just return a copy of the original image
+            result = processor.stamp_image_with_logo(self.test_image)
+            assert result is not self.test_image
+            assert result.size == self.test_image.size
         finally:
             Path(temp_file_path).unlink(missing_ok=True)
 
@@ -112,12 +114,12 @@ class TestImageProcessor:
         # Test with RGBA image
         rgba_image = Image.new("RGBA", (1024, 1024), color=(255, 255, 255, 255))
         result_rgba = processor.stamp_image_with_logo(rgba_image)
-        assert result_rgba.mode == rgba_image.mode
+        assert result_rgba.mode == "RGBA"  # Always returns RGBA
         
         # Test with grayscale image
         gray_image = Image.new("L", (1024, 1024), color=128)
         result_gray = processor.stamp_image_with_logo(gray_image)
-        assert result_gray.mode == gray_image.mode
+        assert result_gray.mode == "RGBA"  # Always returns RGBA
 
     def test_sign_image_with_clouvel_success(self):
         """Test successful signature addition."""

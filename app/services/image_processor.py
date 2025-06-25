@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import os
 import numpy as np
+import random
 
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -89,20 +90,26 @@ class ImageProcessor:
 
         logger.info(f"Initialized ImageProcessor with logo_path: {self.logo_path}")
 
-    def stamp_image_with_logo(self, image: Image.Image, url: str = None) -> Image.Image:
+    def stamp_image_with_logo(self, image: Image.Image, url: str = None, use_logo: bool = False) -> Image.Image:
         """
-        Add a QR code stamp (with prepped background and advanced styling) to the bottom-right corner of the image.
+        Add a QR code stamp to the bottom-right corner of the image.
         Args:
             image (Image.Image): The input PIL image (expected 1024x1024).
             url (str, optional): The URL to encode as a QR code. If None, uses a default test URL.
+            use_logo (bool, optional): Whether to use logo background (True) or simple background (False). Defaults to False.
         Returns:
             Image.Image: The stamped image (new object).
         """
         try:
             if url is None:
                 url = "/redirect/test_image_20250625124000_1024x1024.png"
-            # Generate the full-size QR code stamp
-            qr_stamp_full = self.logo_to_qr(None, url)
+            
+            # Generate the full-size QR code stamp based on mode
+            if use_logo:
+                qr_stamp_full = self.logo_to_qr(None, url)
+            else:
+                qr_stamp_full = self.simple_qr(None, url)
+            
             # Resize to stamp size
             qr_stamp = qr_stamp_full.resize(self.stamp_size, Image.LANCZOS)
             
@@ -180,14 +187,21 @@ class ImageProcessor:
             except AttributeError:
                 text_width, text_height = font.getsize(signature)
 
-            # Center the text in the signature area
-            text_x = (signature_width - text_width) // 2
-            text_y = (signature_height - text_height) // 2
-
-            # Draw the signature in white
-            draw.text(
-                (text_x, text_y), signature, font=font, fill=(255, 255, 255, 255)
-            )
+            # Position centered at the bottom with some margin
+            margin = 20
+            x = (signature_width - text_width) // 2
+            y = signature_height - text_height - margin
+            
+            # Signature color options
+            signature_colors = [
+                (40, 60, 200, 200),    # Sapphire blue
+                (180, 40, 60, 200),   # Ruby red
+                (40, 180, 100, 200),  # Emerald green
+                (120, 60, 180, 200),  # Amethyst purple
+                (230, 170, 40, 200),  # Topaz gold/orange
+            ]
+            signature_color = random.choice(signature_colors)
+            draw.text((x, y), signature, font=font, fill=signature_color)
 
             # Composite the signature text onto the signature area
             signature_area_with_text = Image.alpha_composite(
@@ -239,6 +253,155 @@ class ImageProcessor:
             error_msg = f"Failed to process image: {str(e)}"
             logger.error(error_msg)
             raise ImageProcessingError(error_msg) from e
+
+    def simple_qr(self, image: Image.Image, url: str) -> Image.Image:
+        """
+        Generate a full-size QR code image (512x512) with a soft, clean, modern look.
+        Uses a light blue/grey gradient, rounded corners, and partial opacity for modules.
+        Ignores the input image size, always returns a 512x512 QR code image.
+        """
+        # Always use the manual method for maximum control
+        return self._create_manual_styled_qr(url)
+
+    def _create_manual_styled_qr(self, url: str) -> Image.Image:
+        """Create a manually styled QR code with enhanced styling and Clouvel '25 signature for better appearance when reduced."""
+        QR_SIZE = 512
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=3  # Slightly larger border for better margins
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        # Soft, very light blue/grey background
+        bg_color = (235, 240, 250, 255)  # Very light blue-grey, fully opaque
+        qr_img = Image.new('RGBA', (QR_SIZE, QR_SIZE), bg_color)
+        draw = ImageDraw.Draw(qr_img)
+        
+        # Add subtle Clouvel '25 signature watermark
+        try:
+            # Create a temporary image for the signature
+            signature_img = Image.new('RGBA', (QR_SIZE, QR_SIZE), (0, 0, 0, 0))
+            signature_draw = ImageDraw.Draw(signature_img)
+            
+            # Use a nice font if available, otherwise fallback
+            try:
+                from PIL import ImageFont
+                font_size = 48
+                # Try Rock Salt font first
+                font_paths = [
+                    "fonts/RockSalt-Regular.ttf",  # Rock Salt font (Google Fonts)
+                    "/System/Library/Fonts/Apple Chancery.ttf",  # Cursive style
+                    "/System/Library/Fonts/Bradley Hand.ttc",    # Handwritten style
+                    "/System/Library/Fonts/Chalkboard.ttc",      # Chalkboard style
+                    "/System/Library/Fonts/Arial.ttf"           # Fallback
+                ]
+                font = None
+                for font_path in font_paths:
+                    try:
+                        font = ImageFont.truetype(font_path, font_size)
+                        break
+                    except:
+                        continue
+                if font is None:
+                    font = ImageFont.load_default()
+            except:
+                font = ImageFont.load_default()
+            
+            # Signature text and position (bottom-right corner)
+            signature_text = "Clouvel '25"
+            text_bbox = signature_draw.textbbox((0, 0), signature_text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            # Position centered at the bottom with some margin
+            margin = 20
+            x = (QR_SIZE - text_width) // 2
+            y = QR_SIZE - text_height - margin
+            
+            # Signature color options
+            signature_colors = [
+                (40, 60, 200, 200),    # Sapphire blue
+                (180, 40, 60, 200),   # Ruby red
+                (40, 180, 100, 200),  # Emerald green
+                (120, 60, 180, 200),  # Amethyst purple
+                (230, 170, 40, 200),  # Topaz gold/orange
+            ]
+            signature_color = random.choice(signature_colors)
+            signature_draw.text((x, y), signature_text, fill=signature_color, font=font)
+            
+            # Composite the signature onto the background
+            qr_img = Image.alpha_composite(qr_img, signature_img)
+            
+        except Exception as e:
+            logger.warning(f"Could not add signature watermark: {e}")
+            # Continue without signature if there's an error
+        
+        # Enhanced blue/grey gradient for better readability when reduced
+        grad_start = np.array([70, 100, 150])   # Darker blue-grey
+        grad_end = np.array([110, 140, 190])    # Lighter blue-grey
+        alpha = 255  # Fully opaque for maximum contrast and readability
+        
+        qr_matrix = qr.get_matrix()
+        modules_count = len(qr_matrix)
+        module_size = QR_SIZE // modules_count
+        
+        # Larger corner radius for smoother appearance when scaled
+        corner_radius = max(6, module_size // 2)
+        
+        for y in range(modules_count):
+            for x in range(modules_count):
+                if qr_matrix[y][x]:
+                    # Calculate gradient based on position
+                    t = (y + x) / (2 * (modules_count - 1))  # Diagonal gradient
+                    color = tuple((grad_start * (1 - t) + grad_end * t).astype(int))
+                    
+                    # Module coordinates
+                    left = x * module_size
+                    top = y * module_size
+                    right = (x + 1) * module_size
+                    bottom = (y + 1) * module_size
+                    
+                    # Create a slightly larger area for the halo effect
+                    halo_size = module_size + 4
+                    halo_left = left - 2
+                    halo_top = top - 2
+                    
+                    # Draw white halo/glow first
+                    halo_mask = Image.new('L', (halo_size, halo_size), 0)
+                    halo_draw = ImageDraw.Draw(halo_mask)
+                    halo_draw.rounded_rectangle(
+                        [0, 0, halo_size, halo_size], 
+                        radius=corner_radius + 2, 
+                        fill=180  # Semi-transparent white
+                    )
+                    
+                    # Create the halo image
+                    halo_img = Image.new('RGBA', (halo_size, halo_size), (255, 255, 255, 180))
+                    halo_img.putalpha(halo_mask)
+                    
+                    # Paste the halo
+                    qr_img.paste(halo_img, (halo_left, halo_top), halo_img)
+                    
+                    # Draw the main module with rounded corners
+                    mask = Image.new('L', (module_size, module_size), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.rounded_rectangle(
+                        [0, 0, module_size, module_size], 
+                        radius=corner_radius, 
+                        fill=255
+                    )
+                    
+                    # Create the colored module
+                    module_img = Image.new('RGBA', (module_size, module_size), color + (alpha,))
+                    module_img.putalpha(mask)
+                    
+                    # Paste the main module
+                    qr_img.paste(module_img, (left, top), module_img)
+        
+        return qr_img
 
     def logo_to_qr(self, image: Image.Image, url: str, logo_path: str = None) -> Image.Image:
         """

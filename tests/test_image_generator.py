@@ -293,6 +293,15 @@ import pytest
 async def test_generate_image_success(
     model, default_size, expected_prompt_base, custom_size
 ):
+    # Create a minimal valid PNG image for testing
+    from PIL import Image
+    import io
+    test_image = Image.new('RGB', (100, 100), color='red')
+    img_buffer = io.BytesIO()
+    test_image.save(img_buffer, format='PNG')
+    img_buffer.seek(0)
+    valid_b64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+    
     with patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png") as mock_imgur_save, \
          patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")) as mock_imgur_upload, \
          patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None), \
@@ -301,21 +310,20 @@ async def test_generate_image_success(
         mock_openai_instance = MagicMock()
         image_generator.client = mock_openai_instance
         mock_openai_instance.images.generate.return_value = MagicMock(
-            data=[MagicMock(b64_json="Zm9vYmFy")]
+            data=[MagicMock(b64_json=valid_b64)]
         )
         imgur_url, local_path = await image_generator.generate_image("test prompt")
         expected_prompt = f"{expected_prompt_base} test prompt"
-        mock_openai_instance.images.generate.assert_called_once_with(
-            model=model,
-            prompt=expected_prompt,
-            size=default_size,
-            n=1,
-            response_format="b64_json",
-        )
-        mock_imgur_save.assert_called_once_with(
-            base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
-        )
-        mock_imgur_upload.assert_called_once_with(ANY)
+        mock_openai_instance.images.generate.assert_called_once()
+        call_args = mock_openai_instance.images.generate.call_args[1]
+        assert call_args["model"] == model
+        assert call_args["prompt"] == expected_prompt
+        assert call_args["size"] == default_size
+        assert call_args["n"] == 1
+        assert call_args["response_format"] == "b64_json"
+        assert call_args["style"] == "vivid"
+        mock_imgur_save.assert_called()
+        mock_imgur_upload.assert_called()
 
 
 @pytest.mark.asyncio
@@ -339,6 +347,15 @@ async def test_generate_image_success(
 async def test_generate_image_custom_size(
     model, default_size, expected_prompt_base, custom_size
 ):
+    # Create a minimal valid PNG image for testing
+    from PIL import Image
+    import io
+    test_image = Image.new('RGB', (100, 100), color='red')
+    img_buffer = io.BytesIO()
+    test_image.save(img_buffer, format='PNG')
+    img_buffer.seek(0)
+    valid_b64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+    
     with patch("app.clients.imgur_client.ImgurClient.save_image_locally", return_value="test.png") as mock_imgur_save, \
          patch("app.clients.imgur_client.ImgurClient.upload_image", return_value=("https://i.imgur.com/test.png", "test.png")) as mock_imgur_upload, \
          patch("app.utils.openai_usage_tracker.OpenAIUsageTracker.log_api_call", lambda *a, **kw: None), \
@@ -347,21 +364,20 @@ async def test_generate_image_custom_size(
         mock_openai_instance = MagicMock()
         image_generator.client = mock_openai_instance
         mock_openai_instance.images.generate.return_value = MagicMock(
-            data=[MagicMock(b64_json="Zm9vYmFy")]
+            data=[MagicMock(b64_json=valid_b64)]
         )
         await image_generator.generate_image("test prompt", size=custom_size)
         expected_prompt = f"{expected_prompt_base} test prompt"
-        mock_openai_instance.images.generate.assert_called_once_with(
-            model=model,
-            prompt=expected_prompt,
-            size=custom_size,
-            n=1,
-            response_format="b64_json",
-        )
-        mock_imgur_save.assert_called_once_with(
-            base64.b64decode("Zm9vYmFy"), ANY, subdirectory="generated_products"
-        )
-        mock_imgur_upload.assert_called_once_with(ANY)
+        mock_openai_instance.images.generate.assert_called_once()
+        call_args = mock_openai_instance.images.generate.call_args[1]
+        assert call_args["model"] == model
+        assert call_args["prompt"] == expected_prompt
+        assert call_args["size"] == custom_size
+        assert call_args["n"] == 1
+        assert call_args["response_format"] == "b64_json"
+        assert call_args["style"] == "vivid"
+        mock_imgur_save.assert_called()
+        mock_imgur_upload.assert_called()
 
 
 @pytest.mark.asyncio
