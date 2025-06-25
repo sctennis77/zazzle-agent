@@ -12,12 +12,12 @@ help:
 	@echo "  make format          - Format code with black and isort"
 	@echo "  make lint            - Lint code with flake8"
 	@echo "  make type-check      - Run type checking with mypy"
-	@echo "  make test            - Run the test suite with coverage"
+	@echo "  make test            - Run the test suite with coverage (DB is preserved)"
 	@echo "  make test-pattern <test_path> - Run a specific test suite or file. Example: make test-pattern tests/test_file.py"
 	@echo "  make run-full        - Run the complete product generation pipeline"
 	@echo "  make run-full SUBREDDIT=<subreddit> - Run pipeline with specific subreddit (e.g., SUBREDDIT=golf)"
-	@echo "  make clean           - Remove Poetry cache and outputs"
-	@echo "  make docker-build    - Build Docker image (tests must pass first)"
+	@echo "  make clean           - Remove Poetry cache and outputs (DB is preserved)"
+	@echo "  make docker-build    - Build Docker image (tests must pass first, DB is preserved)"
 	@echo "  make docker-run      - Run Docker container"
 	@echo "  make scrape          - Run only the scraping part of the program"
 	@echo "  make run-generate-image IMAGE_PROMPT=\"<prompt>\" MODEL=<dall-e-2|dall-e-3> - Generate an image with DALL-E and upload to Imgur"
@@ -26,30 +26,9 @@ help:
 	@echo "  make frontend-dev    - Start the frontend development server"
 	@echo "  make test-interaction-agent - Test the Reddit interaction agent"
 	@echo "  make create-test-db  - Create test database with sample data"
-	@echo ""
-	@echo "Complete Environment Setup:"
-	@echo "  make full_from_fresh_env - Complete fresh setup with cleanup, install, test, and service startup"
-	@echo "  make dev_setup          - Quick development setup preserving existing environment"
-	@echo "  make start-services     - Start API and frontend services"
-	@echo "  make stop-services      - Stop all services"
-	@echo "  make restart-services   - Restart all services"
-	@echo "  make status             - Check system health and service status"
-	@echo ""
-	@echo "Docker Commands:"
-	@echo "  make docker-build-all   - Build all Docker images (API, Frontend, Pipeline, Interaction)"
-	@echo "  make docker-run-local   - Start all services with Docker Compose"
-	@echo "  make docker-stop-local  - Stop Docker Compose services"
-	@echo "  make docker-logs        - Show Docker Compose logs"
-	@echo "  make docker-clean       - Clean up Docker resources"
-	@echo ""
-	@echo "Kubernetes Commands:"
-	@echo "  make k8s-deploy         - Deploy to Kubernetes cluster"
-	@echo "  make k8s-status         - Check Kubernetes deployment status"
-	@echo "  make k8s-logs           - Show Kubernetes logs"
-	@echo "  make k8s-delete         - Delete Kubernetes deployment"
-	@echo "  make deploy-production  - Complete production deployment (test, build, deploy)"
-	@echo ""
-	@echo "For more information, see docs/DEPLOYMENT_GUIDE.md"
+	@echo "  make reset-db        - DANGEROUS: Delete all data in the main database (use only when needed)"
+	@echo "  make fresh-db        - Alias for reset-db, for convenience"
+	@echo "\nBy default, the main database (data/zazzle_pipeline.db) is preserved between sessions and builds.\nTo clear it, use make reset-db or make fresh-db."
 
 install-poetry:
 	@echo "Installing Poetry..."
@@ -100,6 +79,7 @@ run-generate-image:
 clean:
 	$(POETRY) cache clear --all pypi
 	rm -rf outputs/ .coverage
+	@echo "(DB is preserved)"
 
 # Docker targets
 
@@ -216,15 +196,19 @@ restore-db:
 	@echo ""
 	@echo "To restore, run: cp zazzle_pipeline.db.backup.<timestamp> zazzle_pipeline.db"
 
+# DANGEROUS: Only use these if you want to clear all data in the main database!
 reset-db:
 	@echo "WARNING: This will delete all data in the database!"
 	@read -p "Are you sure? Type 'yes' to confirm: " confirm; \
 	if [ "$$confirm" = "yes" ]; then \
-		rm -f zazzle_pipeline.db; \
+		rm -f data/zazzle_pipeline.db; \
 		echo "Database reset. Run 'make alembic-upgrade' to recreate tables."; \
 	else \
 		echo "Database reset cancelled."; \
 	fi
+
+# Alias for reset-db
+fresh-db: reset-db
 
 health-check:
 	@echo "Running comprehensive health check..."
@@ -290,7 +274,7 @@ full_from_fresh_env:
 	@echo ""
 	@echo "Step 2: Cleaning environment..."
 	@make clean
-	@echo "✅ Environment cleaned"
+	@echo "✅ Environment cleaned (DB is preserved)"
 	@echo ""
 	@echo "Step 3: Installing dependencies..."
 	@make install
@@ -322,12 +306,12 @@ full_from_fresh_env:
 	@echo "🔍 Checking frontend..."
 	@curl -s http://localhost:5173 > /dev/null && echo "✅ Frontend responding" || echo "⚠️  Frontend may still be starting"
 	@echo ""
-	@echo "🎉 Fresh environment setup complete!"
+	@echo "🎉 Fresh environment setup complete! (DB is preserved)"
 	@echo "=================================================="
 	@echo "📊 Services Status:"
 	@echo "   • API Server: http://localhost:8000"
 	@echo "   • Frontend: http://localhost:5173"
-	@echo "   • Database: zazzle_pipeline.db"
+	@echo "   • Database: data/zazzle_pipeline.db (preserved)"
 	@echo ""
 	@echo "🔧 Available commands:"
 	@echo "   • make run-full - Run the complete pipeline"
@@ -335,6 +319,7 @@ full_from_fresh_env:
 	@echo "   • make stop-api - Stop API server"
 	@echo "   • make frontend-dev - Start frontend dev server"
 	@echo "   • make test-interaction-agent - Test interaction agent"
+	@echo "   • make reset-db - DANGEROUS: Delete all data in the main database"
 	@echo ""
 	@echo "📝 Next steps:"
 	@echo "   1. Open http://localhost:5173 in your browser"
