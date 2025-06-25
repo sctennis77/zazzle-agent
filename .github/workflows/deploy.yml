@@ -1,0 +1,140 @@
+name: Deploy Zazzle Agent
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: poetry install
+    
+    - name: Run tests
+      run: poetry run pytest tests/ --cov=app
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push Docker images
+      run: |
+        docker build -f Dockerfile.api -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-api:${{ github.sha }} .
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-frontend:${{ github.sha }} .
+        docker build -f Dockerfile.pipeline -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-pipeline:${{ github.sha }} .
+        docker build -f Dockerfile.interaction -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-interaction:${{ github.sha }} .
+        
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-api:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-frontend:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-pipeline:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-interaction:${{ github.sha }}
+
+  deploy-production:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push Docker images
+      run: |
+        docker build -f Dockerfile.api -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-api:${{ github.sha }} .
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-frontend:${{ github.sha }} .
+        docker build -f Dockerfile.pipeline -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-pipeline:${{ github.sha }} .
+        docker build -f Dockerfile.interaction -t ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-interaction:${{ github.sha }} .
+        
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-api:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-frontend:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-pipeline:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/zazzle-agent-interaction:${{ github.sha }}
+
+  deploy-k8s:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
+        export KUBECONFIG=kubeconfig.yaml
+    
+    - name: Deploy to Kubernetes
+      run: |
+        # Update image tags in k8s manifests
+        sed -i "s|IMAGE_TAG|${{ github.sha }}|g" k8s/*.yaml
+        
+        # Apply manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/secrets.yaml
+        kubectl apply -f k8s/persistent-volume.yaml
+        kubectl apply -f k8s/api-deployment.yaml
+        kubectl apply -f k8s/frontend-deployment.yaml
+        kubectl apply -f k8s/pipeline-deployment.yaml
+        kubectl apply -f k8s/interaction-deployment.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for deployment
+        kubectl rollout status deployment/zazzle-agent-api -n zazzle-agent
+        kubectl rollout status deployment/zazzle-agent-frontend -n zazzle-agent 

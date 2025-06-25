@@ -4,6 +4,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Rock Salt';
+  src: url('/fonts/RockSalt-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 @keyframes shooting-star {
   0% {
     opacity: 0;

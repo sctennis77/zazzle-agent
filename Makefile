@@ -3,7 +3,7 @@ PYTHON=python3
 PIP=pip3
 POETRY=poetry
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend
 
 help:
 	@echo "Available targets:"
@@ -510,6 +510,87 @@ deploy-production:
 	@echo "Step 4: Checking deployment status..."
 	@make k8s-status
 	@echo "✅ Production deployment completed!"
+
+# =====================
+# Simplified Deployment Commands
+# =====================
+
+# One-command deployment from scratch
+deploy:
+	@echo "🚀 Deploying Zazzle Agent from scratch..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		exit 1; \
+	fi
+	@./deploy.sh
+
+# Deploy with clean images
+deploy-clean:
+	@echo "🚀 Deploying Zazzle Agent with clean images..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		exit 1; \
+	fi
+	@./deploy.sh --clean-images
+
+# Deploy without running initial pipeline
+deploy-quick:
+	@echo "🚀 Quick deployment (skipping initial pipeline)..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		exit 1; \
+	fi
+	@./deploy.sh --skip-pipeline
+
+# Validate deployment
+validate-deployment:
+	@echo "🔍 Validating deployment..."
+	@echo "Checking API health..."
+	@curl -f -s http://localhost:8000/health > /dev/null && echo "✅ API is healthy" || echo "❌ API health check failed"
+	@echo "Checking frontend..."
+	@curl -f -s http://localhost:5173 > /dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend check failed"
+	@echo "Checking database..."
+	@docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT COUNT(*) FROM reddit_posts;" 2>/dev/null && echo "✅ Database is accessible" || echo "❌ Database check failed"
+
+# Show deployment status
+deployment-status:
+	@echo "📊 Deployment Status"
+	@echo "==================="
+	@docker-compose ps
+	@echo ""
+	@echo "🔗 Service URLs:"
+	@echo "  • Frontend: http://localhost:5173"
+	@echo "  • API: http://localhost:8000"
+	@echo "  • API Docs: http://localhost:8000/docs"
+	@echo ""
+	@echo "📋 Recent logs:"
+	@docker-compose logs --tail=10
+
+# Run pipeline manually
+run-pipeline:
+	@echo "🚀 Running pipeline manually..."
+	@docker-compose exec -T pipeline python app/main.py --mode full
+
+# Show logs
+show-logs:
+	@echo "📋 Showing logs for all services..."
+	@docker-compose logs -f
+
+# Show logs for specific service
+show-logs-api:
+	@echo "📋 Showing API logs..."
+	@docker-compose logs -f api
+
+show-logs-pipeline:
+	@echo "📋 Showing pipeline logs..."
+	@docker-compose logs -f pipeline
+
+show-logs-frontend:
+	@echo "📋 Showing frontend logs..."
+	@docker-compose logs -f frontend
 
 # Always run this after changing Poetry dependencies to keep Docker in sync
 export-requirements:

@@ -1,0 +1,3 @@
+# Copy frontend source code
+COPY frontend/ .
+COPY ../fonts/ /app/fonts/ 

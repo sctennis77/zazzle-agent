@@ -61,4 +61,4 @@ update-checker==0.18.0
 urllib3==2.4.0
 uvicorn==0.27.1
 websocket-client==1.8.0
--e git+https://github.com/sctennis77/zazzle-agent.git@0728c7baa561eea1f544be89f25b18bc60740adf#egg=zazzle_agent
+-e git+https://github.com/sctennis77/zazzle-agent.git@main#egg=zazzle_agent

@@ -100,6 +100,7 @@ class ImageProcessor:
         Returns:
             Image.Image: The stamped image (new object).
         """
+        logger.info("Stamping image with QR code (logo: %s, url: %s)", use_logo, url)
         try:
             if url is None:
                 url = "/redirect/test_image_20250625124000_1024x1024.png"
@@ -126,6 +127,7 @@ class ImageProcessor:
             x = img_width - stamp_width - 20
             y = img_height - stamp_height - 20
             stamped.paste(bordered_stamp, (x, y), bordered_stamp)
+            logger.info("Image stamped with QR code at position (%d, %d)", x, y)
             return stamped
         except Exception as e:
             error_msg = f"Failed to stamp image with QR code: {str(e)}"
@@ -145,6 +147,7 @@ class ImageProcessor:
         Raises:
             ImageProcessingError: If signature processing fails
         """
+        logger.info("Signing image with Clouvel '25 signature")
         try:
             # Copy image to avoid mutating input
             signed = image.copy().convert("RGBA")
@@ -210,7 +213,7 @@ class ImageProcessor:
 
             # Paste the modified signature area back into the original image
             signed.paste(signature_area_with_text, (x, y))
-
+            logger.info("Image signed with Clouvel '25 signature at position (%d, %d)", x, y)
             return signed.convert(image.mode)
 
         except Exception as e:
@@ -242,9 +245,11 @@ class ImageProcessor:
             processed_image = image.copy()
 
             if add_logo:
+                logger.info("Calling stamp_image_with_logo in process_image")
                 processed_image = self.stamp_image_with_logo(processed_image)
 
             if add_signature:
+                logger.info("Calling sign_image_with_clouvel in process_image")
                 processed_image = self.sign_image_with_clouvel(processed_image)
 
             return processed_image

@@ -1010,3 +1010,182 @@ To fully reset and test the environment, follow these steps:
 - The product modal and card now display enhanced Reddit post information (author, score, comments, summary, etc.).
 
 --- 
+
+# Zazzle Agent
+
+An automated AI-powered product generation system that creates custom merchandise based on trending Reddit content.
+
+## 🚀 Quick Start (One Command Deployment)
+
+For a complete deployment from scratch:
+
+```bash
+make deploy
+```
+
+This single command handles everything:
+- ✅ Prerequisites validation
+- ✅ Environment setup
+- ✅ Docker image building
+- ✅ Service orchestration
+- ✅ Health checks
+- ✅ Initial pipeline run
+
+## 📋 Prerequisites
+
+- Docker and Docker Compose
+- API keys for OpenAI, Reddit, Zazzle, and Imgur
+
+## 🛠️ Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd zazzle-agent
+   ```
+
+2. **Configure environment**
+   ```bash
+   cp env.example .env
+   # Edit .env with your API keys
+   ```
+
+3. **Deploy**
+   ```bash
+   make deploy
+   ```
+
+## 🎯 What It Does
+
+The Zazzle Agent automatically:
+
+1. **Discovers trending content** from Reddit subreddits
+2. **Generates product ideas** using AI analysis
+3. **Creates custom artwork** with DALL-E
+4. **Designs products** on Zazzle with affiliate links
+5. **Engages with communities** through Reddit interactions
+
+## 🏗️ Architecture
+
+- **Frontend**: React + TypeScript + Vite
+- **Backend**: FastAPI + Python 3.12
+- **Database**: SQLite (with Alembic migrations)
+- **AI**: OpenAI GPT and DALL-E
+- **Infrastructure**: Docker + Docker Compose
+- **Monitoring**: Health checks + structured logging
+
+## 📊 Services
+
+- **API Server** (Port 8000): FastAPI backend with product management
+- **Frontend** (Port 5173): React interface for viewing products
+- **Pipeline**: Automated product generation (every 6 hours)
+- **Interaction Agent**: Reddit engagement (every 2 hours)
+- **Database**: SQLite with persistent storage
+
+## 🔧 Management Commands
+
+### Deployment
+```bash
+make deploy              # Full deployment
+make deploy-clean        # Clean deployment (removes old images)
+make deploy-quick        # Quick deployment (skips initial pipeline)
+```
+
+### Monitoring
+```bash
+make deployment-status   # Check service status
+make validate-deployment # Validate all services
+make show-logs          # View all logs
+make show-logs-api      # View API logs
+make show-logs-pipeline # View pipeline logs
+```
+
+### Pipeline Control
+```bash
+make run-pipeline       # Run pipeline manually
+docker-compose down     # Stop all services
+docker-compose up -d    # Start all services
+```
+
+## 🌐 Access Points
+
+After deployment:
+- **Frontend**: http://localhost:5173
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+
+## 📈 Features
+
+### AI-Powered Product Generation
+- Analyzes Reddit trends using GPT
+- Creates custom artwork with DALL-E
+- Generates product descriptions and titles
+- Optimizes for engagement and sales
+
+### Automated Workflow
+- Scheduled pipeline execution
+- Reddit community engagement
+- Affiliate link generation
+- Product tracking and analytics
+
+### Modern Tech Stack
+- TypeScript frontend with modern UI
+- FastAPI backend with automatic docs
+- Docker containerization
+- Health monitoring and logging
+
+## 🔒 Security & Best Practices
+
+- Environment variable validation
+- Structured logging with rotation
+- Health checks for all services
+- Graceful error handling
+- API rate limiting
+- Secure credential management
+
+## 📚 Documentation
+
+- [Deployment Guide](DEPLOYMENT.md) - Complete deployment instructions
+- [Environment Setup](env.example) - Environment variable reference
+- [API Documentation](http://localhost:8000/docs) - Interactive API docs
+
+## 🚀 Production Deployment
+
+For production environments:
+
+1. **Use the deployment script**:
+   ```bash
+   ./deploy.sh --clean-images
+   ```
+
+2. **Monitor the deployment**:
+   ```bash
+   make deployment-status
+   make validate-deployment
+   ```
+
+3. **Set up monitoring**:
+   ```bash
+   make show-logs
+   ```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `make test`
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For issues or questions:
+1. Check the [troubleshooting section](DEPLOYMENT.md#troubleshooting)
+2. Review service logs: `make show-logs`
+3. Validate deployment: `make validate-deployment`
+4. Check service status: `make deployment-status` 
