@@ -29,6 +29,7 @@ import io
 
 from app.clients.imgur_client import ImgurClient
 from app.models import ProductIdea, ProductInfo
+from app.services.image_processor import ImageProcessor
 from app.utils.logging_config import get_logger
 from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
 
@@ -112,6 +113,7 @@ class ImageGenerator:
 
         self.client = OpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
+        self.image_processor = ImageProcessor()
         self.model = model
         self.style = style or self.DEFAULT_STYLES[model]
         logger.info(f"Initialized ImageGenerator with model: {model} and style: {self.style}")
@@ -153,7 +155,7 @@ class ImageGenerator:
             raise ImageGenerationError(f"DALL-E API call failed: {str(e)}") from e
 
     async def generate_image(
-        self, prompt: str, size: Optional[str] = None, template_id: Optional[str] = None
+        self, prompt: str, size: Optional[str] = None, template_id: Optional[str] = None, stamp_image: bool = True
     ) -> Tuple[str, str]:
         """
         Generate an image using DALL-E and store it both locally and on Imgur.
@@ -163,6 +165,7 @@ class ImageGenerator:
             size (str, optional): The size of the image to generate. If None, uses the
                 model's default size.
             template_id (str, optional): Zazzle template ID for naming the image file
+            stamp_image (bool, optional): Whether to apply the logo stamp. Defaults to True.
 
         Returns:
             Tuple[str, str]: Tuple containing (imgur_url, local_path)
@@ -196,7 +199,7 @@ class ImageGenerator:
             logger.info("Image data successfully retrieved from DALL-E response.")
 
             # Process and store the image
-            return await self._process_and_store_image(response, template_id, size)
+            return await self._process_and_store_image(response, template_id, size, stamp_image=stamp_image)
 
         except Exception as e:
             error_msg = f"Failed to generate or store image: {str(e)}"
@@ -204,7 +207,7 @@ class ImageGenerator:
             raise ImageGenerationError(error_msg) from e
 
     async def _process_and_store_image(
-        self, response: ImagesResponse, template_id: Optional[str], size: str
+        self, response: ImagesResponse, template_id: Optional[str], size: str, stamp_image: bool = True, qr_url: Optional[str] = None, product_idea: Optional[dict] = None
     ) -> Tuple[str, str]:
         """
         Process DALL-E response and store image locally and on Imgur.
@@ -213,12 +216,12 @@ class ImageGenerator:
             response (ImagesResponse): DALL-E API response containing image data
             template_id (str, optional): Template ID for file naming
             size (str): Image size for file naming
+            stamp_image (bool, optional): Whether to apply the logo/QR stamp. Defaults to True.
+            qr_url (str, optional): URL to encode as a QR code for the stamp. If None, fallback to /redirect/{image_name}.
+            product_idea (dict, optional): The product idea object for per-product customization.
 
         Returns:
-            Tuple[str, str]: Tuple containing (imgur_url, local_path)
-
-        Raises:
-            ImageGenerationError: If image processing or storage fails
+            Tuple[str, str]: (local image path, Imgur URL)
         """
         try:
             # Get the base64 encoded image data
@@ -229,6 +232,25 @@ class ImageGenerator:
             image_data = base64.b64decode(image_data_b64)
             logger.info("Image data successfully retrieved from DALL-E response.")
 
+            # Load image as PIL, apply QR/logo stamp if requested
+            image = Image.open(io.BytesIO(image_data))
+            if stamp_image:
+                # Determine the QR code URL
+                if qr_url:
+                    stamp_url = qr_url
+                elif product_idea and product_idea.get('affiliate_link'):
+                    stamp_url = product_idea['affiliate_link']
+                else:
+                    # Use a redirect to self + image name
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    filename_prefix = (
+                        f"{template_id}_{timestamp}" if template_id else f"dalle_{timestamp}"
+                    )
+                    filename = f"{filename_prefix}_{size}.png"
+                    stamp_url = f"/redirect/{filename}"
+                stamped_image = self.image_processor.logo_to_qr(image, stamp_url)
+                image = stamped_image
+
             # Save locally with appropriate naming
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename_prefix = (
@@ -236,8 +258,14 @@ class ImageGenerator:
             )
             filename = f"{filename_prefix}_{size}.png"
 
+            # Save processed image to bytes
+            output_bytes = io.BytesIO()
+            image.save(output_bytes, format="PNG")
+            output_bytes.seek(0)
+            processed_image_data = output_bytes.read()
+
             local_path = self.imgur_client.save_image_locally(
-                image_data, filename, subdirectory="generated_products"
+                processed_image_data, filename, subdirectory="generated_products"
             )
             logger.info(f"Image saved locally at: {local_path}")
 
@@ -333,124 +361,3 @@ class ImageGenerator:
         """
         imgur_url, local_path = await self.generate_image(prompt)
         return {"url": imgur_url, "local_path": local_path}
-
-    def sign_image_with_clouvel(self, image: Image.Image) -> Image.Image:
-        """
-        Add a 'Clouvel '25' signature to the bottom-right corner of the image.
-        Cuts out a rectangle, applies white signature text, then pastes it back.
-        Args:
-            image (Image.Image): The input PIL image (expected 1024x1024).
-        Returns:
-            Image.Image: The signed image (new object).
-        """
-        # Copy image to avoid mutating input
-        signed = image.copy().convert("RGBA")
-        width, height = signed.size
-
-        # Signature text
-        signature = "Clouvel '25"
-
-        # Try to use a script font, fallback to default
-        try:
-            font = ImageFont.truetype("arial.ttf", 48)
-        except Exception:
-            font = ImageFont.load_default()
-
-        # Calculate signature area (slightly bigger than before)
-        margin = 32
-        signature_width = 200  # Fixed width for signature area
-        signature_height = 80  # Fixed height for signature area
-        
-        # Position the signature area in bottom-right
-        x = width - signature_width - margin
-        y = height - signature_height - margin
-        
-        # Cut out the rectangle from the original image
-        signature_area = signed.crop((x, y, x + signature_width, y + signature_height))
-        
-        # Create a new image for the signature text
-        signature_overlay = Image.new("RGBA", (signature_width, signature_height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(signature_overlay)
-        
-        # Calculate text position within the signature area
-        try:
-            bbox = draw.textbbox((0, 0), signature, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-        except AttributeError:
-            text_width, text_height = font.getsize(signature)
-        
-        # Center the text in the signature area
-        text_x = (signature_width - text_width) // 2
-        text_y = (signature_height - text_height) // 2
-        
-        # Draw the signature in white
-        draw.text((text_x, text_y), signature, font=font, fill=(255, 255, 255, 255))
-        
-        # Composite the signature text onto the signature area
-        signature_area_with_text = Image.alpha_composite(signature_area, signature_overlay)
-        
-        # Paste the modified signature area back into the original image
-        signed.paste(signature_area_with_text, (x, y))
-        
-        return signed.convert(image.mode)
-
-    def stamp_image_with_logo(self, image: Image.Image) -> Image.Image:
-        """
-        Add a circular logo stamp to the bottom-right corner of the image.
-        Cuts out a small square, places the logo in the center, then pastes it back.
-        Args:
-            image (Image.Image): The input PIL image (expected 1024x1024).
-        Returns:
-            Image.Image: The stamped image (new object).
-        """
-        # Copy image to avoid mutating input
-        stamped = image.copy().convert("RGBA")
-        width, height = stamped.size
-
-        # Load the circular logo
-        try:
-            logo = Image.open("frontend/src/assets/logo.png").convert("RGBA")
-        except Exception as e:
-            logger.error(f"Failed to load logo: {e}")
-            return stamped
-
-        # Make the stamp smaller and flush with the bottom-right (no margin)
-        stamp_width = 80
-        stamp_height = 80
-        x = width - stamp_width
-        y = height - stamp_height
-
-        # Cut out the rectangle from the original image
-        stamp_area = stamped.crop((x, y, x + stamp_width, y + stamp_height))
-
-        # Resize logo to fit within the stamp area (with a little padding)
-        logo_size = min(stamp_width, stamp_height) - 8  # 8px padding
-        logo_resized = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
-
-        # Create a new image for the logo overlay
-        logo_overlay = Image.new("RGBA", (stamp_width, stamp_height), (0, 0, 0, 0))
-
-        # Center the logo in the stamp area
-        logo_x = (stamp_width - logo_size) // 2
-        logo_y = (stamp_height - logo_size) // 2
-        logo_overlay.paste(logo_resized, (logo_x, logo_y), logo_resized)
-
-        # Apply transparency to make it watermark-like
-        logo_overlay_data = logo_overlay.getdata()
-        watermark_data = []
-        for pixel in logo_overlay_data:
-            if pixel[3] > 0:
-                watermark_data.append((pixel[0], pixel[1], pixel[2], int(pixel[3] * 0.3)))
-            else:
-                watermark_data.append(pixel)
-        watermark_overlay = Image.new("RGBA", (stamp_width, stamp_height))
-        watermark_overlay.putdata(watermark_data)
-
-        # Composite the watermark overlay onto the stamp area
-        stamp_area_with_logo = Image.alpha_composite(stamp_area, watermark_overlay)
-
-        # Paste the modified stamp area back into the original image
-        stamped.paste(stamp_area_with_logo, (x, y))
-
-        return stamped.convert(image.mode)
