@@ -24,6 +24,8 @@ import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.images_response import ImagesResponse
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 from app.clients.imgur_client import ImgurClient
 from app.models import ProductIdea, ProductInfo
@@ -326,3 +328,124 @@ class ImageGenerator:
         """
         imgur_url, local_path = await self.generate_image(prompt)
         return {"url": imgur_url, "local_path": local_path}
+
+    def sign_image_with_clouvel(self, image: Image.Image) -> Image.Image:
+        """
+        Add a 'Clouvel '25' signature to the bottom-right corner of the image.
+        Cuts out a rectangle, applies white signature text, then pastes it back.
+        Args:
+            image (Image.Image): The input PIL image (expected 1024x1024).
+        Returns:
+            Image.Image: The signed image (new object).
+        """
+        # Copy image to avoid mutating input
+        signed = image.copy().convert("RGBA")
+        width, height = signed.size
+
+        # Signature text
+        signature = "Clouvel '25"
+
+        # Try to use a script font, fallback to default
+        try:
+            font = ImageFont.truetype("arial.ttf", 48)
+        except Exception:
+            font = ImageFont.load_default()
+
+        # Calculate signature area (slightly bigger than before)
+        margin = 32
+        signature_width = 200  # Fixed width for signature area
+        signature_height = 80  # Fixed height for signature area
+        
+        # Position the signature area in bottom-right
+        x = width - signature_width - margin
+        y = height - signature_height - margin
+        
+        # Cut out the rectangle from the original image
+        signature_area = signed.crop((x, y, x + signature_width, y + signature_height))
+        
+        # Create a new image for the signature text
+        signature_overlay = Image.new("RGBA", (signature_width, signature_height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(signature_overlay)
+        
+        # Calculate text position within the signature area
+        try:
+            bbox = draw.textbbox((0, 0), signature, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        except AttributeError:
+            text_width, text_height = font.getsize(signature)
+        
+        # Center the text in the signature area
+        text_x = (signature_width - text_width) // 2
+        text_y = (signature_height - text_height) // 2
+        
+        # Draw the signature in white
+        draw.text((text_x, text_y), signature, font=font, fill=(255, 255, 255, 255))
+        
+        # Composite the signature text onto the signature area
+        signature_area_with_text = Image.alpha_composite(signature_area, signature_overlay)
+        
+        # Paste the modified signature area back into the original image
+        signed.paste(signature_area_with_text, (x, y))
+        
+        return signed.convert(image.mode)
+
+    def stamp_image_with_logo(self, image: Image.Image) -> Image.Image:
+        """
+        Add a circular logo stamp to the bottom-right corner of the image.
+        Cuts out a small square, places the logo in the center, then pastes it back.
+        Args:
+            image (Image.Image): The input PIL image (expected 1024x1024).
+        Returns:
+            Image.Image: The stamped image (new object).
+        """
+        # Copy image to avoid mutating input
+        stamped = image.copy().convert("RGBA")
+        width, height = stamped.size
+
+        # Load the circular logo
+        try:
+            logo = Image.open("frontend/src/assets/logo.png").convert("RGBA")
+        except Exception as e:
+            logger.error(f"Failed to load logo: {e}")
+            return stamped
+
+        # Make the stamp smaller and flush with the bottom-right (no margin)
+        stamp_width = 80
+        stamp_height = 80
+        x = width - stamp_width
+        y = height - stamp_height
+
+        # Cut out the rectangle from the original image
+        stamp_area = stamped.crop((x, y, x + stamp_width, y + stamp_height))
+
+        # Resize logo to fit within the stamp area (with a little padding)
+        logo_size = min(stamp_width, stamp_height) - 8  # 8px padding
+        logo_resized = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+
+        # Create a new image for the logo overlay
+        logo_overlay = Image.new("RGBA", (stamp_width, stamp_height), (0, 0, 0, 0))
+
+        # Center the logo in the stamp area
+        logo_x = (stamp_width - logo_size) // 2
+        logo_y = (stamp_height - logo_size) // 2
+        logo_overlay.paste(logo_resized, (logo_x, logo_y), logo_resized)
+
+        # Apply transparency to make it watermark-like
+        logo_overlay_data = logo_overlay.getdata()
+        watermark_data = []
+        for pixel in logo_overlay_data:
+            if pixel[3] > 0:
+                watermark_data.append((pixel[0], pixel[1], pixel[2], int(pixel[3] * 0.3)))
+            else:
+                watermark_data.append(pixel)
+        watermark_overlay = Image.new("RGBA", (stamp_width, stamp_height))
+        watermark_overlay.putdata(watermark_data)
+
+        # Composite the watermark overlay onto the stamp area
+        stamp_area_with_logo = Image.alpha_composite(stamp_area, watermark_overlay)
+
+        # Paste the modified stamp area back into the original image
+        stamped.paste(stamp_area_with_logo, (x, y))
+
+        return stamped.convert(image.mode)
