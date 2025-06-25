@@ -1,11 +1,16 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout';
 import { ProductGrid } from './components/ProductGrid/ProductGrid';
 
 function App() {
   return (
-    <Layout>
-      <ProductGrid />
-    </Layout>
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<ProductGrid />} />
+        </Routes>
+      </Layout>
+    </Router>
   );
 }
 

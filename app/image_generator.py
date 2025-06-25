@@ -234,24 +234,8 @@ class ImageGenerator:
 
             # Load image as PIL, apply QR/logo stamp if requested
             image = Image.open(io.BytesIO(image_data))
-            if stamp_image:
-                # Determine the QR code URL
-                if qr_url:
-                    stamp_url = qr_url
-                elif product_idea and product_idea.get('affiliate_link'):
-                    stamp_url = product_idea['affiliate_link']
-                else:
-                    # Use a redirect to self + image name
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                    filename_prefix = (
-                        f"{template_id}_{timestamp}" if template_id else f"dalle_{timestamp}"
-                    )
-                    filename = f"{filename_prefix}_{size}.png"
-                    stamp_url = f"/redirect/{filename}"
-                stamped_image = self.image_processor.logo_to_qr(image, stamp_url)
-                image = stamped_image
-
-            # Save locally with appropriate naming
+            
+            # Save locally with appropriate naming first
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename_prefix = (
                 f"{template_id}_{timestamp}" if template_id else f"dalle_{timestamp}"
@@ -272,6 +256,37 @@ class ImageGenerator:
             # Upload to Imgur
             imgur_url, _ = self.imgur_client.upload_image(local_path)
             logger.info(f"Image uploaded to Imgur. URL: {imgur_url}")
+            
+            # Extract the actual filename from Imgur URL for QR code
+            imgur_filename = imgur_url.split('/')[-1]
+            
+            if stamp_image:
+                # Determine the QR code URL
+                if qr_url:
+                    stamp_url = qr_url
+                elif product_idea and product_idea.get('affiliate_link'):
+                    stamp_url = product_idea['affiliate_link']
+                else:
+                    # Use the actual Imgur filename for the redirect
+                    stamp_url = f"/redirect/{imgur_filename}"
+                stamped_image = self.image_processor.logo_to_qr(image, stamp_url)
+                
+                # Re-upload the stamped image to Imgur
+                stamped_output_bytes = io.BytesIO()
+                stamped_image.save(stamped_output_bytes, format="PNG")
+                stamped_output_bytes.seek(0)
+                stamped_image_data = stamped_output_bytes.read()
+                
+                # Save stamped image locally
+                stamped_local_path = self.imgur_client.save_image_locally(
+                    stamped_image_data, f"stamped_{filename}", subdirectory="generated_products"
+                )
+                
+                # Upload stamped image to Imgur
+                stamped_imgur_url, _ = self.imgur_client.upload_image(stamped_local_path)
+                logger.info(f"Stamped image uploaded to Imgur. URL: {stamped_imgur_url}")
+                
+                return stamped_imgur_url, stamped_local_path
 
             return imgur_url, local_path
 

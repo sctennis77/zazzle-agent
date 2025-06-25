@@ -46,8 +46,27 @@ export interface RedditPost {
   num_comments?: number;
 }
 
+export interface PipelineRunUsage {
+  id: number;
+  pipeline_run_id: number;
+  idea_model: string;
+  image_model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  image_tokens: number;
+  total_cost_usd: string;
+  created_at: string;
+}
+
 export interface GeneratedProduct {
   product_info: ProductInfo;
   pipeline_run: PipelineRun;
   reddit_post: RedditPost;
+}
+
+export interface GeneratedProductSchema {
+  product_info: ProductInfo;
+  pipeline_run: PipelineRun;
+  reddit_post: RedditPost;
+  usage?: PipelineRunUsage;
 } 

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -200,6 +201,121 @@ async def get_generated_products():
         logger.error(f"Error in get_generated_products: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/redirect/{image_name}")
+async def redirect_to_product(image_name: str):
+    """
+    Redirect route for QR codes. Takes an image filename and redirects to the gallery with the product opened.
+    
+    Args:
+        image_name (str): The image filename (e.g., "1juzYyg.png" or "256344169523425346_20250625123345_1024x1024.png")
+        
+    Returns:
+        RedirectResponse: Redirects to the frontend gallery with product opened
+    """
+    db = SessionLocal()
+    try:
+        # Clean the image name (remove any path components)
+        clean_image_name = image_name.split('/')[-1]
+        logger.info(f"Looking for product with image: {clean_image_name}")
+        
+        # Find the product by image_url containing the filename
+        # First try exact match with the clean image name
+        product = db.query(ProductInfo).filter(
+            ProductInfo.image_url.contains(clean_image_name)
+        ).join(
+            RedditPost, 
+            ProductInfo.reddit_post_id == RedditPost.id
+        ).first()
+        
+        if not product:
+            # If not found, try a broader search
+            product = db.query(ProductInfo).filter(
+                ProductInfo.image_url.contains(clean_image_name.split('.')[0])
+            ).join(
+                RedditPost, 
+                ProductInfo.reddit_post_id == RedditPost.id
+            ).first()
+        
+        if product:
+            reddit_post = product.reddit_post
+            logger.info(f"Redirecting {image_name} to gallery with product {reddit_post.post_id}")
+            
+            # Redirect to gallery with query parameter to open the specific product
+            frontend_url = f"http://localhost:5175/?product={reddit_post.post_id}"
+            return RedirectResponse(url=frontend_url, status_code=302)
+        else:
+            logger.warning(f"Product not found for image: {clean_image_name}")
+            # Fallback to gallery without specific product
+            return RedirectResponse(url="http://localhost:5175/", status_code=302)
+            
+    except Exception as e:
+        logger.error(f"Error in redirect: {e}")
+        # Fallback to gallery
+        return RedirectResponse(url="http://localhost:5175/", status_code=302)
+    finally:
+        db.close()
+
+
+@app.get("/api/product/{image_name}")
+async def get_product_by_image(image_name: str):
+    """
+    Get a single product by image filename.
+    
+    Args:
+        image_name (str): The image filename
+        
+    Returns:
+        GeneratedProductSchema: The product data
+    """
+    db = SessionLocal()
+    try:
+        # Find the product by image_url containing the filename
+        product = db.query(ProductInfo).filter(
+            ProductInfo.image_url.contains(image_name)
+        ).first()
+        
+        if not product:
+            # Try to find by extracting filename from image_url
+            for product_info in db.query(ProductInfo).all():
+                if product_info.image_url and image_name in product_info.image_url:
+                    product = product_info
+                    break
+        
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product with image {image_name} not found")
+        
+        # Get the associated Reddit post and pipeline run
+        reddit_post = db.query(RedditPost).filter_by(id=product.reddit_post_id).first()
+        pipeline_run = db.query(PipelineRun).filter_by(id=product.pipeline_run_id).first()
+        
+        if not reddit_post or not pipeline_run:
+            raise HTTPException(status_code=404, detail="Associated data not found")
+        
+        # Convert to schemas
+        product_schema = ProductInfoSchema.model_validate(product)
+        pipeline_schema = PipelineRunSchema.model_validate(pipeline_run)
+        reddit_schema = RedditPostSchema.model_validate(reddit_post)
+        
+        # Fetch usage data
+        usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=pipeline_run.id).first()
+        usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
+        
+        return GeneratedProductSchema(
+            product_info=product_schema,
+            pipeline_run=pipeline_schema,
+            reddit_post=reddit_schema,
+            usage=usage_schema,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting product by image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 

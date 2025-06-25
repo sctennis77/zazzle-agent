@@ -17,6 +17,9 @@ from typing import Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
+from qrcode.image.styledpil import StyledPilImage
+from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+from qrcode.image.styles.colormasks import ImageColorMask, SolidFillColorMask
 
 from app.utils.logging_config import get_logger
 
@@ -279,58 +282,129 @@ class ImageProcessor:
 
     def logo_to_qr(self, image: Image.Image, url: str, logo_path: str = None) -> Image.Image:
         """
-        Overlay a QR code (generated from the given URL) onto the image, using the logo as a mask.
-        The QR code will only be visible where the logo is opaque (e.g., circular or custom logo shape).
+        Create a QR code with the logo embedded in the center, using advanced styling.
+        The QR code will be stamped in the bottom-right corner of the image.
 
         Args:
             image (Image.Image): The input PIL image (expected 1024x1024).
             url (str): The URL to encode as a QR code.
-            logo_path (str, optional): Path to the logo file to use as a mask. Defaults to self.logo_path.
+            logo_path (str, optional): Path to the logo file. Defaults to self.logo_path.
 
         Returns:
-            Image.Image: The image with the QR code stamped using the logo mask.
-        """
-        logo_path = logo_path or self.logo_path
-        if not logo_path or not Path(logo_path).exists():
-            logger.warning("No valid logo path for QR mask, returning original image")
-            return image.copy()
+            Image.Image: The image with the QR code stamped in the bottom-right.
 
+        Raises:
+            ImageProcessingError: If there's an error processing the image or logo.
+        """
         try:
-            # Generate QR code as a PIL image (black/white)
+            # Use provided logo path or default
+            logo_path = logo_path or self.logo_path
+            
+            # Create QR code with advanced styling
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction for logo overlay
+                box_size=10,
+                border=2
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # Create styled QR code with logo embedded in center
+            qr_image = qr.make_image(
+                image_factory=StyledPilImage,
+                module_drawer=RoundedModuleDrawer(),
+                color_mask=SolidFillColorMask(back_color=(255, 255, 255), front_color=(0, 0, 0)),
+                embedded_image_path=logo_path
+            )
+            
+            # Resize QR code to stamp size
+            qr_image = qr_image.resize(self.stamp_size, Image.Resampling.LANCZOS)
+            
+            # Create a copy of the input image
+            result_image = image.copy()
+            
+            # Calculate position (bottom-right corner)
+            img_width, img_height = result_image.size
+            qr_width, qr_height = qr_image.size
+            x = img_width - qr_width - 20  # 20px margin from edges
+            y = img_height - qr_height - 20
+            
+            # Paste QR code onto the image
+            result_image.paste(qr_image, (x, y))
+            
+            return result_image
+            
+        except Exception as e:
+            logger.error(f"Error creating QR code with logo: {e}")
+            raise ImageProcessingError(f"Failed to create QR code with logo: {e}")
+
+    def create_qr_variants(self, image: Image.Image, url: str, logo_path: str = None) -> dict:
+        """
+        Create multiple QR code variants for testing and comparison.
+        
+        Args:
+            image (Image.Image): The input PIL image.
+            url (str): The URL to encode as a QR code.
+            logo_path (str, optional): Path to the logo file.
+            
+        Returns:
+            dict: Dictionary containing different QR code variants.
+        """
+        variants = {}
+        
+        try:
+            # Variant 1: Logo embedded in center (current implementation)
+            variants['embedded_logo'] = self.logo_to_qr(image, url, logo_path)
+            
+            # Variant 2: Simple QR code with logo overlay
             qr = qrcode.QRCode(
                 version=1,
                 error_correction=qrcode.constants.ERROR_CORRECT_H,
                 box_size=10,
-                border=2,
+                border=2
             )
             qr.add_data(url)
             qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
-
-            # Resize QR code to fit the stamp area
-            stamp_width, stamp_height = self.stamp_size
-            qr_img = qr_img.resize((stamp_width, stamp_height), Image.Resampling.LANCZOS)
-
-            # Load the logo and use its alpha channel as a mask
-            logo = Image.open(logo_path).convert("RGBA").resize((stamp_width, stamp_height), Image.Resampling.LANCZOS)
-            mask = logo.split()[-1]  # Use alpha channel as mask
-
-            # Composite the QR code using the logo mask
-            qr_masked = Image.new("RGBA", (stamp_width, stamp_height), (0, 0, 0, 0))
-            qr_masked.paste(qr_img, (0, 0), mask=mask)
-
-            # Copy the original image and paste the masked QR code in the bottom-right
-            stamped = image.copy().convert("RGBA")
-            width, height = stamped.size
-            x = width - stamp_width
-            y = height - stamp_height
-
-            # Cut out the area and composite the QR code
-            stamp_area = stamped.crop((x, y, x + stamp_width, y + stamp_height))
-            stamp_area_with_qr = Image.alpha_composite(stamp_area, qr_masked)
-            stamped.paste(stamp_area_with_qr, (x, y))
-
-            return stamped.convert(image.mode)
+            
+            # Create simple QR code
+            simple_qr = qr.make_image(fill_color="black", back_color="white")
+            simple_qr = simple_qr.resize(self.stamp_size, Image.Resampling.LANCZOS)
+            
+            # Load and resize logo for overlay
+            logo_path = logo_path or self.logo_path
+            logo = Image.open(logo_path).convert("RGBA")
+            logo_size = (self.stamp_size[0] // 4, self.stamp_size[1] // 4)  # 1/4 of QR size
+            logo = logo.resize(logo_size, Image.Resampling.LANCZOS)
+            
+            # Create circular mask for logo
+            mask = Image.new('L', logo_size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0, logo_size[0], logo_size[1]), fill=255)
+            
+            # Apply mask to logo
+            logo.putalpha(mask)
+            
+            # Calculate center position for logo
+            qr_center_x = simple_qr.size[0] // 2 - logo_size[0] // 2
+            qr_center_y = simple_qr.size[1] // 2 - logo_size[1] // 2
+            
+            # Create result image
+            result_image = image.copy()
+            qr_with_logo = simple_qr.copy()
+            qr_with_logo.paste(logo, (qr_center_x, qr_center_y), logo)
+            
+            # Position in bottom-right
+            img_width, img_height = result_image.size
+            qr_width, qr_height = qr_with_logo.size
+            x = img_width - qr_width - 20
+            y = img_height - qr_height - 20
+            
+            result_image.paste(qr_with_logo, (x, y))
+            variants['overlay_logo'] = result_image
+            
+            return variants
+            
         except Exception as e:
-            logger.error(f"Failed to overlay QR code with logo mask: {e}")
-            return image.copy() 
+            logger.error(f"Error creating QR variants: {e}")
+            raise ImageProcessingError(f"Failed to create QR variants: {e}") 
