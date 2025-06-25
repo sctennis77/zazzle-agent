@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment } from 'react-icons/fa';
@@ -11,6 +11,13 @@ interface ProductModalProps {
 
 export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onClose }) => {
   if (!product) return null;
+
+  // Expand/collapse state for post content
+  const [showFullPost, setShowFullPost] = useState(false);
+  const postContent = product.reddit_post.content || '';
+  const previewLength = 200;
+  const isLong = postContent.length > previewLength;
+  const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={product.product_info.image_title || product.product_info.theme}>
@@ -70,7 +77,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     {product.reddit_post.title}
                   </h3>
                   <div className="border-t border-gray-200 pt-3">
-                    <p className="text-sm leading-relaxed italic text-gray-700">{product.reddit_post.content}</p>
+                    <p className="text-sm leading-relaxed italic text-gray-700" style={{ minHeight: '3.5em' }}>
+                      {showFullPost ? postContent : previewContent}
+                    </p>
+                    {isLong && (
+                      <button
+                        className="mt-2 text-xs text-blue-600 hover:underline focus:outline-none"
+                        onClick={() => setShowFullPost(v => !v)}
+                        aria-expanded={showFullPost}
+                      >
+                        {showFullPost ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
                   </div>
                   <div className="border-t border-gray-200 pt-3">
                     <div className="flex items-center gap-4 text-sm">
