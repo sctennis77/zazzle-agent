@@ -100,6 +100,7 @@ class ProductInfo(Base):
         Integer, ForeignKey("reddit_posts.id", ondelete="CASCADE"), index=True
     )
     theme = Column(String(256), index=True)
+    image_title = Column(String(256), nullable=True, index=True)
     image_url = Column(Text)
     product_url = Column(Text)
     affiliate_link = Column(Text)

@@ -563,11 +563,11 @@ class RedditAgent:
             messages = [
                 {
                     "role": "system",
-                    "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well.",
+                    "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well. Also create a concise, witty and insightful title (one sentence max) that captures the essence of the theme and comment summary.",
                 },
                 {
                     "role": "user",
-                    "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
+                    "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Title: [A concise, witty and insightful title reflecting the theme and comment summary]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
                 },
             ]
 
@@ -577,14 +577,17 @@ class RedditAgent:
             # Log the raw response for debugging
             logger.info(f"Raw OpenAI Response: {content}")
 
-            # Parse response to get theme and image description
+            # Parse response to get theme, image title, and image description
             lines = content.split("\n")
             logger.info(f"OpenAI Response: {lines}")
             theme = None
+            image_title = None
             image_description = None
             for line in lines:
                 if line.startswith("Theme:"):
                     theme = line.replace("Theme:", "").strip().strip('"')
+                elif line.startswith("Image Title:"):
+                    image_title = line.replace("Image Title:", "").strip().strip('"')
                 elif line.startswith("Image Description:"):
                     image_description = line.replace("Image Description:", "").strip()
 
@@ -607,13 +610,15 @@ class RedditAgent:
             product_idea = ProductIdea(
                 theme=theme,
                 image_description=image_description,
-                design_instructions={"image": None, "theme": theme},
+                design_instructions={"image": None, "theme": theme, "image_title": image_title},
                 reddit_context=reddit_context,
                 model=self.config.model,
                 prompt_version=self.config.prompt_version,
             )
 
             logger.info(f"Successfully generated product idea: {theme}")
+            if image_title:
+                logger.info(f"Generated image title: {image_title}")
             return product_idea
 
         except ValueError:
@@ -700,6 +705,7 @@ class RedditAgent:
             design_instructions = DesignInstructions(
                 image=imgur_url,
                 theme=product_idea.theme,
+                image_title=product_idea.design_instructions.get("image_title"),
                 text=product_idea.image_description,
                 product_type=ZAZZLE_PRINT_TEMPLATE.product_type,
                 template_id=self.config.zazzle_template_id,

@@ -12,6 +12,7 @@ export interface ProductInfo {
   pipeline_run_id: number;
   reddit_post_id: number;
   theme: string;
+  image_title?: string;
   image_url: string;
   product_url: string;
   template_id: string;

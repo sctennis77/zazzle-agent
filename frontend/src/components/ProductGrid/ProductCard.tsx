@@ -48,7 +48,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         
         <div className="flex flex-col flex-1 px-5 pb-5">
           <h3 className="text-base font-medium text-gray-800 mb-3 text-center cursor-pointer flex-1 leading-relaxed italic">
-            {product.product_info.theme}
+            {product.product_info.image_title || product.product_info.theme}
           </h3>
           
           <div className="text-sm text-gray-500 text-center mt-auto">

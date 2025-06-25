@@ -214,6 +214,7 @@ class ZazzleProductDesigner:
                 image_url=design_instructions.image,
                 product_url=product_url,
                 theme=design_instructions.theme,
+                image_title=design_instructions.__dict__.get("image_title"),
                 model=design_instructions.model,
                 prompt_version=design_instructions.prompt_version,
                 reddit_context=reddit_context,

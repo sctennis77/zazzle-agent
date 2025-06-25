@@ -13,7 +13,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   if (!product) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={product.product_info.theme}>
+    <Modal isOpen={isOpen} onClose={onClose} title={product.product_info.image_title || product.product_info.theme}>
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Image Section */}
@@ -21,7 +21,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 relative">
               <img
                 src={product.product_info.image_url}
-                alt={product.product_info.theme}
+                alt={product.product_info.image_title || product.product_info.theme}
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
               />
             </div>
@@ -52,6 +52,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
 
           {/* Details Section */}
           <div className="space-y-6">
+            {/* Product Theme */}
+            {product.product_info.image_title && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-gray-900">Theme</h4>
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <p className="text-sm leading-relaxed text-gray-700 italic">{product.product_info.theme}</p>
+                </div>
+              </div>
+            )}
+
             {/* Reddit Post Content */}
             {product.reddit_post.content && (
               <div className="space-y-2">

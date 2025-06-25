@@ -97,6 +97,7 @@ class ProductInfoSchema(BaseModel):
     pipeline_run_id: int
     reddit_post_id: int
     theme: str
+    image_title: Optional[str] = None
     image_url: str
     product_url: str
     affiliate_link: Optional[str] = None
@@ -424,6 +425,7 @@ class ProductInfo:
         prompt_version (str): Version of the prompt used
         reddit_context (RedditContext): The Reddit context this product came from
         design_instructions (Dict[str, Any]): The design instructions used
+        image_title (Optional[str]): Concise creative title for the image
         image_local_path (Optional[str]): Optional path to local image file
         affiliate_link (Optional[str]): Optional Zazzle affiliate link
     """
@@ -440,6 +442,7 @@ class ProductInfo:
     prompt_version: str
     reddit_context: RedditContext
     design_instructions: Dict[str, Any]
+    image_title: Optional[str] = None
     image_local_path: Optional[str] = None
     affiliate_link: Optional[str] = None
 
@@ -572,6 +575,7 @@ class ProductInfo:
             pipeline_run_id=0,  # This will be set by the ORM model
             reddit_post_id=0,  # This will be set by the ORM model
             theme=self.theme,
+            image_title=self.image_title,
             image_url=self.image_url,
             product_url=self.product_url,
             affiliate_link=self.affiliate_link,
@@ -595,6 +599,7 @@ class DesignInstructions:
     Attributes:
         image (str): URL of the image to use
         theme (Optional[str]): Optional theme for the product
+        image_title (Optional[str]): Optional concise creative title for the image
         text (Optional[str]): Optional text to include
         color (Optional[str]): Optional color specification
         quantity (Optional[int]): Optional quantity
@@ -606,6 +611,7 @@ class DesignInstructions:
 
     image: str
     theme: Optional[str] = None
+    image_title: Optional[str] = None
     text: Optional[str] = None
     color: Optional[str] = None
     quantity: Optional[int] = None

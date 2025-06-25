@@ -87,6 +87,7 @@ def product_info_to_db(product_info, pipeline_run_id, reddit_post_id):
         pipeline_run_id=pipeline_run_id,
         reddit_post_id=reddit_post_id,
         theme=getattr(product_info, "theme", None),
+        image_title=getattr(product_info, "image_title", None),
         image_url=getattr(product_info, "image_url", None),
         product_url=getattr(product_info, "product_url", None),
         affiliate_link=getattr(product_info, "affiliate_link", None),
