@@ -3,115 +3,47 @@ PYTHON=python3
 PIP=pip3
 POETRY=poetry
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend setup-dev setup-prod setup-quick health-check health-quick health-logs health-resources health-full backup backup-db backup-list backup-clean backup-clean-days backup-stats restore restore-db maintenance cleanup diagnose reset-system
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend setup-dev setup-prod setup-quick health-check health-logs backup-db restore-db check-db
 
 help:
 	@echo "Available targets:"
 	@echo ""
-	@echo "🔧 Environment Setup:"
-	@echo "  make setup-dev      - Setup development environment"
-	@echo "  make setup-prod     - Setup production environment"
-	@echo "  make setup-quick    - Quick setup (skip API tests)"
-	@echo ""
-	@echo "🚀 Deployment:"
-	@echo "  make deploy         - Deploy from scratch"
+	@echo "🚀 CRITICAL - Production Deployment:"
+	@echo "  make setup-prod     - Setup production environment (CRITICAL)"
+	@echo "  make deploy         - Deploy from scratch (CRITICAL)"
 	@echo "  make deploy-clean   - Deploy with clean images"
 	@echo "  make deploy-quick   - Quick deployment (skip pipeline)"
 	@echo ""
-	@echo "🏥 Health Monitoring:"
-	@echo "  make health-check   - Comprehensive health check"
-	@echo "  make health-quick   - Quick health check"
-	@echo "  make health-logs    - Health check with logs"
-	@echo "  make health-resources- Health check with resource usage"
-	@echo "  make health-full    - Full health check with everything"
+	@echo "🏥 CRITICAL - Health Monitoring:"
+	@echo "  make health-check   - Essential health check (CRITICAL)"
+	@echo "  make health-logs    - Health check with logs (CRITICAL)"
+	@echo "  make deployment-status - Show deployment status (CRITICAL)"
+	@echo "  make validate-deployment - Validate deployment (CRITICAL)"
 	@echo ""
-	@echo "💾 Backup & Restore:"
-	@echo "  make backup         - Create full backup"
-	@echo "  make backup-db      - Create database backup only"
-	@echo "  make backup-list    - List available backups"
-	@echo "  make backup-clean   - Clean old backups (30 days)"
-	@echo "  make backup-stats   - Show backup statistics"
-	@echo "  make restore BACKUP=file.tar.gz - Restore from backup"
-	@echo "  make restore-db DB=file.db - Restore database only"
+	@echo "💾 CRITICAL - Database Safety:"
+	@echo "  make backup-db      - Database backup (CRITICAL)"
+	@echo "  make restore-db DB=file.db - Database restore (CRITICAL)"
+	@echo "  make check-db       - Check database (CRITICAL)"
 	@echo ""
-	@echo "🔧 Maintenance:"
-	@echo "  make maintenance    - Full system maintenance"
-	@echo "  make cleanup        - Clean up system resources"
-	@echo "  make diagnose       - Run system diagnosis"
-	@echo "  make reset-system   - Reset entire system (DANGEROUS)"
-	@echo ""
-	@echo "📊 Status & Monitoring:"
-	@echo "  make deployment-status - Show deployment status"
-	@echo "  make validate-deployment - Validate deployment"
-	@echo "  make show-logs      - Show all logs"
+	@echo "📊 CRITICAL - Operations:"
+	@echo "  make show-logs      - Show all logs (CRITICAL)"
 	@echo "  make show-logs-api  - Show API logs"
 	@echo "  make show-logs-pipeline - Show pipeline logs"
-	@echo "  make show-logs-frontend - Show frontend logs"
+	@echo "  make run-pipeline   - Run pipeline manually (CRITICAL)"
 	@echo ""
-	@echo "🚀 Pipeline Control:"
-	@echo "  make run-pipeline   - Run pipeline manually"
+	@echo "🔧 Development (Optional):"
+	@echo "  make setup-dev      - Setup development environment"
+	@echo "  make setup-quick    - Quick setup (skip API tests)"
+	@echo "  make install-deps   - Install dependencies"
+	@echo "  make test           - Run test suite"
+	@echo "  make format         - Format code"
+	@echo "  make lint           - Lint code"
 	@echo ""
-	@echo "🐳 Docker Commands:"
-	@echo "  make docker-build-all - Build all Docker images"
-	@echo "  make docker-run-local - Start with Docker Compose"
-	@echo "  make docker-stop-local - Stop Docker Compose"
-	@echo "  make docker-logs    - Show Docker logs"
-	@echo "  make docker-clean   - Clean Docker resources"
-	@echo ""
-	@echo "☸️  Kubernetes Commands:"
-	@echo "  make k8s-deploy     - Deploy to Kubernetes"
-	@echo "  make k8s-status     - Show K8s status"
-	@echo "  make k8s-logs       - Show K8s logs"
-	@echo "  make k8s-delete     - Delete K8s deployment"
-	@echo ""
-	@echo "🧪 Development:"
-	@echo "  make install-poetry - Install Poetry dependency manager"
-	@echo "  make install-deps   - Install project dependencies"
-	@echo "  make format         - Format code with black and isort"
-	@echo "  make lint           - Lint code with flake8"
-	@echo "  make type-check     - Run type checking with mypy"
-	@echo "  make test           - Run test suite with coverage"
-	@echo "  make test-pattern <path> - Run specific test"
-	@echo "  make run-full       - Run complete pipeline locally"
-	@echo "  make run-api        - Start FastAPI server"
-	@echo "  make stop-api       - Stop FastAPI server"
-	@echo ""
-	@echo "🌐 Frontend:"
-	@echo "  make frontend-dev   - Start frontend dev server"
-	@echo "  make frontend-build - Build frontend for production"
-	@echo "  make frontend-preview - Preview production build"
-	@echo "  make frontend-install - Install frontend dependencies"
-	@echo "  make frontend-lint  - Lint frontend code"
-	@echo "  make frontend-clean - Clean frontend build files"
-	@echo ""
-	@echo "🗄️  Database:"
-	@echo "  make alembic-init   - Initialize Alembic"
-	@echo "  make alembic-revision - Create new migration"
-	@echo "  make alembic-upgrade - Run migrations"
-	@echo "  make alembic-downgrade - Rollback migration"
-	@echo "  make check-db       - Check database contents"
-	@echo "  make check-pipeline-db - Check pipeline database"
-	@echo "  make get-last-run   - Get last pipeline run"
-	@echo "  make backup-db      - Backup database"
-	@echo "  make restore-db     - Restore database"
-	@echo "  make reset-db       - Reset database (DANGEROUS)"
-	@echo ""
-	@echo "🔧 Utilities:"
-	@echo "  make export-requirements - Export requirements.txt"
-	@echo "  make clean          - Clean build artifacts"
-	@echo ""
-	@echo "📚 Examples:"
-	@echo "  make setup-dev && make deploy"
-	@echo "  make health-check"
-	@echo "  make backup"
-	@echo "  make restore BACKUP=zazzle_agent_backup_20241201_120000.tar.gz"
-	@echo "  make maintenance"
-	@echo ""
-	@echo "💡 Quick Start:"
-	@echo "  1. make setup-dev    # Setup environment"
-	@echo "  2. make deploy       # Deploy application"
-	@echo "  3. make health-check # Verify everything works"
-	@echo "  4. make backup       # Create initial backup"
+	@echo "💡 Quick Start (Production):"
+	@echo "  1. make setup-prod  # Setup environment"
+	@echo "  2. make deploy      # Deploy application"
+	@echo "  3. make health-check # Verify deployment"
+	@echo "  4. make backup-db   # Create database backup"
 
 install-poetry:
 	@echo "Installing Poetry..."
@@ -606,7 +538,7 @@ deploy:
 		echo "See .env.example for required variables."; \
 		echo ""; \
 		echo "Run this first to set up your environment:"; \
-		echo "  ./scripts/setup-environment.sh"; \
+		echo "  make setup-prod"; \
 		exit 1; \
 	fi
 	@./deploy.sh
@@ -619,7 +551,7 @@ deploy-clean:
 		echo "See .env.example for required variables."; \
 		echo ""; \
 		echo "Run this first to set up your environment:"; \
-		echo "  ./scripts/setup-environment.sh"; \
+		echo "  make setup-prod"; \
 		exit 1; \
 	fi
 	@./deploy.sh --clean-images
@@ -632,7 +564,7 @@ deploy-quick:
 		echo "See .env.example for required variables."; \
 		echo ""; \
 		echo "Run this first to set up your environment:"; \
-		echo "  ./scripts/setup-environment.sh"; \
+		echo "  make setup-prod"; \
 		exit 1; \
 	fi
 	@./deploy.sh --skip-pipeline
@@ -689,100 +621,48 @@ export-requirements:
 	poetry run pip freeze > requirements.txt
 
 # =====================
-# Environment Setup
+# Environment Setup (CRITICAL)
 # =====================
 
-# Setup environment for development
-setup-dev:
-	@echo "🔧 Setting up development environment..."
-	@./scripts/setup-environment.sh
-
-# Setup environment for production
+# Setup environment for production (CRITICAL)
 setup-prod:
 	@echo "🔧 Setting up production environment..."
 	@./scripts/setup-environment.sh --production
 
-# Setup environment without API tests
+# Setup environment for development (Optional)
+setup-dev:
+	@echo "🔧 Setting up development environment..."
+	@./scripts/setup-environment.sh
+
+# Setup environment without API tests (CRITICAL)
 setup-quick:
 	@echo "🔧 Quick environment setup (skipping API tests)..."
 	@./scripts/setup-environment.sh --skip-tests
 
 # =====================
-# Health Monitoring
+# Health Monitoring (CRITICAL)
 # =====================
 
-# Comprehensive health check
+# Essential health check (CRITICAL)
 health-check:
-	@echo "🏥 Running comprehensive health check..."
-	@./scripts/health-monitor.sh
-
-# Quick health check
-health-quick:
-	@echo "🏥 Running quick health check..."
+	@echo "🏥 Running essential health check..."
 	@./scripts/health-monitor.sh --quick
 
-# Health check with logs
+# Health check with logs (CRITICAL)
 health-logs:
 	@echo "🏥 Running health check with logs..."
 	@./scripts/health-monitor.sh --logs
 
-# Health check with resource usage
-health-resources:
-	@echo "🏥 Running health check with resource usage..."
-	@./scripts/health-monitor.sh --resources
-
-# Full health check with everything
-health-full:
-	@echo "🏥 Running full health check..."
-	@./scripts/health-monitor.sh --logs --resources
-
 # =====================
-# Backup and Restore
+# Database Safety (CRITICAL)
 # =====================
 
-# Create full backup
-backup:
-	@echo "💾 Creating full backup..."
-	@./scripts/backup-restore.sh backup
-
-# Create database backup only
+# Create database backup (CRITICAL)
 backup-db:
 	@echo "💾 Creating database backup..."
 	@./scripts/backup-restore.sh backup-db
 
-# List available backups
-backup-list:
-	@echo "💾 Listing available backups..."
-	@./scripts/backup-restore.sh list
-
-# Clean old backups (default 30 days)
-backup-clean:
-	@echo "💾 Cleaning old backups..."
-	@./scripts/backup-restore.sh clean
-
-# Clean backups older than specified days
-backup-clean-days:
-	@echo "💾 Cleaning backups older than $(DAYS) days..."
-	@./scripts/backup-restore.sh clean $(DAYS)
-
-# Show backup statistics
-backup-stats:
-	@echo "💾 Showing backup statistics..."
-	@./scripts/backup-restore.sh stats
-
-# Restore from backup (usage: make restore BACKUP=filename.tar.gz)
-restore:
-	@echo "💾 Restoring from backup..."
-	@if [ -z "$(BACKUP)" ]; then \
-		echo "❌ No backup file specified. Usage: make restore BACKUP=filename.tar.gz"; \
-		echo ""; \
-		echo "Available backups:"; \
-		./scripts/backup-restore.sh list; \
-		exit 1; \
-	fi
-	@./scripts/backup-restore.sh restore $(BACKUP)
-
-# Restore database only (usage: make restore-db DB=filename.db)
+# Restore database (CRITICAL)
 restore-db:
 	@echo "💾 Restoring database..."
 	@if [ -z "$(DB)" ]; then \
@@ -795,83 +675,131 @@ restore-db:
 	@./scripts/backup-restore.sh restore-db $(DB)
 
 # =====================
-# Maintenance Commands
+# Deployment (CRITICAL)
 # =====================
 
-# Full system maintenance
-maintenance:
-	@echo "🔧 Running full system maintenance..."
-	@echo "1. Checking health..."
-	@./scripts/health-monitor.sh --quick
-	@echo ""
-	@echo "2. Creating backup..."
-	@./scripts/backup-restore.sh backup
-	@echo ""
-	@echo "3. Cleaning old backups..."
-	@./scripts/backup-restore.sh clean 30
-	@echo ""
-	@echo "4. Checking disk usage..."
-	@df -h .
-	@echo ""
-	@echo "✅ Maintenance completed"
+# Deploy from scratch (CRITICAL)
+deploy:
+	@echo "🚀 Deploying Zazzle Agent from scratch..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh
 
-# Clean up system resources
-cleanup:
-	@echo "🧹 Cleaning up system resources..."
-	@echo "1. Cleaning Docker..."
-	@docker system prune -f
-	@echo ""
-	@echo "2. Cleaning old backups..."
-	@./scripts/backup-restore.sh clean 7
-	@echo ""
-	@echo "3. Checking disk usage..."
-	@df -h .
-	@echo ""
-	@echo "✅ Cleanup completed"
+# Deploy with clean images
+deploy-clean:
+	@echo "🚀 Deploying Zazzle Agent with clean images..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh --clean-images
+
+# Deploy without running initial pipeline
+deploy-quick:
+	@echo "🚀 Quick deployment (skipping initial pipeline)..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh --skip-pipeline
 
 # =====================
-# Troubleshooting Commands
+# Status and Operations (CRITICAL)
 # =====================
 
-# Diagnose issues
-diagnose:
-	@echo "🔍 Running system diagnosis..."
-	@echo "1. Environment check..."
-	@./scripts/setup-environment.sh --skip-tests
-	@echo ""
-	@echo "2. Health check..."
-	@./scripts/health-monitor.sh --logs
-	@echo ""
-	@echo "3. Service status..."
+# Validate deployment (CRITICAL)
+validate-deployment:
+	@echo "🔍 Validating deployment..."
+	@echo "Checking API health..."
+	@curl -f -s http://localhost:8000/health > /dev/null && echo "✅ API is healthy" || echo "❌ API health check failed"
+	@echo "Checking frontend..."
+	@curl -f -s http://localhost:5173 > /dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend check failed"
+	@echo "Checking database..."
+	@docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT COUNT(*) FROM reddit_posts;" 2>/dev/null && echo "✅ Database is accessible" || echo "❌ Database check failed"
+
+# Show deployment status (CRITICAL)
+deployment-status:
+	@echo "📊 Deployment Status"
+	@echo "==================="
 	@docker-compose ps
 	@echo ""
-	@echo "4. Recent logs..."
-	@docker-compose logs --tail=20
+	@echo "🔗 Service URLs:"
+	@echo "  • Frontend: http://localhost:5173"
+	@echo "  • API: http://localhost:8000"
+	@echo "  • API Docs: http://localhost:8000/docs"
 	@echo ""
-	@echo "✅ Diagnosis completed"
+	@echo "📋 Recent logs:"
+	@docker-compose logs --tail=10
 
-# Reset system (DANGEROUS - use with caution)
-reset-system:
-	@echo "⚠️  WARNING: This will reset the entire system!"
-	@echo "This will:"
-	@echo "  • Stop all services"
-	@echo "  • Remove all containers"
-	@echo "  • Remove all images"
-	@echo "  • Delete the database"
-	@echo ""
-	@echo "Are you sure you want to continue? (y/N)"
-	@read -r response; \
-	if [[ "$$response" =~ ^[Yy]$$ ]]; then \
-		echo "🔄 Resetting system..."; \
-		docker-compose down -v --rmi all; \
-		rm -f data/zazzle_pipeline.db; \
-		echo "✅ System reset completed"; \
-		echo ""; \
-		echo "To redeploy:"; \
-		echo "  make deploy"; \
-	else \
-		echo "❌ Reset cancelled"; \
-	fi
+# Run pipeline manually (CRITICAL)
+run-pipeline:
+	@echo "🚀 Running pipeline manually..."
+	@docker-compose exec -T pipeline python app/main.py --mode full
+
+# Show logs (CRITICAL)
+show-logs:
+	@echo "📋 Showing logs for all services..."
+	@docker-compose logs -f
+
+# Show logs for specific service
+show-logs-api:
+	@echo "📋 Showing API logs..."
+	@docker-compose logs -f api
+
+show-logs-pipeline:
+	@echo "📋 Showing pipeline logs..."
+	@docker-compose logs -f pipeline
+
+# =====================
+# Database Operations (CRITICAL)
+# =====================
+
+# Check database (CRITICAL)
+check-db:
+	@echo "Checking database contents..."
+	$(POETRY) run python3 -m scripts.check_db
+
+# =====================
+# Development (Optional)
+# =====================
+
+# Install dependencies
+install-deps:
+	@echo "Installing dependencies with Poetry..."
+	$(POETRY) install
+
+# Run tests
+test:
+	$(POETRY) run pytest tests/ --cov=app
+
+# Format code
+format:
+	@echo "Formatting code with black and isort..."
+	$(POETRY) run black .
+	$(POETRY) run isort .
+
+# Lint code
+lint:
+	@echo "Linting code with flake8..."
+	$(POETRY) run flake8 app/ tests/
+
+# Always run this after changing Poetry dependencies to keep Docker in sync
+export-requirements:
+	poetry run pip freeze > requirements.txt
 
 %::
 	@: 
