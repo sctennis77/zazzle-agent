@@ -12,6 +12,34 @@ from app.models import (
 Base = declarative_base()
 
 
+class Subreddit(Base):
+    """Core subreddit entity - single source of truth for subreddit metadata"""
+    __tablename__ = "subreddits"
+    id = Column(Integer, primary_key=True)
+    subreddit_name = Column(String(100), nullable=False, unique=True, index=True)  # e.g., "golf", "all"
+    reddit_id = Column(String(32), nullable=True, index=True)  # Reddit's internal ID
+    reddit_fullname = Column(String(32), nullable=True, index=True)  # Reddit's fullname (t5_...)
+    display_name = Column(String(100), nullable=True)  # Display name (usually same as subreddit_name)
+    description = Column(Text, nullable=True)  # Subreddit description in Markdown
+    description_html = Column(Text, nullable=True)  # Subreddit description in HTML
+    public_description = Column(Text, nullable=True)  # Public description shown in searches
+    created_utc = Column(DateTime, nullable=True, index=True)  # When subreddit was created
+    subscribers = Column(Integer, nullable=True, index=True)  # Number of subscribers
+    over18 = Column(Boolean, default=False, nullable=False)  # Whether NSFW
+    spoilers_enabled = Column(Boolean, default=False, nullable=False)  # Whether spoilers enabled
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+    # Relationships
+    donations = relationship("Donation", back_populates="subreddit")
+    sponsors = relationship("Sponsor", back_populates="subreddit")
+    subreddit_tiers = relationship("SubredditTier", back_populates="subreddit")
+    fundraising_goals = relationship("SubredditFundraisingGoal", back_populates="subreddit")
+    pipeline_tasks = relationship("PipelineTask", back_populates="subreddit")
+    reddit_posts = relationship("RedditPost", back_populates="subreddit")
+    interaction_actions = relationship("InteractionAgentAction", back_populates="subreddit")
+
+
 class PipelineRun(Base):
     __tablename__ = "pipeline_runs"
     id = Column(Integer, primary_key=True)
@@ -67,7 +95,7 @@ class Donation(Base):
     customer_email = Column(String(255), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
     message = Column(Text, nullable=True)  # Optional message from donor
-    subreddit = Column(String(100), nullable=True, index=True)  # Subreddit associated with the donation
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=True, index=True)  # Subreddit associated with the donation
     reddit_username = Column(String(100), nullable=True, index=True)  # Reddit username of the donor
     stripe_metadata = Column(JSON, nullable=True)  # Additional Stripe metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
@@ -76,6 +104,7 @@ class Donation(Base):
     subreddit_fundraising_goal_id = Column(Integer, ForeignKey("subreddit_fundraising_goals.id"), nullable=True, index=True)  # Associated fundraising goal
 
     # Relationships
+    subreddit = relationship("Subreddit", back_populates="donations")
     subreddit_fundraising_goal = relationship("SubredditFundraisingGoal", back_populates="donations")
 
 
@@ -98,31 +127,34 @@ class Sponsor(Base):
     id = Column(Integer, primary_key=True)
     donation_id = Column(Integer, ForeignKey("donations.id", ondelete="CASCADE"), nullable=False, index=True)
     tier_id = Column(Integer, ForeignKey("sponsor_tiers.id"), nullable=False, index=True)
-    subreddit = Column(String(100), nullable=True, index=True)  # Subreddit they want to support
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=True, index=True)  # Subreddit they want to support
     status = Column(String(32), default="active", nullable=False, index=True)  # active, inactive
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     donation = relationship("Donation", backref="sponsor")
     tier = relationship("SponsorTier", back_populates="sponsors")
+    subreddit = relationship("Subreddit", back_populates="sponsors")
 
 
 class SubredditTier(Base):
     """Community fundraising levels for subreddits"""
     __tablename__ = "subreddit_tiers"
     id = Column(Integer, primary_key=True)
-    subreddit = Column(String(100), nullable=False, index=True)
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=False, index=True)
     tier_level = Column(Integer, nullable=False, index=True)  # 1, 2, 3, etc.
     min_total_donation = Column(Numeric(10, 2), nullable=False, index=True)  # Total community donation needed
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending, active, completed
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     completed_at = Column(DateTime, nullable=True, index=True)
 
+    subreddit = relationship("Subreddit", back_populates="subreddit_tiers")
+
 
 class SubredditFundraisingGoal(Base):
     """Community fundraising goals for subreddits"""
     __tablename__ = "subreddit_fundraising_goals"
     id = Column(Integer, primary_key=True)
-    subreddit = Column(String(100), nullable=False, index=True)
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=False, index=True)
     goal_amount = Column(Numeric(10, 2), nullable=False, index=True)  # Total goal amount
     current_amount = Column(Numeric(10, 2), default=0, nullable=False, index=True)  # Current progress
     deadline = Column(DateTime, nullable=True, index=True)  # Optional deadline
@@ -130,6 +162,7 @@ class SubredditFundraisingGoal(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     completed_at = Column(DateTime, nullable=True, index=True)
 
+    subreddit = relationship("Subreddit", back_populates="fundraising_goals")
     donations = relationship("Donation", back_populates="subreddit_fundraising_goal")
 
 
@@ -138,7 +171,7 @@ class PipelineTask(Base):
     __tablename__ = "pipeline_tasks"
     id = Column(Integer, primary_key=True)
     type = Column(String(32), nullable=False, index=True)  # SUBREDDIT_POST
-    subreddit = Column(String(100), nullable=False, index=True)  # Target subreddit (use "all" for front page)
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=False, index=True)  # Target subreddit
     sponsor_id = Column(Integer, ForeignKey("sponsors.id"), nullable=True, index=True)  # Associated sponsor
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending, in_progress, completed, failed
     priority = Column(Integer, default=0, nullable=False, index=True)  # Higher number = higher priority
@@ -149,6 +182,7 @@ class PipelineTask(Base):
     context_data = Column(JSON, nullable=True)  # Additional context data
     pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=True, index=True)  # Associated pipeline run
 
+    subreddit = relationship("Subreddit", back_populates="pipeline_tasks")
     sponsor = relationship("Sponsor", backref="tasks")
     pipeline_run = relationship("PipelineRun", backref="tasks")
 
@@ -165,7 +199,7 @@ class RedditPost(Base):
     post_id = Column(String(32), unique=True, index=True)
     title = Column(Text)
     content = Column(Text)
-    subreddit = Column(String(64), index=True)
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=True, index=True)
     url = Column(Text)
     permalink = Column(Text)
     comment_summary = Column(Text, nullable=True)
@@ -174,6 +208,7 @@ class RedditPost(Base):
     num_comments = Column(Integer, nullable=True, index=True)  # Number of comments on the post
 
     pipeline_run = relationship("PipelineRun", back_populates="reddit_posts")
+    subreddit = relationship("Subreddit", back_populates="reddit_posts")
     products = relationship(
         "ProductInfo", back_populates="reddit_post", cascade="all, delete-orphan"
     )
@@ -198,7 +233,6 @@ class ProductInfo(Base):
     )
     theme = Column(String(256), index=True)
     image_title = Column(String(256), nullable=True, index=True)
-    image_url = Column(Text)
     product_url = Column(Text)
     affiliate_link = Column(Text)
     template_id = Column(String(64), index=True)
@@ -259,7 +293,7 @@ class InteractionAgentAction(Base):
     target_type = Column(String(32), index=True)  # post, comment
     target_id = Column(String(32), index=True)  # Reddit post/comment ID
     content = Column(Text, nullable=True)  # For replies
-    subreddit = Column(String(64), index=True)
+    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=True, index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     success = Column(
         String(8), default=InteractionActionStatus.PENDING.value, index=True
@@ -269,6 +303,7 @@ class InteractionAgentAction(Base):
 
     product_info = relationship("ProductInfo", back_populates="interaction_actions")
     reddit_post = relationship("RedditPost", back_populates="interaction_actions")
+    subreddit = relationship("Subreddit", back_populates="interaction_actions")
 
     @property
     def action_type_enum(self) -> InteractionActionType:

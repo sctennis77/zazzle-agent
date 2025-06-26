@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.db.models import PipelineTask, Sponsor
+from app.subreddit_service import get_subreddit_service
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ class TaskQueue:
     def add_task(
         self,
         task_type: str,
-        subreddit: str,
+        subreddit_id: int,
         sponsor_id: Optional[int] = None,
         priority: int = 0,
         scheduled_for: Optional[datetime] = None,
@@ -43,7 +44,7 @@ class TaskQueue:
         
         Args:
             task_type: Type of task (SUBREDDIT_POST)
-            subreddit: Target subreddit (use "all" for front page)
+            subreddit_id: Target subreddit ID
             sponsor_id: Associated sponsor ID
             priority: Task priority (higher number = higher priority)
             scheduled_for: When to execute the task
@@ -53,20 +54,20 @@ class TaskQueue:
             PipelineTask: The created task
             
         Raises:
-            ValueError: If task type is invalid or subreddit is missing
+            ValueError: If task type is invalid or subreddit_id is missing
         """
         try:
             # Validate task type
             if task_type != "SUBREDDIT_POST":
                 raise ValueError(f"Invalid task type: {task_type}. Only SUBREDDIT_POST is supported")
             
-            # Validate subreddit
-            if not subreddit:
-                raise ValueError("Subreddit is required")
+            # Validate subreddit_id
+            if not subreddit_id:
+                raise ValueError("Subreddit ID is required")
             
             task = PipelineTask(
                 type=task_type,
-                subreddit=subreddit,
+                subreddit_id=subreddit_id,
                 sponsor_id=sponsor_id,
                 priority=priority,
                 scheduled_for=scheduled_for,
@@ -77,13 +78,51 @@ class TaskQueue:
             self.session.add(task)
             self.session.commit()
             
-            logger.info(f"Added task {task.id} of type {task_type} for r/{subreddit} to queue")
+            # Get subreddit name for logging
+            subreddit_name = task.subreddit.subreddit_name if task.subreddit else f"ID:{subreddit_id}"
+            logger.info(f"Added task {task.id} of type {task_type} for r/{subreddit_name} to queue")
             return task
             
         except Exception as e:
             self.session.rollback()
             logger.error(f"Error adding task to queue: {str(e)}")
             raise
+
+    def add_task_by_name(
+        self,
+        task_type: str,
+        subreddit_name: str,
+        sponsor_id: Optional[int] = None,
+        priority: int = 0,
+        scheduled_for: Optional[datetime] = None,
+        context_data: Optional[Dict[str, Any]] = None,
+    ) -> PipelineTask:
+        """
+        Add a task to the queue using subreddit name (creates subreddit entity if needed).
+        
+        Args:
+            task_type: Type of task (SUBREDDIT_POST)
+            subreddit_name: Target subreddit name (e.g., "golf", "all")
+            sponsor_id: Associated sponsor ID
+            priority: Task priority (higher number = higher priority)
+            scheduled_for: When to execute the task
+            context_data: Additional context data
+            
+        Returns:
+            PipelineTask: The created task
+        """
+        # Get or create subreddit entity
+        subreddit_service = get_subreddit_service()
+        subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+        
+        return self.add_task(
+            task_type=task_type,
+            subreddit_id=subreddit.id,
+            sponsor_id=sponsor_id,
+            priority=priority,
+            scheduled_for=scheduled_for,
+            context_data=context_data,
+        )
 
     def get_next_task(self) -> Optional[PipelineTask]:
         """
@@ -210,7 +249,7 @@ class TaskQueue:
                     {
                         "id": task.id,
                         "type": task.type,
-                        "subreddit": task.subreddit,
+                        "subreddit": task.subreddit.subreddit_name if task.subreddit else f"ID:{task.subreddit_id}",
                         "priority": task.priority,
                         "created_at": task.created_at.isoformat(),
                         "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
@@ -223,20 +262,20 @@ class TaskQueue:
             logger.error(f"Error getting queue status: {str(e)}")
             raise
 
-    def add_subreddit_task(self, subreddit: str, priority: int = 5) -> PipelineTask:
+    def add_subreddit_task(self, subreddit_name: str, priority: int = 5) -> PipelineTask:
         """
         Add a subreddit task to the queue.
         
         Args:
-            subreddit: Target subreddit (use "all" for front page)
+            subreddit_name: Target subreddit name (use "all" for front page)
             priority: Task priority
             
         Returns:
             PipelineTask: The created task
         """
-        return self.add_task(
+        return self.add_task_by_name(
             task_type="SUBREDDIT_POST",
-            subreddit=subreddit,
+            subreddit_name=subreddit_name,
             priority=priority,
             context_data={"subreddit_task": True}
         )
@@ -251,9 +290,9 @@ class TaskQueue:
         Returns:
             PipelineTask: The created task
         """
-        return self.add_task(
+        return self.add_task_by_name(
             task_type="SUBREDDIT_POST",
-            subreddit="all",
+            subreddit_name="all",
             priority=priority,
             context_data={"front_task": True}
         )

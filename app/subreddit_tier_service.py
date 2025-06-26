@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Donation, SubredditTier, SubredditFundraisingGoal, Sponsor
+from app.subreddit_service import get_subreddit_service
 from app.task_queue import TaskQueue
 from app.utils.logging_config import get_logger
 
@@ -35,20 +36,24 @@ class SubredditTierService:
         self.session = session
         self.task_queue = TaskQueue(session)
 
-    def get_subreddit_total_donations(self, subreddit: str) -> Decimal:
+    def get_subreddit_total_donations(self, subreddit_name: str) -> Decimal:
         """
         Get total donations for a subreddit, counting each donation only once.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             
         Returns:
             Decimal: Total donation amount
         """
+        # Get or create subreddit entity
+        subreddit_service = get_subreddit_service()
+        subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+        
         # Query all succeeded donations for this subreddit (direct or via fundraising goal)
         donations = (
             self.session.query(Donation)
-            .filter(Donation.subreddit == subreddit)
+            .filter(Donation.subreddit_id == subreddit.id)
             .filter(Donation.status == "succeeded")
             .all()
         )
@@ -56,39 +61,47 @@ class SubredditTierService:
         unique_donations = {d.id: d for d in donations}.values()
         return sum(d.amount_usd for d in unique_donations) if unique_donations else Decimal('0')
 
-    def get_subreddit_tiers(self, subreddit: str) -> List[SubredditTier]:
+    def get_subreddit_tiers(self, subreddit_name: str) -> List[SubredditTier]:
         """
         Get all tiers for a subreddit.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             
         Returns:
             List[SubredditTier]: List of subreddit tiers
         """
+        # Get or create subreddit entity
+        subreddit_service = get_subreddit_service()
+        subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+        
         return (
             self.session.query(SubredditTier)
-            .filter(SubredditTier.subreddit == subreddit)
+            .filter(SubredditTier.subreddit_id == subreddit.id)
             .order_by(SubredditTier.tier_level)
             .all()
         )
 
-    def create_subreddit_tiers(self, subreddit: str, tier_levels: List[Dict[str, Any]]) -> List[SubredditTier]:
+    def create_subreddit_tiers(self, subreddit_name: str, tier_levels: List[Dict[str, Any]]) -> List[SubredditTier]:
         """
         Create subreddit tiers for a subreddit.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             tier_levels: List of tier configurations with min_total_donation
             
         Returns:
             List[SubredditTier]: Created subreddit tiers
         """
         try:
+            # Get or create subreddit entity
+            subreddit_service = get_subreddit_service()
+            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+            
             tiers = []
             for tier_config in tier_levels:
                 tier = SubredditTier(
-                    subreddit=subreddit,
+                    subreddit_id=subreddit.id,
                     tier_level=tier_config["level"],
                     min_total_donation=tier_config["min_total_donation"],
                     status="pending"
@@ -97,7 +110,7 @@ class SubredditTierService:
                 tiers.append(tier)
             
             self.session.commit()
-            logger.info(f"Created {len(tiers)} tiers for subreddit {subreddit}")
+            logger.info(f"Created {len(tiers)} tiers for subreddit {subreddit_name}")
             return tiers
             
         except Exception as e:
@@ -105,19 +118,19 @@ class SubredditTierService:
             logger.error(f"Error creating subreddit tiers: {str(e)}")
             raise
 
-    def check_and_update_tiers(self, subreddit: str) -> List[SubredditTier]:
+    def check_and_update_tiers(self, subreddit_name: str) -> List[SubredditTier]:
         """
         Check if any subreddit tiers have been reached and update them.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             
         Returns:
             List[SubredditTier]: List of newly completed tiers
         """
         try:
-            total_donations = self.get_subreddit_total_donations(subreddit)
-            tiers = self.get_subreddit_tiers(subreddit)
+            total_donations = self.get_subreddit_total_donations(subreddit_name)
+            tiers = self.get_subreddit_tiers(subreddit_name)
             
             completed_tiers = []
             for tier in tiers:
@@ -129,18 +142,18 @@ class SubredditTierService:
                     tier.completed_at = datetime.now(timezone.utc)
                     
                     # Add task to queue for this tier
-                    self.task_queue.add_subreddit_tier_task(
-                        subreddit=subreddit,
+                    self.task_queue.add_subreddit_task(
+                        subreddit_name=subreddit_name,
                         priority=5  # Medium priority for tier posts
                     )
                     
                     completed_tiers.append(tier)
-                    logger.info(f"Subreddit {subreddit} reached tier {tier.tier_level} "
+                    logger.info(f"Subreddit {subreddit_name} reached tier {tier.tier_level} "
                               f"(${tier.min_total_donation}) - total: ${total_donations}")
             
             if completed_tiers:
                 self.session.commit()
-                logger.info(f"Updated {len(completed_tiers)} tiers for subreddit {subreddit}")
+                logger.info(f"Updated {len(completed_tiers)} tiers for subreddit {subreddit_name}")
             
             return completed_tiers
             
@@ -149,24 +162,27 @@ class SubredditTierService:
             logger.error(f"Error checking subreddit tiers: {str(e)}")
             raise
 
-    def get_fundraising_goals(self, subreddit: Optional[str] = None) -> List[SubredditFundraisingGoal]:
+    def get_fundraising_goals(self, subreddit_name: Optional[str] = None) -> List[SubredditFundraisingGoal]:
         """
         Get fundraising goals.
         
         Args:
-            subreddit: Optional subreddit filter
+            subreddit_name: Optional subreddit filter
             
         Returns:
             List[SubredditFundraisingGoal]: List of fundraising goals
         """
         query = self.session.query(SubredditFundraisingGoal)
-        if subreddit:
-            query = query.filter(SubredditFundraisingGoal.subreddit == subreddit)
+        if subreddit_name:
+            # Get or create subreddit entity
+            subreddit_service = get_subreddit_service()
+            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+            query = query.filter(SubredditFundraisingGoal.subreddit_id == subreddit.id)
         return query.filter(SubredditFundraisingGoal.status == "active").all()
 
     def create_fundraising_goal(
         self, 
-        subreddit: str, 
+        subreddit_name: str, 
         goal_amount: Decimal, 
         deadline: Optional[datetime] = None
     ) -> SubredditFundraisingGoal:
@@ -174,7 +190,7 @@ class SubredditTierService:
         Create a fundraising goal for a subreddit.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             goal_amount: Goal amount
             deadline: Optional deadline
             
@@ -182,8 +198,12 @@ class SubredditTierService:
             SubredditFundraisingGoal: Created fundraising goal
         """
         try:
+            # Get or create subreddit entity
+            subreddit_service = get_subreddit_service()
+            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+            
             goal = SubredditFundraisingGoal(
-                subreddit=subreddit,
+                subreddit_id=subreddit.id,
                 goal_amount=goal_amount,
                 current_amount=Decimal('0'),
                 deadline=deadline,
@@ -193,7 +213,7 @@ class SubredditTierService:
             self.session.add(goal)
             self.session.commit()
             
-            logger.info(f"Created fundraising goal for {subreddit}: ${goal_amount}")
+            logger.info(f"Created fundraising goal for {subreddit_name}: ${goal_amount}")
             return goal
             
         except Exception as e:
@@ -201,19 +221,19 @@ class SubredditTierService:
             logger.error(f"Error creating fundraising goal: {str(e)}")
             raise
 
-    def update_fundraising_progress(self, subreddit: str) -> List[SubredditFundraisingGoal]:
+    def update_fundraising_progress(self, subreddit_name: str) -> List[SubredditFundraisingGoal]:
         """
         Update fundraising progress for a subreddit.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             
         Returns:
             List[SubredditFundraisingGoal]: List of completed goals
         """
         try:
-            total_donations = self.get_subreddit_total_donations(subreddit)
-            goals = self.get_fundraising_goals(subreddit)
+            total_donations = self.get_subreddit_total_donations(subreddit_name)
+            goals = self.get_fundraising_goals(subreddit_name)
             
             completed_goals = []
             for goal in goals:
@@ -227,12 +247,12 @@ class SubredditTierService:
                         goal.completed_at = datetime.now(timezone.utc)
                         completed_goals.append(goal)
                         
-                        logger.info(f"Fundraising goal completed for {subreddit}: "
+                        logger.info(f"Fundraising goal completed for {subreddit_name}: "
                                   f"${goal.goal_amount} (actual: ${total_donations})")
             
             if goals:
                 self.session.commit()
-                logger.info(f"Updated fundraising progress for {subreddit}: ${total_donations}")
+                logger.info(f"Updated fundraising progress for {subreddit_name}: ${total_donations}")
             
             return completed_goals
             
@@ -252,29 +272,32 @@ class SubredditTierService:
             Dict: Processing results
         """
         try:
+            # Get subreddit name for results
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else None
+            
             results = {
-                "subreddit": donation.subreddit,
+                "subreddit": subreddit_name,
                 "amount": donation.amount_usd,
                 "completed_tiers": [],
                 "completed_goals": [],
                 "total_donations": Decimal('0')
             }
             
-            if not donation.subreddit:
+            if not subreddit_name:
                 return results
             
             # Update fundraising progress
-            completed_goals = self.update_fundraising_progress(donation.subreddit)
+            completed_goals = self.update_fundraising_progress(subreddit_name)
             results["completed_goals"] = completed_goals
             
             # Check and update tiers
-            completed_tiers = self.check_and_update_tiers(donation.subreddit)
+            completed_tiers = self.check_and_update_tiers(subreddit_name)
             results["completed_tiers"] = completed_tiers
             
             # Get updated total
-            results["total_donations"] = self.get_subreddit_total_donations(donation.subreddit)
+            results["total_donations"] = self.get_subreddit_total_donations(subreddit_name)
             
-            logger.info(f"Processed donation for {donation.subreddit}: "
+            logger.info(f"Processed donation for {subreddit_name}: "
                       f"${donation.amount_usd}, completed {len(completed_tiers)} tiers, "
                       f"{len(completed_goals)} goals")
             
@@ -284,25 +307,29 @@ class SubredditTierService:
             logger.error(f"Error processing donation: {str(e)}")
             raise
 
-    def get_subreddit_stats(self, subreddit: str) -> Dict[str, Any]:
+    def get_subreddit_stats(self, subreddit_name: str) -> Dict[str, Any]:
         """
         Get comprehensive stats for a subreddit.
         
         Args:
-            subreddit: Subreddit name
+            subreddit_name: Subreddit name
             
         Returns:
             Dict: Subreddit statistics
         """
         try:
-            total_donations = self.get_subreddit_total_donations(subreddit)
-            tiers = self.get_subreddit_tiers(subreddit)
-            goals = self.get_fundraising_goals(subreddit)
+            # Get or create subreddit entity
+            subreddit_service = get_subreddit_service()
+            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+            
+            total_donations = self.get_subreddit_total_donations(subreddit_name)
+            tiers = self.get_subreddit_tiers(subreddit_name)
+            goals = self.get_fundraising_goals(subreddit_name)
             
             # Count donors
             donor_count = (
                 self.session.query(Donation)
-                .filter(Donation.subreddit == subreddit)
+                .filter(Donation.subreddit_id == subreddit.id)
                 .filter(Donation.status == "succeeded")
                 .distinct(Donation.customer_email)
                 .count()
@@ -312,14 +339,14 @@ class SubredditTierService:
             active_sponsors = (
                 self.session.query(Sponsor)
                 .join(Donation)
-                .filter(Donation.subreddit == subreddit)
+                .filter(Donation.subreddit_id == subreddit.id)
                 .filter(Sponsor.status == "active")
                 .filter(Donation.status == "succeeded")
                 .count()
             )
             
             return {
-                "subreddit": subreddit,
+                "subreddit": subreddit_name,
                 "total_donations": float(total_donations),
                 "donor_count": donor_count,
                 "active_sponsors": active_sponsors,
@@ -346,4 +373,51 @@ class SubredditTierService:
             
         except Exception as e:
             logger.error(f"Error getting subreddit stats: {str(e)}")
+            raise
+
+    def check_subreddit_tiers(self, subreddit_name: str) -> Dict[str, Any]:
+        """
+        Check subreddit tiers and fundraising goals for a subreddit.
+        
+        Args:
+            subreddit_name: Subreddit name
+            
+        Returns:
+            Dict: Tier and goal information
+        """
+        try:
+            # Get or create subreddit entity
+            subreddit_service = get_subreddit_service()
+            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
+            
+            total_donations = self.get_subreddit_total_donations(subreddit_name)
+            tiers = self.get_subreddit_tiers(subreddit_name)
+            goals = self.get_fundraising_goals(subreddit_name)
+            
+            return {
+                "subreddit": subreddit_name,
+                "total_donations": float(total_donations),
+                "tiers": [
+                    {
+                        "level": tier.tier_level,
+                        "min_total_donation": float(tier.min_total_donation),
+                        "status": tier.status,
+                        "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
+                    }
+                    for tier in tiers
+                ],
+                "goals": [
+                    {
+                        "goal_amount": float(goal.goal_amount),
+                        "current_amount": float(goal.current_amount),
+                        "progress_percentage": (float(goal.current_amount) / float(goal.goal_amount)) * 100,
+                        "status": goal.status,
+                        "deadline": goal.deadline.isoformat() if goal.deadline else None
+                    }
+                    for goal in goals
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking subreddit tiers: {str(e)}")
             raise 

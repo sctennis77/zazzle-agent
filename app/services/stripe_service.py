@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Donation, Sponsor, SponsorTier, SubredditFundraisingGoal, PipelineTask
 from app.models import DonationRequest, DonationStatus
+from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 
 logger = logging.getLogger(__name__)
@@ -131,11 +132,18 @@ class StripeService:
             Donation: The created donation record
         """
         try:
+            # Get or create subreddit entity
+            subreddit_id = None
+            if donation_request.subreddit:
+                subreddit_service = get_subreddit_service()
+                subreddit = subreddit_service.get_or_create_subreddit(donation_request.subreddit, db)
+                subreddit_id = subreddit.id
+
             # Find active fundraising goal for the subreddit, if any
             fundraising_goal_id = None
-            if donation_request.subreddit:
+            if subreddit_id:
                 goal = db.query(SubredditFundraisingGoal).filter_by(
-                    subreddit=donation_request.subreddit,
+                    subreddit_id=subreddit_id,
                     status="active"
                 ).order_by(SubredditFundraisingGoal.created_at.desc()).first()
                 if goal:
@@ -150,7 +158,7 @@ class StripeService:
                 customer_email=donation_request.customer_email,
                 customer_name=donation_request.customer_name,
                 message=donation_request.message,
-                subreddit=donation_request.subreddit,
+                subreddit_id=subreddit_id,
                 reddit_username=donation_request.reddit_username,
                 is_anonymous=donation_request.is_anonymous,
                 stripe_metadata=payment_intent_data.get("metadata", {}),
@@ -203,7 +211,7 @@ class StripeService:
             sponsor = Sponsor(
                 donation_id=donation.id,
                 tier_id=tier.id,
-                subreddit=donation.subreddit,
+                subreddit_id=donation.subreddit_id,
                 status="active"
             )
             
@@ -231,20 +239,24 @@ class StripeService:
             Dict: Processing results
         """
         try:
-            if not donation.subreddit:
+            if not donation.subreddit_id:
                 return {"subreddit": None, "completed_tiers": [], "completed_goals": []}
+            
+            # Get subreddit name for logging
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
             
             tier_service = SubredditTierService(db)
             results = tier_service.process_donation(donation)
             
-            logger.info(f"Processed subreddit tiers for {donation.subreddit}: "
+            logger.info(f"Processed subreddit tiers for {subreddit_name}: "
                       f"{len(results['completed_tiers'])} tiers, {len(results['completed_goals'])} goals")
             
             return results
             
         except Exception as e:
             logger.error(f"Error processing subreddit tiers: {str(e)}")
-            return {"subreddit": donation.subreddit, "completed_tiers": [], "completed_goals": [], "error": str(e)}
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
+            return {"subreddit": subreddit_name, "completed_tiers": [], "completed_goals": [], "error": str(e)}
 
     def update_donation_status(self, db: Session, payment_intent_id: str, status: DonationStatus) -> Optional[Donation]:
         """
@@ -306,12 +318,17 @@ class StripeService:
             task_queue = TaskQueue(db)
             
             # Determine subreddit for the task
-            subreddit = donation.subreddit or "all"
+            subreddit_id = donation.subreddit_id
+            if not subreddit_id:
+                # Use "all" subreddit if no specific subreddit
+                subreddit_service = get_subreddit_service()
+                all_subreddit = subreddit_service.get_or_create_subreddit("all", db)
+                subreddit_id = all_subreddit.id
             
             # Create task with sponsor priority (higher priority for sponsors)
             task = task_queue.add_task(
                 task_type="SUBREDDIT_POST",
-                subreddit=subreddit,
+                subreddit_id=subreddit_id,
                 sponsor_id=sponsor.id,
                 priority=10,  # Higher priority for sponsor tasks
                 context_data={
@@ -323,8 +340,9 @@ class StripeService:
                 }
             )
             
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "all"
             logger.info(f"Created sponsor task {task.id} for sponsor {sponsor.id} "
-                      f"in r/{subreddit} with priority {task.priority}")
+                      f"in r/{subreddit_name} with priority {task.priority}")
             return task
             
         except Exception as e:

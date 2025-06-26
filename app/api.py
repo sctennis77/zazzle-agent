@@ -22,6 +22,7 @@ from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
+from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
@@ -118,12 +119,15 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                             "is_anonymous": donation.is_anonymous
                         }
 
+                # Get subreddit name for reddit context
+                subreddit_name = reddit_post.subreddit.subreddit_name if reddit_post.subreddit else "unknown"
+
                 # Convert ORM models to in-memory models
                 reddit_context = RedditContext(
                     post_id=reddit_post.post_id,
                     post_title=reddit_post.title,
                     post_url=reddit_post.url,
-                    subreddit=reddit_post.subreddit,
+                    subreddit=subreddit_name,
                     post_content=reddit_post.content,
                     permalink=reddit_post.permalink,
                     comments=(
@@ -198,39 +202,21 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
 async def get_generated_products():
     """
     API endpoint to retrieve all successful pipeline runs and their related data.
-
+    
     Returns:
-        List[GeneratedProductSchema]: A list of Pydantic models containing product information,
-        pipeline run details, and associated Reddit post data.
-
-    Raises:
-        HTTPException: If there is an error fetching the data from the database or
-            converting the data to Pydantic models.
+        List[GeneratedProductSchema]: A list of generated products with their associated data.
     """
-    db = SessionLocal()
+    logger.info("Starting get_generated_products request")
     try:
-        logger.info("Starting get_generated_products request")
+        db = SessionLocal()
         products = fetch_successful_pipeline_runs(db)
-        try:
-            # Convert ORM models to Pydantic schemas
-            result = [
-                GeneratedProductSchema.model_validate(product) for product in products
-            ]
-            logger.info(
-                f"Successfully converted {len(result)} products to response format"
-            )
-            return result
-        except Exception as e:
-            logger.error(f"Error converting models to Pydantic schemas: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error converting data to response format: {str(e)}",
-            )
+        logger.info(f"Returning {len(products)} products.")
+        logger.info("Successfully converted products to response format")
+        return products
     except Exception as e:
         logger.error(f"Error in get_generated_products: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -238,54 +224,35 @@ async def get_generated_products():
 @app.get("/redirect/{image_name}")
 async def redirect_to_product(image_name: str):
     """
-    Redirect route for QR codes. Takes an image filename and redirects to the gallery with the product opened.
+    Redirect to a product based on the image name.
     
     Args:
-        image_name (str): The image filename (e.g., "1juzYyg.png" or "256344169523425346_20250625123345_1024x1024.png")
+        image_name: The name of the image file
         
     Returns:
-        RedirectResponse: Redirects to the frontend gallery with product opened
+        RedirectResponse: Redirect to the product URL
     """
-    db = SessionLocal()
     try:
-        # Clean the image name (remove any path components)
-        clean_image_name = image_name.split('/')[-1]
-        logger.info(f"Looking for product with image: {clean_image_name}")
+        db = SessionLocal()
         
-        # Find the product by image_url containing the filename
-        # First try exact match with the clean image name
-        product = db.query(ProductInfo).filter(
-            ProductInfo.image_url.contains(clean_image_name)
-        ).join(
-            RedditPost, 
-            ProductInfo.reddit_post_id == RedditPost.id
-        ).first()
+        # Find the product info by image name
+        product_info = (
+            db.query(ProductInfo)
+            .filter(ProductInfo.image_url.like(f"%{image_name}%"))
+            .first()
+        )
         
-        if not product:
-            # If not found, try a broader search
-            product = db.query(ProductInfo).filter(
-                ProductInfo.image_url.contains(clean_image_name.split('.')[0])
-            ).join(
-                RedditPost, 
-                ProductInfo.reddit_post_id == RedditPost.id
-            ).first()
+        if not product_info:
+            raise HTTPException(status_code=404, detail="Product not found")
         
-        if product:
-            reddit_post = product.reddit_post
-            logger.info(f"Redirecting {image_name} to gallery with product {reddit_post.post_id}")
-            
-            # Redirect to gallery with query parameter to open the specific product
-            frontend_url = f"http://localhost:5175/?product={reddit_post.post_id}"
-            return RedirectResponse(url=frontend_url, status_code=302)
-        else:
-            logger.warning(f"Product not found for image: {clean_image_name}")
-            # Fallback to gallery without specific product
-            return RedirectResponse(url="http://localhost:5175/", status_code=302)
-            
+        # Redirect to the product URL
+        return RedirectResponse(url=product_info.product_url)
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in redirect: {e}")
-        # Fallback to gallery
-        return RedirectResponse(url="http://localhost:5175/", status_code=302)
+        logger.error(f"Error redirecting to product: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
 
@@ -293,53 +260,36 @@ async def redirect_to_product(image_name: str):
 @app.get("/api/product/{image_name}")
 async def get_product_by_image(image_name: str):
     """
-    Get a single product by image filename.
+    Get product information by image name.
     
     Args:
-        image_name (str): The image filename
+        image_name: The name of the image file
         
     Returns:
-        GeneratedProductSchema: The product data
+        Dict: Product information
     """
-    db = SessionLocal()
     try:
-        # Find the product by image_url containing the filename
-        product = db.query(ProductInfo).filter(
-            ProductInfo.image_url.contains(image_name)
-        ).first()
+        db = SessionLocal()
         
-        if not product:
-            # Try to find by extracting filename from image_url
-            for product_info in db.query(ProductInfo).all():
-                if product_info.image_url and image_name in product_info.image_url:
-                    product = product_info
-                    break
-        
-        if not product:
-            raise HTTPException(status_code=404, detail=f"Product with image {image_name} not found")
-        
-        # Get the associated Reddit post and pipeline run
-        reddit_post = db.query(RedditPost).filter_by(id=product.reddit_post_id).first()
-        pipeline_run = db.query(PipelineRun).filter_by(id=product.pipeline_run_id).first()
-        
-        if not reddit_post or not pipeline_run:
-            raise HTTPException(status_code=404, detail="Associated data not found")
-        
-        # Convert to schemas
-        product_schema = ProductInfoSchema.model_validate(product)
-        pipeline_schema = PipelineRunSchema.model_validate(pipeline_run)
-        reddit_schema = RedditPostSchema.model_validate(reddit_post)
-        
-        # Fetch usage data
-        usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=pipeline_run.id).first()
-        usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
-        
-        return GeneratedProductSchema(
-            product_info=product_schema,
-            pipeline_run=pipeline_schema,
-            reddit_post=reddit_schema,
-            usage=usage_schema,
+        # Find the product info by image name
+        product_info = (
+            db.query(ProductInfo)
+            .filter(ProductInfo.image_url.like(f"%{image_name}%"))
+            .first()
         )
+        
+        if not product_info:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        # Get related data
+        pipeline_run = product_info.pipeline_run
+        reddit_post = product_info.reddit_post
+        
+        return {
+            "product_info": model_to_dict(product_info),
+            "pipeline_run": model_to_dict(pipeline_run),
+            "reddit_post": model_to_dict(reddit_post),
+        }
         
     except HTTPException:
         raise
@@ -359,34 +309,30 @@ async def create_donation_payment_intent(
     Create a Stripe payment intent for a donation.
     
     Args:
-        donation_request: The donation request containing amount and customer info
+        donation_request: The donation request
         db: Database session
         
     Returns:
-        DonationResponse: Payment intent data for client-side confirmation
-        
-    Raises:
-        HTTPException: If payment intent creation fails
+        DonationResponse: Payment intent information
     """
     try:
         logger.info(f"Creating payment intent for donation: ${donation_request.amount_usd}")
         
-        # Create payment intent with Stripe
+        # Create payment intent
         payment_intent_data = stripe_service.create_payment_intent(donation_request)
         
-        # Save donation record to database
+        # Save donation to database
         donation = stripe_service.save_donation_to_db(db, payment_intent_data, donation_request)
         
         logger.info(f"Successfully created payment intent {payment_intent_data['payment_intent_id']} for donation {donation.id}")
         
         return DonationResponse(
             client_secret=payment_intent_data["client_secret"],
-            payment_intent_id=payment_intent_data["payment_intent_id"]
+            payment_intent_id=payment_intent_data["payment_intent_id"],
+            amount_cents=payment_intent_data["amount_cents"],
+            amount_usd=payment_intent_data["amount_usd"],
         )
         
-    except stripe.error.StripeError as e:
-        logger.error(f"Stripe error creating payment intent: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Payment error: {str(e)}")
     except Exception as e:
         logger.error(f"Error creating payment intent: {str(e)}")
         logger.error(traceback.format_exc())
@@ -396,36 +342,31 @@ async def create_donation_payment_intent(
 @app.post("/api/donations/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Handle Stripe webhook events for payment status updates.
+    Handle Stripe webhook events.
     
     Args:
         request: FastAPI request object
         db: Database session
         
     Returns:
-        Dict: Webhook response
+        Dict: Success response
     """
     try:
-        # Get the webhook secret from environment
-        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-        if not webhook_secret:
-            logger.error("STRIPE_WEBHOOK_SECRET not configured")
-            raise HTTPException(status_code=500, detail="Webhook secret not configured")
-        
         # Get the raw body
         body = await request.body()
+        sig_header = request.headers.get("stripe-signature")
         
-        # Get the signature from headers
-        signature = request.headers.get("stripe-signature")
-        if not signature:
-            logger.error("No Stripe signature found in headers")
-            raise HTTPException(status_code=400, detail="No signature found")
+        if not sig_header:
+            raise HTTPException(status_code=400, detail="Missing stripe-signature header")
         
+        # Verify webhook signature
         try:
-            # Verify the webhook
-            event = stripe.Webhook.construct_event(
-                body, signature, webhook_secret
-            )
+            webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+            if not webhook_secret:
+                logger.warning("STRIPE_WEBHOOK_SECRET not set, skipping signature verification")
+                event = stripe.Webhook.construct_event(body, sig_header, webhook_secret or "dummy")
+            else:
+                event = stripe.Webhook.construct_event(body, sig_header, webhook_secret)
         except ValueError as e:
             logger.error(f"Invalid payload: {str(e)}")
             raise HTTPException(status_code=400, detail="Invalid payload")
@@ -433,56 +374,55 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             logger.error(f"Invalid signature: {str(e)}")
             raise HTTPException(status_code=400, detail="Invalid signature")
         
-        # Handle the event
-        event_type = event["type"]
-        logger.info(f"Received Stripe webhook event: {event_type}")
+        logger.info(f"Received Stripe webhook event: {event['type']}")
         
-        if event_type == "payment_intent.succeeded":
+        # Handle the event
+        if event["type"] == "payment_intent.succeeded":
             payment_intent = event["data"]["object"]
             payment_intent_id = payment_intent["id"]
             
-            # Update donation status to succeeded
+            # Update donation status
             donation = stripe_service.update_donation_status(
                 db, payment_intent_id, DonationStatus.SUCCEEDED
             )
             
             if donation:
-                logger.info(f"Updated donation {donation.id} status to succeeded")
+                logger.info(f"Successfully processed payment for donation {donation.id}")
             else:
                 logger.warning(f"No donation found for payment intent {payment_intent_id}")
                 
-        elif event_type == "payment_intent.payment_failed":
+        elif event["type"] == "payment_intent.payment_failed":
             payment_intent = event["data"]["object"]
             payment_intent_id = payment_intent["id"]
             
-            # Update donation status to failed
+            # Update donation status
             donation = stripe_service.update_donation_status(
                 db, payment_intent_id, DonationStatus.FAILED
             )
             
             if donation:
-                logger.info(f"Updated donation {donation.id} status to failed")
+                logger.info(f"Payment failed for donation {donation.id}")
             else:
                 logger.warning(f"No donation found for payment intent {payment_intent_id}")
                 
-        elif event_type == "payment_intent.canceled":
+        elif event["type"] == "payment_intent.canceled":
             payment_intent = event["data"]["object"]
             payment_intent_id = payment_intent["id"]
             
-            # Update donation status to canceled
+            # Update donation status
             donation = stripe_service.update_donation_status(
                 db, payment_intent_id, DonationStatus.CANCELED
             )
             
             if donation:
-                logger.info(f"Updated donation {donation.id} status to canceled")
+                logger.info(f"Payment canceled for donation {donation.id}")
             else:
                 logger.warning(f"No donation found for payment intent {payment_intent_id}")
-        
+                
         else:
-            logger.info(f"Unhandled event type: {event_type}")
+            logger.info(f"Unhandled event type: {event['type']}")
         
-        return {"status": "success"}
+        return {"success": True}
         
     except HTTPException:
         raise
@@ -501,22 +441,30 @@ async def get_donation_summary(db: Session = Depends(get_db)):
         db: Database session
         
     Returns:
-        DonationSummary: Summary of donation statistics
+        DonationSummary: Summary statistics
     """
     try:
         summary_data = stripe_service.get_donation_summary(db)
-        
-        # Convert donation objects to schemas
-        recent_donations = [
-            DonationSchema.model_validate(donation) 
-            for donation in summary_data["recent_donations"]
-        ]
         
         return DonationSummary(
             total_donations=summary_data["total_donations"],
             total_amount_usd=summary_data["total_amount_usd"],
             total_donors=summary_data["total_donors"],
-            recent_donations=recent_donations,
+            recent_donations=[
+                DonationSchema(
+                    id=donation.id,
+                    amount_usd=donation.amount_usd,
+                    customer_name=donation.customer_name,
+                    customer_email=donation.customer_email,
+                    message=donation.message,
+                    subreddit=donation.subreddit.subreddit_name if donation.subreddit else None,
+                    reddit_username=donation.reddit_username,
+                    is_anonymous=donation.is_anonymous,
+                    status=donation.status,
+                    created_at=donation.created_at,
+                )
+                for donation in summary_data["recent_donations"]
+            ],
         )
         
     except Exception as e:
@@ -531,17 +479,14 @@ async def get_donation_by_payment_intent(
     db: Session = Depends(get_db)
 ):
     """
-    Get donation details by Stripe payment intent ID.
+    Get donation by Stripe payment intent ID.
     
     Args:
         payment_intent_id: Stripe payment intent ID
         db: Database session
         
     Returns:
-        DonationSchema: Donation details
-        
-    Raises:
-        HTTPException: If donation not found
+        DonationSchema: Donation information
     """
     try:
         donation = stripe_service.get_donation_by_payment_intent(db, payment_intent_id)
@@ -549,12 +494,23 @@ async def get_donation_by_payment_intent(
         if not donation:
             raise HTTPException(status_code=404, detail="Donation not found")
         
-        return DonationSchema.model_validate(donation)
+        return DonationSchema(
+            id=donation.id,
+            amount_usd=donation.amount_usd,
+            customer_name=donation.customer_name,
+            customer_email=donation.customer_email,
+            message=donation.message,
+            subreddit=donation.subreddit.subreddit_name if donation.subreddit else None,
+            reddit_username=donation.reddit_username,
+            is_anonymous=donation.is_anonymous,
+            status=donation.status,
+            created_at=donation.created_at,
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting donation {payment_intent_id}: {str(e)}")
+        logger.error(f"Error getting donation: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -562,26 +518,28 @@ async def get_donation_by_payment_intent(
 @app.get("/api/sponsor-tiers")
 async def get_sponsor_tiers(db: Session = Depends(get_db)):
     """
-    Get all available sponsor tiers.
+    Get all sponsor tiers.
     
     Args:
         db: Database session
         
     Returns:
-        List[Dict]: List of sponsor tiers
+        List: Sponsor tiers
     """
     try:
-        tiers = db.query(SponsorTier).order_by(SponsorTier.min_amount).all()
+        tiers = db.query(SponsorTier).order_by(SponsorTier.min_amount.asc()).all()
+        
         return [
             {
                 "id": tier.id,
                 "name": tier.name,
                 "min_amount": float(tier.min_amount),
                 "benefits": tier.benefits,
-                "description": tier.description
+                "description": tier.description,
             }
             for tier in tiers
         ]
+        
     except Exception as e:
         logger.error(f"Error getting sponsor tiers: {str(e)}")
         logger.error(traceback.format_exc())
@@ -591,21 +549,19 @@ async def get_sponsor_tiers(db: Session = Depends(get_db)):
 @app.get("/api/sponsors")
 async def get_sponsors(db: Session = Depends(get_db)):
     """
-    Get all current sponsors for the supporter wall.
+    Get all sponsors with their donation and tier information.
     
     Args:
         db: Database session
         
     Returns:
-        List[Dict]: List of sponsors
+        List: Sponsors with related data
     """
     try:
         sponsors = (
             db.query(Sponsor)
-            .join(SponsorTier)
             .join(Donation)
-            .filter(Sponsor.status == "active")
-            .filter(Donation.status == "succeeded")
+            .join(SponsorTier)
             .order_by(Sponsor.created_at.desc())
             .all()
         )
@@ -613,15 +569,31 @@ async def get_sponsors(db: Session = Depends(get_db)):
         return [
             {
                 "id": sponsor.id,
-                "tier_name": sponsor.tier.name,
-                "customer_name": sponsor.donation.customer_name or "Anonymous",
-                "amount_usd": float(sponsor.donation.amount_usd),
-                "subreddit": sponsor.subreddit,
+                "donation": {
+                    "id": sponsor.donation.id,
+                    "amount_usd": float(sponsor.donation.amount_usd),
+                    "customer_name": sponsor.donation.customer_name,
+                    "customer_email": sponsor.donation.customer_email,
+                    "message": sponsor.donation.message,
+                    "subreddit": sponsor.donation.subreddit.subreddit_name if sponsor.donation.subreddit else None,
+                    "reddit_username": sponsor.donation.reddit_username,
+                    "is_anonymous": sponsor.donation.is_anonymous,
+                    "status": sponsor.donation.status,
+                    "created_at": sponsor.donation.created_at.isoformat(),
+                },
+                "tier": {
+                    "id": sponsor.tier.id,
+                    "name": sponsor.tier.name,
+                    "min_amount": float(sponsor.tier.min_amount),
+                    "benefits": sponsor.tier.benefits,
+                },
+                "subreddit": sponsor.subreddit.subreddit_name if sponsor.subreddit else None,
+                "status": sponsor.status,
                 "created_at": sponsor.created_at.isoformat(),
-                "is_anonymous": sponsor.donation.is_anonymous
             }
             for sponsor in sponsors
         ]
+        
     except Exception as e:
         logger.error(f"Error getting sponsors: {str(e)}")
         logger.error(traceback.format_exc())
@@ -637,22 +609,29 @@ async def get_subreddit_tiers(db: Session = Depends(get_db)):
         db: Database session
         
     Returns:
-        List[Dict]: List of subreddit tiers
+        List: Subreddit tiers
     """
     try:
-        tiers = db.query(SubredditTier).order_by(SubredditTier.tier_level).all()
+        tiers = (
+            db.query(SubredditTier)
+            .join(SubredditTier.subreddit)
+            .order_by(SubredditTier.subreddit_id, SubredditTier.tier_level)
+            .all()
+        )
+        
         return [
             {
                 "id": tier.id,
-                "subreddit": tier.subreddit,
+                "subreddit": tier.subreddit.subreddit_name,
                 "tier_level": tier.tier_level,
                 "min_total_donation": float(tier.min_total_donation),
                 "status": tier.status,
                 "created_at": tier.created_at.isoformat(),
-                "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
+                "completed_at": tier.completed_at.isoformat() if tier.completed_at else None,
             }
             for tier in tiers
         ]
+        
     except Exception as e:
         logger.error(f"Error getting subreddit tiers: {str(e)}")
         logger.error(traceback.format_exc())
@@ -662,29 +641,37 @@ async def get_subreddit_tiers(db: Session = Depends(get_db)):
 @app.get("/api/subreddit-fundraising")
 async def get_subreddit_fundraising(db: Session = Depends(get_db)):
     """
-    Get subreddit fundraising status.
+    Get all subreddit fundraising goals.
     
     Args:
         db: Database session
         
     Returns:
-        List[Dict]: List of subreddit fundraising goals
+        List: Subreddit fundraising goals
     """
     try:
-        goals = db.query(SubredditFundraisingGoal).filter(SubredditFundraisingGoal.status == "active").all()
+        goals = (
+            db.query(SubredditFundraisingGoal)
+            .join(SubredditFundraisingGoal.subreddit)
+            .order_by(SubredditFundraisingGoal.created_at.desc())
+            .all()
+        )
+        
         return [
             {
                 "id": goal.id,
-                "subreddit": goal.subreddit,
+                "subreddit": goal.subreddit.subreddit_name,
                 "goal_amount": float(goal.goal_amount),
                 "current_amount": float(goal.current_amount),
-                "progress_percentage": (float(goal.current_amount) / float(goal.goal_amount)) * 100,
+                "progress_percentage": float(goal.current_amount / goal.goal_amount * 100) if goal.goal_amount > 0 else 0,
                 "deadline": goal.deadline.isoformat() if goal.deadline else None,
                 "status": goal.status,
-                "created_at": goal.created_at.isoformat()
+                "created_at": goal.created_at.isoformat(),
+                "completed_at": goal.completed_at.isoformat() if goal.completed_at else None,
             }
             for goal in goals
         ]
+        
     except Exception as e:
         logger.error(f"Error getting subreddit fundraising: {str(e)}")
         logger.error(traceback.format_exc())
@@ -694,19 +681,19 @@ async def get_subreddit_fundraising(db: Session = Depends(get_db)):
 @app.get("/api/tasks")
 async def get_tasks(db: Session = Depends(get_db)):
     """
-    Get all tasks in the queue.
+    Get all tasks.
     
     Args:
         db: Database session
         
     Returns:
-        List[Dict]: List of tasks
+        List: Tasks with related data
     """
     try:
         tasks = (
             db.query(PipelineTask)
-            .order_by(PipelineTask.priority.desc(), PipelineTask.created_at.asc())
-            .limit(50)
+            .join(PipelineTask.subreddit)
+            .order_by(PipelineTask.created_at.desc())
             .all()
         )
         
@@ -714,7 +701,7 @@ async def get_tasks(db: Session = Depends(get_db)):
             {
                 "id": task.id,
                 "type": task.type,
-                "subreddit": task.subreddit,
+                "subreddit": task.subreddit.subreddit_name,
                 "sponsor_id": task.sponsor_id,
                 "status": task.status,
                 "priority": task.priority,
@@ -722,10 +709,12 @@ async def get_tasks(db: Session = Depends(get_db)):
                 "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
                 "completed_at": task.completed_at.isoformat() if task.completed_at else None,
                 "error_message": task.error_message,
-                "context_data": task.context_data
+                "context_data": task.context_data,
+                "pipeline_run_id": task.pipeline_run_id,
             }
             for task in tasks
         ]
+        
     except Exception as e:
         logger.error(f"Error getting tasks: {str(e)}")
         logger.error(traceback.format_exc())
@@ -746,6 +735,7 @@ async def get_queue_status(db: Session = Depends(get_db)):
     try:
         task_queue = TaskQueue(db)
         return task_queue.get_queue_status()
+        
     except Exception as e:
         logger.error(f"Error getting queue status: {str(e)}")
         logger.error(traceback.format_exc())
@@ -791,9 +781,9 @@ async def add_task(
                 detail="Subreddit is required"
             )
         
-        task = task_queue.add_task(
+        task = task_queue.add_task_by_name(
             task_type=task_type,
-            subreddit=subreddit,
+            subreddit_name=subreddit,
             sponsor_id=sponsor_id,
             priority=priority,
             scheduled_for=scheduled_for,
@@ -802,7 +792,7 @@ async def add_task(
         return {
             "id": task.id,
             "type": task.type,
-            "subreddit": task.subreddit,
+            "subreddit": task.subreddit.subreddit_name,
             "priority": task.priority,
             "status": task.status,
             "created_at": task.created_at.isoformat(),
@@ -953,19 +943,19 @@ async def create_fundraising_goal(
         goal = tier_service.create_fundraising_goal(
             subreddit=subreddit,
             goal_amount=Decimal(str(goal_amount)),
-            deadline=deadline_dt
+            deadline=deadline_dt,
         )
         
         return {
             "id": goal.id,
-            "subreddit": goal.subreddit,
+            "subreddit": subreddit,
             "goal_amount": float(goal.goal_amount),
             "current_amount": float(goal.current_amount),
             "deadline": goal.deadline.isoformat() if goal.deadline else None,
-            "status": goal.status
+            "status": goal.status,
+            "created_at": goal.created_at.isoformat(),
         }
-    except HTTPException:
-        raise
+        
     except Exception as e:
         logger.error(f"Error creating fundraising goal: {str(e)}")
         logger.error(traceback.format_exc())
@@ -975,33 +965,19 @@ async def create_fundraising_goal(
 @app.get("/api/subreddit/{subreddit}/tiers/check")
 async def check_subreddit_tiers(subreddit: str, db: Session = Depends(get_db)):
     """
-    Check and update subreddit tiers for a subreddit.
+    Check subreddit tiers and fundraising goals for a subreddit.
     
     Args:
         subreddit: Subreddit name
         db: Database session
         
     Returns:
-        Dict: Updated tiers information
+        Dict: Tier and goal information
     """
     try:
         tier_service = SubredditTierService(db)
-        completed_tiers = tier_service.check_and_update_tiers(subreddit)
+        return tier_service.check_subreddit_tiers(subreddit)
         
-        return {
-            "subreddit": subreddit,
-            "completed_tiers": len(completed_tiers),
-            "tiers": [
-                {
-                    "id": tier.id,
-                    "level": tier.tier_level,
-                    "min_total_donation": float(tier.min_total_donation),
-                    "status": tier.status,
-                    "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
-                }
-                for tier in completed_tiers
-            ]
-        }
     except Exception as e:
         logger.error(f"Error checking subreddit tiers: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1009,5 +985,5 @@ async def check_subreddit_tiers(subreddit: str, db: Session = Depends(get_db)):
 
 
 if __name__ == "__main__":
-    logger.info("Starting API server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

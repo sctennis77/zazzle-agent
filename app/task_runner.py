@@ -116,6 +116,9 @@ class TaskRunner:
                 task_queue.mark_completed(task_id, error_message="Task not found")
                 return False
             
+            # Get subreddit name from the relationship
+            subreddit_name = task.subreddit.subreddit_name if task.subreddit else f"ID:{task.subreddit_id}"
+            
             # Initialize pipeline components
             config = PipelineConfig(
                 model="dall-e-3",
@@ -133,15 +136,15 @@ class TaskRunner:
                 raise ValueError(f"Unknown task type: {task.type}")
             
             # Get the subreddit (could be "all" for front page or specific subreddit)
-            reddit_target = reddit_client.get_subreddit(task.subreddit)
-            logger.info(f"Processing SUBREDDIT_POST task for r/{task.subreddit}")
+            reddit_target = reddit_client.get_subreddit(subreddit_name)
+            logger.info(f"Processing SUBREDDIT_POST task for r/{subreddit_name}")
             
             # Create RedditAgent with the appropriate target
             reddit_agent = RedditAgent(
                 config,
                 pipeline_run_id=None,  # Will be set by pipeline
                 session=session,
-                subreddit_name=task.subreddit,  # Could be "all" or specific subreddit
+                subreddit_name=subreddit_name,  # Could be "all" or specific subreddit
             )
             
             content_generator = ContentGenerator()
