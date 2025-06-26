@@ -180,6 +180,35 @@ stop-api:
 	@while lsof -i :8000 > /dev/null; do sleep 1; done 
 
 # =====================
+# Task Runner Management
+# =====================
+
+run-task-runner:
+	@echo "Starting Task Runner service..."
+	$(POETRY) run python -m app.task_runner
+
+run-task-runner-once:
+	@echo "Running Task Runner once..."
+	$(POETRY) run python -c "import asyncio; from app.task_runner import TaskRunner; asyncio.run(TaskRunner().run_once())"
+
+add-front-pick-task:
+	@echo "Adding front pick task to queue..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_front_pick_task(); print(f'Added task {task.id}'); session.close()"
+
+add-sponsored-task:
+	@if [ -z "$(SPONSOR_ID)" ] || [ -z "$(SUBREDDIT)" ]; then \
+		echo "Error: Please specify SPONSOR_ID and SUBREDDIT"; \
+		echo "Usage: make add-sponsored-task SPONSOR_ID=1 SUBREDDIT=funny"; \
+		exit 1; \
+	fi
+	@echo "Adding sponsored task to queue..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_sponsored_task($(SPONSOR_ID), '$(SUBREDDIT)'); print(f'Added sponsored task {task.id} for subreddit $(SUBREDDIT)'); session.close()"
+
+show-task-queue:
+	@echo "Showing task queue status..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); status = queue.get_queue_status(); import json; print(json.dumps(status, indent=2)); session.close()"
+
+# =====================
 # Frontend (React) targets
 # =====================
 

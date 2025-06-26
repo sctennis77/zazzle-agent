@@ -28,7 +28,7 @@ from app.clients.imgur_client import ImgurClient
 from app.content_generator import ContentGenerator
 from app.db.database import SessionLocal
 from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
-from app.db.models import ErrorLog, PipelineRun, PipelineRunUsage
+from app.db.models import ErrorLog, PipelineRun, PipelineRunUsage, PipelineTask
 from app.image_generator import ImageGenerator
 from app.models import (
     DesignInstructions,
@@ -38,6 +38,7 @@ from app.models import (
     RedditContext,
 )
 from app.pipeline_status import PipelineStatus
+from app.task_queue import TaskQueue
 from app.utils.logging_config import get_logger
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
@@ -426,3 +427,108 @@ class Pipeline:
         finally:
             logging.debug("Closing session...")
             session.close()
+
+    async def run_task_pipeline(self, task_id: int) -> Optional[List[ProductInfo]]:
+        """
+        Run the pipeline for a specific task from the queue.
+        
+        Args:
+            task_id: ID of the task to execute
+            
+        Returns:
+            Optional[List[ProductInfo]]: List of generated products or None if failed
+        """
+        try:
+            session = self.session or SessionLocal()
+            task_queue = TaskQueue(session)
+            
+            # Get the task
+            task = session.query(PipelineTask).get(task_id)
+            if not task:
+                logger.error(f"Task {task_id} not found")
+                return None
+            
+            # Mark task as in progress
+            task_queue.mark_in_progress(task_id)
+            
+            # Create a new pipeline run for this task
+            pipeline_run = PipelineRun(
+                status=PipelineStatus.STARTED.value,
+                start_time=datetime.utcnow(),
+                config={"task_id": task_id, "task_type": task.type}
+            )
+            session.add(pipeline_run)
+            session.commit()
+            self.pipeline_run_id = pipeline_run.id
+            
+            logger.info(f"Starting task pipeline for task {task_id} (type: {task.type})")
+            
+            # Configure Reddit agent based on task type
+            if task.type == "SPONSORED_POST" and task.subreddit:
+                # Use specific subreddit for sponsored posts
+                self.reddit_agent.subreddit_name = task.subreddit
+                logger.info(f"Using subreddit {task.subreddit} for sponsored post")
+            elif task.type == "FRONT_PICK":
+                # Use front page for front picks
+                self.reddit_agent.subreddit_name = None  # Will pick random from front
+                logger.info("Using front page for front pick")
+            elif task.type == "SUBREDDIT_TIER_POST" and task.subreddit:
+                # Use specific subreddit for tier posts
+                self.reddit_agent.subreddit_name = task.subreddit
+                logger.info(f"Using subreddit {task.subreddit} for tier post")
+            else:
+                # Default to random subreddit
+                self.reddit_agent.subreddit_name = None
+                logger.info("Using random subreddit")
+            
+            # Run the pipeline
+            products = await self.run_pipeline()
+            
+            # Mark task as completed
+            task_queue.mark_completed(task_id)
+            
+            logger.info(f"Successfully completed task {task_id}, generated {len(products)} products")
+            return products
+            
+        except Exception as e:
+            error_msg = f"Error in task pipeline for task {task_id}: {str(e)}"
+            logger.error(error_msg)
+            
+            # Mark task as failed
+            if 'task_queue' in locals():
+                task_queue.mark_completed(task_id, error_message=error_msg)
+            
+            # Log error to database
+            self.log_error(error_msg, error_type="TASK_PIPELINE_ERROR", component="PIPELINE")
+            
+            return None
+        finally:
+            if 'session' in locals() and not self.session:
+                session.close()
+
+    def check_task_queue_first(self) -> Optional[int]:
+        """
+        Check if there are any tasks in the queue that should be processed first.
+        
+        Returns:
+            Optional[int]: Task ID to process, or None if no tasks available
+        """
+        try:
+            session = self.session or SessionLocal()
+            task_queue = TaskQueue(session)
+            
+            # Get the next task
+            task = task_queue.get_next_task()
+            if task:
+                logger.info(f"Found task {task.id} in queue, will process this instead of random content")
+                return task.id
+            else:
+                logger.debug("No tasks in queue, will use random content")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error checking task queue: {str(e)}")
+            return None
+        finally:
+            if 'session' in locals() and not self.session:
+                session.close()
