@@ -7,6 +7,14 @@ export interface RedditContext {
   permalink: string;
 }
 
+export interface SponsorInfo {
+  reddit_username: string;
+  tier_name: string;
+  tier_min_amount: number;
+  donation_amount: number;
+  is_anonymous: boolean;
+}
+
 export interface ProductInfo {
   id: number;
   pipeline_run_id: number;
@@ -21,6 +29,7 @@ export interface ProductInfo {
   product_type: string;
   design_description: string;
   affiliate_link?: string;
+  sponsor_info?: SponsorInfo;
 }
 
 export interface PipelineRun {

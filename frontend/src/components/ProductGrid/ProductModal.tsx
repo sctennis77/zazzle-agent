@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart } from 'react-icons/fa';
+import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import { DonationModal } from '../common/DonationModal';
 
 interface ProductModalProps {
@@ -9,6 +9,20 @@ interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+// Helper function to get tier icon and color
+const getTierDisplay = (tierName: string) => {
+  const tier = tierName.toLowerCase();
+  if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
+    return { icon: FaCrown, color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' };
+  } else if (tier.includes('silver')) {
+    return { icon: FaStar, color: 'text-gray-600', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
+  } else if (tier.includes('bronze')) {
+    return { icon: FaGem, color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
+  } else {
+    return { icon: FaHeart, color: 'text-pink-600', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' };
+  }
+};
 
 export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onClose }) => {
   if (!product) return null;
@@ -43,6 +57,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </p>
                 </div>
               </div>
+              
               {/* Action Buttons */}
               <div className="flex flex-col gap-3">
                 <a
@@ -76,6 +91,49 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             </div>
             {/* Details Section */}
             <div className="space-y-6">
+              {/* Sponsor Information */}
+              {product.product_info.sponsor_info && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-gray-900">Sponsored by</h4>
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                    <div className="flex items-center gap-3">
+                      {(() => {
+                        const tierDisplay = getTierDisplay(product.product_info.sponsor_info.tier_name);
+                        const IconComponent = tierDisplay.icon;
+                        return (
+                          <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
+                            <IconComponent size={20} className={tierDisplay.color} />
+                          </div>
+                        );
+                      })()}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">
+                            {product.product_info.sponsor_info.reddit_username}
+                          </span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${(() => {
+                            const tier = product.product_info.sponsor_info.tier_name.toLowerCase();
+                            if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
+                              return 'bg-yellow-100 text-yellow-800';
+                            } else if (tier.includes('silver')) {
+                              return 'bg-gray-100 text-gray-800';
+                            } else if (tier.includes('bronze')) {
+                              return 'bg-orange-100 text-orange-800';
+                            } else {
+                              return 'bg-pink-100 text-pink-800';
+                            }
+                          })()}`}>
+                            {product.product_info.sponsor_info.tier_name}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Donated ${product.product_info.sponsor_info.donation_amount.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Reddit Post Content */}
               {product.reddit_post.content && (
                 <div className="space-y-2">

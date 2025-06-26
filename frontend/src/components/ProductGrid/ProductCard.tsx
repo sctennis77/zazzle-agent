@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
 import type { GeneratedProduct } from '../../types/productTypes';
-import { FaExpand } from 'react-icons/fa';
+import { FaExpand, FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {
   product: GeneratedProduct;
 }
+
+// Helper function to get tier icon and color
+const getTierDisplay = (tierName: string) => {
+  const tier = tierName.toLowerCase();
+  if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
+    return { icon: FaCrown, color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
+  } else if (tier.includes('silver')) {
+    return { icon: FaStar, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+  } else if (tier.includes('bronze')) {
+    return { icon: FaGem, color: 'text-orange-600', bgColor: 'bg-orange-100' };
+  } else {
+    return { icon: FaHeart, color: 'text-pink-600', bgColor: 'bg-pink-100' };
+  }
+};
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [showModal, setShowModal] = useState(false);
@@ -43,6 +57,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             >
               <FaExpand size={16} />
             </button>
+            {/* Sponsor indicator */}
+            {product.product_info.sponsor_info && (
+              <div className="absolute top-2 left-2">
+                {(() => {
+                  const tierDisplay = getTierDisplay(product.product_info.sponsor_info.tier_name);
+                  const IconComponent = tierDisplay.icon;
+                  return (
+                    <div className={`p-1.5 rounded-full ${tierDisplay.bgColor} border border-white shadow-sm`} title={`Sponsored by ${product.product_info.sponsor_info.reddit_username} (${product.product_info.sponsor_info.tier_name})`}>
+                      <IconComponent size={12} className={tierDisplay.color} />
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
         

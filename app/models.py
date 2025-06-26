@@ -109,6 +109,7 @@ class ProductInfoSchema(BaseModel):
     available_actions: Optional[Dict[str, int]] = (
         None  # Maps action_type to remaining count
     )
+    sponsor_info: Optional[Dict[str, Any]] = None  # Sponsor information if available
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -585,6 +586,7 @@ class ProductInfo:
             product_type=self.product_type,
             design_description=self.design_instructions.get("description"),
             available_actions=self.design_instructions.get("available_actions"),
+            sponsor_info=self.design_instructions.get("sponsor_info"),
         )
 
 

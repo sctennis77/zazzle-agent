@@ -102,6 +102,22 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     continue
                 logger.info(f"Found reddit post: {reddit_post.post_id}")
 
+                # Fetch sponsor information if available
+                sponsor_info = None
+                pipeline_task = db.query(PipelineTask).filter_by(pipeline_run_id=run.id).first()
+                if pipeline_task and pipeline_task.sponsor_id:
+                    sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
+                    if sponsor:
+                        donation = sponsor.donation
+                        tier = sponsor.tier
+                        sponsor_info = {
+                            "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                            "tier_name": tier.name,
+                            "tier_min_amount": float(tier.min_amount),
+                            "donation_amount": float(donation.amount_usd),
+                            "is_anonymous": donation.is_anonymous
+                        }
+
                 # Convert ORM models to in-memory models
                 reddit_context = RedditContext(
                     post_id=reddit_post.post_id,
@@ -144,6 +160,10 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     # Fetch usage data
                     usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
                     usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
+
+                    # Add sponsor info to the schema if available
+                    if sponsor_info:
+                        product_schema.sponsor_info = sponsor_info
 
                     products.append(
                         GeneratedProductSchema(
