@@ -4,19 +4,24 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import stripe
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage
-from app.models import GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation
+from app.models import (
+    GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
+    DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus
+)
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
 from app.pipeline_status import PipelineStatus
+from app.services.stripe_service import StripeService
 from app.utils.logging_config import setup_logging
 
 # Setup logging
@@ -38,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize Stripe service
+stripe_service = StripeService()
 
 
 @app.on_event("startup")
@@ -318,6 +326,215 @@ async def get_product_by_image(image_name: str):
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
+
+
+@app.post("/api/donations/create-payment-intent", response_model=DonationResponse)
+async def create_donation_payment_intent(
+    donation_request: DonationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a Stripe payment intent for a donation.
+    
+    Args:
+        donation_request: The donation request containing amount and customer info
+        db: Database session
+        
+    Returns:
+        DonationResponse: Payment intent data for client-side confirmation
+        
+    Raises:
+        HTTPException: If payment intent creation fails
+    """
+    try:
+        logger.info(f"Creating payment intent for donation: ${donation_request.amount_usd}")
+        
+        # Create payment intent with Stripe
+        payment_intent_data = stripe_service.create_payment_intent(donation_request)
+        
+        # Save donation record to database
+        donation = stripe_service.save_donation_to_db(db, payment_intent_data, donation_request)
+        
+        logger.info(f"Successfully created payment intent {payment_intent_data['payment_intent_id']} for donation {donation.id}")
+        
+        return DonationResponse(
+            client_secret=payment_intent_data["client_secret"],
+            payment_intent_id=payment_intent_data["payment_intent_id"]
+        )
+        
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error creating payment intent: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Payment error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error creating payment intent: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/donations/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Handle Stripe webhook events for payment status updates.
+    
+    Args:
+        request: FastAPI request object
+        db: Database session
+        
+    Returns:
+        Dict: Webhook response
+    """
+    try:
+        # Get the webhook secret from environment
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+        if not webhook_secret:
+            logger.error("STRIPE_WEBHOOK_SECRET not configured")
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        
+        # Get the raw body
+        body = await request.body()
+        
+        # Get the signature from headers
+        signature = request.headers.get("stripe-signature")
+        if not signature:
+            logger.error("No Stripe signature found in headers")
+            raise HTTPException(status_code=400, detail="No signature found")
+        
+        try:
+            # Verify the webhook
+            event = stripe.Webhook.construct_event(
+                body, signature, webhook_secret
+            )
+        except ValueError as e:
+            logger.error(f"Invalid payload: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Invalid signature: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+        
+        # Handle the event
+        event_type = event["type"]
+        logger.info(f"Received Stripe webhook event: {event_type}")
+        
+        if event_type == "payment_intent.succeeded":
+            payment_intent = event["data"]["object"]
+            payment_intent_id = payment_intent["id"]
+            
+            # Update donation status to succeeded
+            donation = stripe_service.update_donation_status(
+                db, payment_intent_id, DonationStatus.SUCCEEDED
+            )
+            
+            if donation:
+                logger.info(f"Updated donation {donation.id} status to succeeded")
+            else:
+                logger.warning(f"No donation found for payment intent {payment_intent_id}")
+                
+        elif event_type == "payment_intent.payment_failed":
+            payment_intent = event["data"]["object"]
+            payment_intent_id = payment_intent["id"]
+            
+            # Update donation status to failed
+            donation = stripe_service.update_donation_status(
+                db, payment_intent_id, DonationStatus.FAILED
+            )
+            
+            if donation:
+                logger.info(f"Updated donation {donation.id} status to failed")
+            else:
+                logger.warning(f"No donation found for payment intent {payment_intent_id}")
+                
+        elif event_type == "payment_intent.canceled":
+            payment_intent = event["data"]["object"]
+            payment_intent_id = payment_intent["id"]
+            
+            # Update donation status to canceled
+            donation = stripe_service.update_donation_status(
+                db, payment_intent_id, DonationStatus.CANCELED
+            )
+            
+            if donation:
+                logger.info(f"Updated donation {donation.id} status to canceled")
+            else:
+                logger.warning(f"No donation found for payment intent {payment_intent_id}")
+        
+        else:
+            logger.info(f"Unhandled event type: {event_type}")
+        
+        return {"status": "success"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing webhook: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/donations/summary", response_model=DonationSummary)
+async def get_donation_summary(db: Session = Depends(get_db)):
+    """
+    Get donation summary statistics.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        DonationSummary: Summary of donation statistics
+    """
+    try:
+        summary_data = stripe_service.get_donation_summary(db)
+        
+        # Convert donation objects to schemas
+        recent_donations = [
+            DonationSchema.model_validate(donation) 
+            for donation in summary_data["recent_donations"]
+        ]
+        
+        return DonationSummary(
+            total_donations=summary_data["total_donations"],
+            total_amount_usd=summary_data["total_amount_usd"],
+            total_donors=summary_data["total_donors"],
+            recent_donations=recent_donations,
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting donation summary: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/donations/{payment_intent_id}", response_model=DonationSchema)
+async def get_donation_by_payment_intent(
+    payment_intent_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get donation details by Stripe payment intent ID.
+    
+    Args:
+        payment_intent_id: Stripe payment intent ID
+        db: Database session
+        
+    Returns:
+        DonationSchema: Donation details
+        
+    Raises:
+        HTTPException: If donation not found
+    """
+    try:
+        donation = stripe_service.get_donation_by_payment_intent(db, payment_intent_id)
+        
+        if not donation:
+            raise HTTPException(status_code=404, detail="Donation not found")
+        
+        return DonationSchema.model_validate(donation)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting donation {payment_intent_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":

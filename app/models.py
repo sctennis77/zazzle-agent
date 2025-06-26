@@ -648,23 +648,67 @@ class AffiliateLinker:
         )
 
 
-class InteractionActionType(Enum):
+class InteractionActionType(str, Enum):
     UPVOTE = "upvote"
     DOWNVOTE = "downvote"
-    MARKETING_REPLY = "marketing_reply"
-    NON_MARKETING_REPLY = "non_marketing_reply"
-    GENERATE_MARKETING_REPLY = "generate_marketing_reply"
-    GENERATE_NON_MARKETING_REPLY = "generate_non_marketing_reply"
-    GET_POST_CONTEXT = "get_post_context"
-    GET_COMMENT_CONTEXT = "get_comment_context"
+    REPLY = "reply"
 
 
-class InteractionTargetType(Enum):
+class InteractionTargetType(str, Enum):
     POST = "post"
     COMMENT = "comment"
 
 
-class InteractionActionStatus(Enum):
+class InteractionActionStatus(str, Enum):
     PENDING = "pending"
     SUCCESS = "success"
     FAILED = "failed"
+
+
+class DonationStatus(str, Enum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELED = "canceled"
+
+
+class DonationRequest(BaseModel):
+    """Request model for creating a donation payment intent."""
+    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
+    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
+    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
+    message: Optional[str] = Field(None, max_length=1000, description="Optional message from donor")
+    is_anonymous: bool = Field(False, description="Whether the donation should be anonymous")
+
+
+class DonationResponse(BaseModel):
+    """Response model for donation payment intent."""
+    client_secret: str = Field(..., description="Stripe client secret for payment confirmation")
+    payment_intent_id: str = Field(..., description="Stripe payment intent ID")
+
+
+class DonationSchema(BaseModel):
+    """Schema for donation data."""
+    id: int
+    stripe_payment_intent_id: str
+    amount_cents: int
+    amount_usd: Decimal
+    currency: str
+    status: DonationStatus
+    customer_email: Optional[str]
+    customer_name: Optional[str]
+    message: Optional[str]
+    is_anonymous: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DonationSummary(BaseModel):
+    """Summary of donation statistics."""
+    total_donations: int
+    total_amount_usd: Decimal
+    total_donors: int
+    recent_donations: List[DonationSchema]

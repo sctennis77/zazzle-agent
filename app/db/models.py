@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric, Boolean
 from sqlalchemy.orm import declarative_base, relationship
 
 from app.models import (
@@ -54,6 +54,23 @@ class PipelineRunUsage(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     pipeline_run = relationship("PipelineRun", backref="usage", uselist=False)
+
+
+class Donation(Base):
+    __tablename__ = "donations"
+    id = Column(Integer, primary_key=True)
+    stripe_payment_intent_id = Column(String(255), unique=True, nullable=False, index=True)
+    amount_cents = Column(Integer, nullable=False)  # Amount in cents
+    amount_usd = Column(Numeric(10, 2), nullable=False)  # Amount in USD
+    currency = Column(String(3), default="usd", nullable=False)
+    status = Column(String(32), default="pending", nullable=False, index=True)  # pending, succeeded, failed, canceled
+    customer_email = Column(String(255), nullable=True, index=True)
+    customer_name = Column(String(255), nullable=True)
+    message = Column(Text, nullable=True)  # Optional message from donor
+    stripe_metadata = Column(JSON, nullable=True)  # Additional Stripe metadata
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+    is_anonymous = Column(Boolean, default=False, nullable=False)
 
 
 class RedditPost(Base):

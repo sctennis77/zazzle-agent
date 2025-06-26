@@ -24,6 +24,7 @@ Pillow = "^10.0.0"
 schedule = "^1.2.0"
 pytest-cov = "^6.2.1"
 qrcode = {version = "^8.2", extras = ["pil", "all"]}
+stripe = "^12.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
