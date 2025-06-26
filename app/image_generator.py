@@ -232,41 +232,33 @@ class ImageGenerator:
             image_data = base64.b64decode(image_data_b64)
             logger.info("Image data successfully retrieved from DALL-E response.")
 
-            # Load image as PIL, apply QR/logo stamp if requested
+            # Load image as PIL
             image = Image.open(io.BytesIO(image_data))
             
-            # Save locally with appropriate naming first
+            # Generate timestamp and filename
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename_prefix = (
                 f"{template_id}_{timestamp}" if template_id else f"dalle_{timestamp}"
             )
             filename = f"{filename_prefix}_{size}.png"
 
-            # Save processed image to bytes
-            output_bytes = io.BytesIO()
-            image.save(output_bytes, format="PNG")
-            output_bytes.seek(0)
-            processed_image_data = output_bytes.read()
-
-            local_path = self.imgur_client.save_image_locally(
-                processed_image_data, filename, subdirectory="generated_products"
-            )
-            logger.info(f"Image saved locally at: {local_path}")
-
-            # Upload to Imgur
-            imgur_url, _ = self.imgur_client.upload_image(local_path)
-            logger.info(f"Image uploaded to Imgur. URL: {imgur_url}")
-            
-            # Extract the actual filename from Imgur URL for QR code
-            imgur_filename = imgur_url.split('/')[-1]
-            
             if stamp_image:
-                # First, create the stamped image with a placeholder URL
-                # We'll update the URL after we get the stamped image filename
-                placeholder_stamp_url = "/redirect/placeholder.jpeg"
-                stamped_image = self.image_processor.stamp_image_with_logo(image, placeholder_stamp_url)
+                # Generate a predictable filename for the stamped image
+                stamped_filename = f"stamped_{filename}"
                 
-                # Re-upload the stamped image to Imgur
+                # Determine the QR code URL
+                if qr_url:
+                    stamp_url = qr_url
+                elif product_idea and product_idea.get('affiliate_link'):
+                    stamp_url = product_idea['affiliate_link']
+                else:
+                    # Use the predictable filename for the redirect
+                    stamp_url = f"/redirect/{stamped_filename}"
+                
+                # Create the stamped image with the correct QR code URL
+                stamped_image = self.image_processor.stamp_image_with_logo(image, stamp_url)
+                
+                # Save stamped image to bytes
                 stamped_output_bytes = io.BytesIO()
                 stamped_image.save(stamped_output_bytes, format="PNG")
                 stamped_output_bytes.seek(0)
@@ -274,46 +266,32 @@ class ImageGenerator:
                 
                 # Save stamped image locally
                 stamped_local_path = self.imgur_client.save_image_locally(
-                    stamped_image_data, f"stamped_{filename}", subdirectory="generated_products"
+                    stamped_image_data, stamped_filename, subdirectory="generated_products"
                 )
                 
-                # Upload stamped image to Imgur
+                # Upload only the final stamped image to Imgur
                 stamped_imgur_url, _ = self.imgur_client.upload_image(stamped_local_path)
                 logger.info(f"Stamped image uploaded to Imgur. URL: {stamped_imgur_url}")
                 
-                # Extract the stamped image filename for the QR code URL
-                stamped_imgur_filename = stamped_imgur_url.split('/')[-1]
-                
-                # Determine the final QR code URL using the stamped image filename
-                if qr_url:
-                    final_stamp_url = qr_url
-                elif product_idea and product_idea.get('affiliate_link'):
-                    final_stamp_url = product_idea['affiliate_link']
-                else:
-                    # Use the stamped image filename for the redirect
-                    final_stamp_url = f"/redirect/{stamped_imgur_filename}"
-                
-                # Now create the final stamped image with the correct QR code URL
-                final_stamped_image = self.image_processor.stamp_image_with_logo(image, final_stamp_url)
-                
-                # Re-upload the final stamped image to Imgur
-                final_stamped_output_bytes = io.BytesIO()
-                final_stamped_image.save(final_stamped_output_bytes, format="PNG")
-                final_stamped_output_bytes.seek(0)
-                final_stamped_image_data = final_stamped_output_bytes.read()
-                
-                # Save final stamped image locally
-                final_stamped_local_path = self.imgur_client.save_image_locally(
-                    final_stamped_image_data, f"final_stamped_{filename}", subdirectory="generated_products"
-                )
-                
-                # Upload final stamped image to Imgur
-                final_stamped_imgur_url, _ = self.imgur_client.upload_image(final_stamped_local_path)
-                logger.info(f"Final stamped image uploaded to Imgur. URL: {final_stamped_imgur_url}")
-                
-                return final_stamped_imgur_url, final_stamped_local_path
+                return stamped_imgur_url, stamped_local_path
+            else:
+                # Save unprocessed image to bytes
+                output_bytes = io.BytesIO()
+                image.save(output_bytes, format="PNG")
+                output_bytes.seek(0)
+                processed_image_data = output_bytes.read()
 
-            return imgur_url, local_path
+                # Save locally
+                local_path = self.imgur_client.save_image_locally(
+                    processed_image_data, filename, subdirectory="generated_products"
+                )
+                logger.info(f"Image saved locally at: {local_path}")
+
+                # Upload to Imgur
+                imgur_url, _ = self.imgur_client.upload_image(local_path)
+                logger.info(f"Image uploaded to Imgur. URL: {imgur_url}")
+                
+                return imgur_url, local_path
 
         except Exception as e:
             raise ImageGenerationError(
