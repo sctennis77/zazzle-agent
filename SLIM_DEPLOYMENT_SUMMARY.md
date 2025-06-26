@@ -52,6 +52,7 @@ make health-logs   # Health check with logs
 ### **3. Database Safety (CRITICAL)**
 ```bash
 make backup-db     # Database backup
+make backup-list   # List available backups (ESSENTIAL)
 make restore-db DB=file.db  # Database restore
 make check-db      # Check database
 ```
@@ -60,6 +61,7 @@ make check-db      # Check database
 - Database-only backup (lightweight)
 - Safe restore operations
 - Basic backup management
+- Backup listing for management
 
 ### **4. Basic Deployment (CRITICAL)**
 ```bash
@@ -86,6 +88,17 @@ make run-pipeline        # Run pipeline manually
 - Deployment validation
 - Log viewing
 - Manual pipeline execution
+
+### **6. Essential Maintenance (CRITICAL)**
+```bash
+make cleanup        # Quick cleanup (ESSENTIAL)
+make restart        # Emergency restart (CRITICAL)
+```
+
+**Purpose**: Required for system maintenance
+- Docker resource cleanup
+- Service restart capability
+- Basic system maintenance
 
 ## 📊 Before vs After
 
@@ -139,6 +152,15 @@ make run-pipeline
 make backup-db
 ```
 
+### **Weekly Maintenance**
+```bash
+# Quick cleanup
+make cleanup
+
+# Check backup list
+make backup-list
+```
+
 ### **Troubleshooting**
 ```bash
 # Check health with logs
@@ -150,6 +172,9 @@ make show-logs-pipeline
 
 # Validate deployment
 make validate-deployment
+
+# Emergency restart if needed
+make restart
 ```
 
 ## 🔒 Security Considerations

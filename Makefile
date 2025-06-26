@@ -3,7 +3,7 @@ PYTHON=python3
 PIP=pip3
 POETRY=poetry
 
-.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend setup-dev setup-prod setup-quick health-check health-logs backup-db restore-db check-db
+.PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend setup-dev setup-prod setup-quick health-check health-logs backup-db restore-db check-db cleanup restart
 
 help:
 	@echo "Available targets:"
@@ -22,6 +22,7 @@ help:
 	@echo ""
 	@echo "💾 CRITICAL - Database Safety:"
 	@echo "  make backup-db      - Database backup (CRITICAL)"
+	@echo "  make backup-list    - List available backups (ESSENTIAL)"
 	@echo "  make restore-db DB=file.db - Database restore (CRITICAL)"
 	@echo "  make check-db       - Check database (CRITICAL)"
 	@echo ""
@@ -30,6 +31,10 @@ help:
 	@echo "  make show-logs-api  - Show API logs"
 	@echo "  make show-logs-pipeline - Show pipeline logs"
 	@echo "  make run-pipeline   - Run pipeline manually (CRITICAL)"
+	@echo ""
+	@echo "🔧 CRITICAL - Maintenance:"
+	@echo "  make cleanup        - Quick cleanup (ESSENTIAL)"
+	@echo "  make restart        - Emergency restart (CRITICAL)"
 	@echo ""
 	@echo "🔧 Development (Optional):"
 	@echo "  make setup-dev      - Setup development environment"
@@ -44,6 +49,11 @@ help:
 	@echo "  2. make deploy      # Deploy application"
 	@echo "  3. make health-check # Verify deployment"
 	@echo "  4. make backup-db   # Create database backup"
+	@echo ""
+	@echo "🆘 Emergency Procedures:"
+	@echo "  make restart        # Restart all services"
+	@echo "  make cleanup        # Clean up Docker resources"
+	@echo "  make health-logs    # Check health with logs"
 
 install-poetry:
 	@echo "Installing Poetry..."
@@ -674,6 +684,11 @@ restore-db:
 	fi
 	@./scripts/backup-restore.sh restore-db $(DB)
 
+# List database backups (ESSENTIAL)
+backup-list:
+	@echo "💾 Listing available backups..."
+	@./scripts/backup-restore.sh list
+
 # =====================
 # Deployment (CRITICAL)
 # =====================
@@ -772,6 +787,23 @@ show-logs-pipeline:
 check-db:
 	@echo "Checking database contents..."
 	$(POETRY) run python3 -m scripts.check_db
+
+# =====================
+# Essential Maintenance (CRITICAL)
+# =====================
+
+# Quick cleanup (ESSENTIAL)
+cleanup:
+	@echo "🧹 Quick cleanup..."
+	@echo "Cleaning Docker resources..."
+	@docker system prune -f
+	@echo "✅ Cleanup completed"
+
+# Emergency restart (CRITICAL)
+restart:
+	@echo "🔄 Restarting all services..."
+	@docker-compose restart
+	@echo "✅ Services restarted"
 
 # =====================
 # Development (Optional)

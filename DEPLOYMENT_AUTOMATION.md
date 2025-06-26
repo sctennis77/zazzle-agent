@@ -108,13 +108,14 @@ make health-logs      # Health check with logs (CRITICAL)
 - ✅ Database-only backup (lightweight)
 - ✅ Safe restore operations
 - ✅ Basic backup management
+- ✅ Backup listing (essential for management)
 
 **Usage**:
 ```bash
 # Create database backup (CRITICAL)
 ./scripts/backup-restore.sh backup-db
 
-# List database backups
+# List database backups (ESSENTIAL)
 ./scripts/backup-restore.sh list
 
 # Restore database (CRITICAL)
@@ -124,8 +125,25 @@ make health-logs      # Health check with logs (CRITICAL)
 **Make Commands**:
 ```bash
 make backup-db                 # Database backup (CRITICAL)
+make backup-list               # List available backups (ESSENTIAL)
 make restore-db DB=file.db     # Database restore (CRITICAL)
 ```
+
+## 🔧 Essential Maintenance (CRITICAL)
+
+### Basic Maintenance Commands
+```bash
+# Quick cleanup (ESSENTIAL)
+make cleanup
+
+# Emergency restart (CRITICAL)
+make restart
+```
+
+**Maintenance Tasks**:
+- ✅ Docker resource cleanup
+- ✅ Service restart capability
+- ✅ Basic system maintenance
 
 ## 🚀 Essential Deployment Commands
 
@@ -227,6 +245,18 @@ docker-compose up -d
 
 # Check health
 make health-check
+```
+
+### Emergency Commands
+```bash
+# Restart all services
+make restart
+
+# Clean up Docker resources
+make cleanup
+
+# Check health with logs
+make health-logs
 ```
 
 ### Database Recovery
