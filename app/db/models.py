@@ -75,6 +75,58 @@ class Donation(Base):
     is_anonymous = Column(Boolean, default=False, nullable=False)
 
 
+class SponsorTier(Base):
+    """Individual donor levels (Bronze, Silver, Gold, etc.)"""
+    __tablename__ = "sponsor_tiers"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64), nullable=False, unique=True, index=True)  # e.g., "Bronze", "Silver", "Gold"
+    min_amount = Column(Numeric(10, 2), nullable=False, index=True)  # Minimum donation amount for this tier
+    benefits = Column(Text, nullable=True)  # Description of benefits
+    description = Column(Text, nullable=True)  # General description
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    sponsors = relationship("Sponsor", back_populates="tier")
+
+
+class Sponsor(Base):
+    """Individual sponsors linked to donations"""
+    __tablename__ = "sponsors"
+    id = Column(Integer, primary_key=True)
+    donation_id = Column(Integer, ForeignKey("donations.id", ondelete="CASCADE"), nullable=False, index=True)
+    tier_id = Column(Integer, ForeignKey("sponsor_tiers.id"), nullable=False, index=True)
+    subreddit = Column(String(100), nullable=True, index=True)  # Subreddit they want to support
+    status = Column(String(32), default="active", nullable=False, index=True)  # active, inactive
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    donation = relationship("Donation", backref="sponsor")
+    tier = relationship("SponsorTier", back_populates="sponsors")
+
+
+class SubredditTier(Base):
+    """Community fundraising levels for subreddits"""
+    __tablename__ = "subreddit_tiers"
+    id = Column(Integer, primary_key=True)
+    subreddit = Column(String(100), nullable=False, index=True)
+    tier_level = Column(Integer, nullable=False, index=True)  # 1, 2, 3, etc.
+    min_total_donation = Column(Numeric(10, 2), nullable=False, index=True)  # Total community donation needed
+    status = Column(String(32), default="pending", nullable=False, index=True)  # pending, active, completed
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    completed_at = Column(DateTime, nullable=True, index=True)
+
+
+class SubredditFundraisingGoal(Base):
+    """Community fundraising goals for subreddits"""
+    __tablename__ = "subreddit_fundraising_goals"
+    id = Column(Integer, primary_key=True)
+    subreddit = Column(String(100), nullable=False, index=True)
+    goal_amount = Column(Numeric(10, 2), nullable=False, index=True)  # Total goal amount
+    current_amount = Column(Numeric(10, 2), default=0, nullable=False, index=True)  # Current progress
+    deadline = Column(DateTime, nullable=True, index=True)  # Optional deadline
+    status = Column(String(32), default="active", nullable=False, index=True)  # active, completed, expired
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    completed_at = Column(DateTime, nullable=True, index=True)
+
+
 class RedditPost(Base):
     __tablename__ = "reddit_posts"
     id = Column(Integer, primary_key=True)

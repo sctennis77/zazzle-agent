@@ -6,7 +6,7 @@ from typing import Dict, Optional
 import stripe
 from sqlalchemy.orm import Session
 
-from app.db.models import Donation
+from app.db.models import Donation, Sponsor, SponsorTier
 from app.models import DonationRequest, DonationStatus
 
 logger = logging.getLogger(__name__)
@@ -157,6 +157,56 @@ class StripeService:
             logger.error(f"Error saving donation to database: {str(e)}")
             raise
 
+    def create_sponsor_record(self, db: Session, donation: Donation) -> Optional[Sponsor]:
+        """
+        Create a sponsor record when a donation succeeds.
+        
+        Args:
+            db: Database session
+            donation: The successful donation record
+            
+        Returns:
+            Sponsor: The created sponsor record or None if no matching tier
+        """
+        try:
+            # Find the appropriate sponsor tier based on donation amount
+            tier = (
+                db.query(SponsorTier)
+                .filter(SponsorTier.min_amount <= donation.amount_usd)
+                .order_by(SponsorTier.min_amount.desc())
+                .first()
+            )
+            
+            if not tier:
+                logger.warning(f"No sponsor tier found for donation amount ${donation.amount_usd}")
+                return None
+            
+            # Check if sponsor record already exists
+            existing_sponsor = db.query(Sponsor).filter_by(donation_id=donation.id).first()
+            if existing_sponsor:
+                logger.info(f"Sponsor record already exists for donation {donation.id}")
+                return existing_sponsor
+            
+            # Create sponsor record
+            sponsor = Sponsor(
+                donation_id=donation.id,
+                tier_id=tier.id,
+                subreddit=donation.subreddit,
+                status="active"
+            )
+            
+            db.add(sponsor)
+            db.commit()
+            db.refresh(sponsor)
+            
+            logger.info(f"Created sponsor record {sponsor.id} for donation {donation.id} with tier {tier.name}")
+            return sponsor
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error creating sponsor record: {str(e)}")
+            raise
+
     def update_donation_status(self, db: Session, payment_intent_id: str, status: DonationStatus) -> Optional[Donation]:
         """
         Update donation status in the database.
@@ -176,6 +226,11 @@ class StripeService:
                 db.commit()
                 db.refresh(donation)
                 logger.info(f"Updated donation {donation.id} status to {status.value}")
+                
+                # Create sponsor record if donation succeeded
+                if status == DonationStatus.SUCCEEDED:
+                    self.create_sponsor_record(db, donation)
+                
                 return donation
             else:
                 logger.warning(f"No donation found for payment intent {payment_intent_id}")

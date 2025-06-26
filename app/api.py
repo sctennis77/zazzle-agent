@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SponsorTier, Sponsor, SubredditTier, SubredditFundraisingGoal
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus
@@ -533,6 +533,138 @@ async def get_donation_by_payment_intent(
         raise
     except Exception as e:
         logger.error(f"Error getting donation {payment_intent_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/sponsor-tiers")
+async def get_sponsor_tiers(db: Session = Depends(get_db)):
+    """
+    Get all available sponsor tiers.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List[Dict]: List of sponsor tiers
+    """
+    try:
+        tiers = db.query(SponsorTier).order_by(SponsorTier.min_amount).all()
+        return [
+            {
+                "id": tier.id,
+                "name": tier.name,
+                "min_amount": float(tier.min_amount),
+                "benefits": tier.benefits,
+                "description": tier.description
+            }
+            for tier in tiers
+        ]
+    except Exception as e:
+        logger.error(f"Error getting sponsor tiers: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/sponsors")
+async def get_sponsors(db: Session = Depends(get_db)):
+    """
+    Get all current sponsors for the supporter wall.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List[Dict]: List of sponsors
+    """
+    try:
+        sponsors = (
+            db.query(Sponsor)
+            .join(SponsorTier)
+            .join(Donation)
+            .filter(Sponsor.status == "active")
+            .filter(Donation.status == "succeeded")
+            .order_by(Sponsor.created_at.desc())
+            .all()
+        )
+        
+        return [
+            {
+                "id": sponsor.id,
+                "tier_name": sponsor.tier.name,
+                "customer_name": sponsor.donation.customer_name or "Anonymous",
+                "amount_usd": float(sponsor.donation.amount_usd),
+                "subreddit": sponsor.subreddit,
+                "created_at": sponsor.created_at.isoformat(),
+                "is_anonymous": sponsor.donation.is_anonymous
+            }
+            for sponsor in sponsors
+        ]
+    except Exception as e:
+        logger.error(f"Error getting sponsors: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/subreddit-tiers")
+async def get_subreddit_tiers(db: Session = Depends(get_db)):
+    """
+    Get all subreddit tiers.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List[Dict]: List of subreddit tiers
+    """
+    try:
+        tiers = db.query(SubredditTier).order_by(SubredditTier.tier_level).all()
+        return [
+            {
+                "id": tier.id,
+                "subreddit": tier.subreddit,
+                "tier_level": tier.tier_level,
+                "min_total_donation": float(tier.min_total_donation),
+                "status": tier.status,
+                "created_at": tier.created_at.isoformat(),
+                "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
+            }
+            for tier in tiers
+        ]
+    except Exception as e:
+        logger.error(f"Error getting subreddit tiers: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/subreddit-fundraising")
+async def get_subreddit_fundraising(db: Session = Depends(get_db)):
+    """
+    Get subreddit fundraising status.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List[Dict]: List of subreddit fundraising goals
+    """
+    try:
+        goals = db.query(SubredditFundraisingGoal).filter(SubredditFundraisingGoal.status == "active").all()
+        return [
+            {
+                "id": goal.id,
+                "subreddit": goal.subreddit,
+                "goal_amount": float(goal.goal_amount),
+                "current_amount": float(goal.current_amount),
+                "progress_percentage": (float(goal.current_amount) / float(goal.goal_amount)) * 100,
+                "deadline": goal.deadline.isoformat() if goal.deadline else None,
+                "status": goal.status,
+                "created_at": goal.created_at.isoformat()
+            }
+            for goal in goals
+        ]
+    except Exception as e:
+        logger.error(f"Error getting subreddit fundraising: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
