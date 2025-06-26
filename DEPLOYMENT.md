@@ -47,11 +47,173 @@ gh secret list
 - ZAZZLE_AFFILIATE_ID
 - IMGUR_CLIENT_ID
 - IMGUR_CLIENT_SECRET
+- STRIPE_SECRET_KEY
+- STRIPE_PUBLISHABLE_KEY
+- STRIPE_WEBHOOK_SECRET
 
 **Optional for advanced deployment:**
 - DOCKER_USERNAME
 - DOCKER_PASSWORD
 - KUBE_CONFIG
+
+---
+
+## 💳 Stripe Integration: Local Dev to Production
+
+### Step 1: Set Up Stripe Account
+
+1. **Create Stripe Account**
+   - Go to [stripe.com](https://stripe.com) and create an account
+   - Complete account verification (business details, bank account)
+
+2. **Get API Keys**
+   - Navigate to Developers → API keys in Stripe Dashboard
+   - Copy your **Publishable key** and **Secret key**
+   - Note: Use test keys for development, live keys for production
+
+### Step 2: Local Development Setup
+
+1. **Add Stripe Keys to .env**
+   ```bash
+   # Copy environment template
+   cp env.example .env
+   
+   # Edit .env and add your Stripe keys
+   STRIPE_SECRET_KEY=sk_test_...
+   STRIPE_PUBLISHABLE_KEY=pk_test_...
+   STRIPE_WEBHOOK_SECRET=whsec_...  # We'll set this up next
+   ```
+
+2. **Set Up Stripe Webhook (Local)**
+   ```bash
+   # Install Stripe CLI
+   # macOS
+   brew install stripe/stripe-cli/stripe
+   
+   # Windows
+   # Download from https://github.com/stripe/stripe-cli/releases
+   
+   # Linux
+   # Download from https://github.com/stripe/stripe-cli/releases
+   
+   # Login to Stripe
+   stripe login
+   
+   # Forward webhooks to local development
+   stripe listen --forward-to localhost:8000/api/stripe/webhook
+   
+   # Copy the webhook secret from the output
+   # Add it to your .env file as STRIPE_WEBHOOK_SECRET
+   ```
+
+3. **Test Local Integration**
+   ```bash
+   # Start the application
+   make deploy
+   
+   # Test donation flow
+   # 1. Open http://localhost:5173
+   # 2. Click on a product
+   # 3. Click "Support this Project"
+   # 4. Use Stripe test card: 4242 4242 4242 4242
+   ```
+
+### Step 3: Production Deployment
+
+1. **Switch to Live Stripe Keys**
+   ```bash
+   # Update .env with live keys
+   STRIPE_SECRET_KEY=sk_live_...
+   STRIPE_PUBLISHABLE_KEY=pk_live_...
+   ```
+
+2. **Set Up Production Webhook**
+   - Go to Stripe Dashboard → Developers → Webhooks
+   - Click "Add endpoint"
+   - URL: `https://yourdomain.com/api/stripe/webhook`
+   - Events to send: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`
+   - Copy the webhook secret and add to production environment
+
+3. **Update GitHub Secrets**
+   ```bash
+   # Update secrets with production values
+   gh secret set STRIPE_SECRET_KEY --body "sk_live_..."
+   gh secret set STRIPE_PUBLISHABLE_KEY --body "pk_live_..."
+   gh secret set STRIPE_WEBHOOK_SECRET --body "whsec_..."
+   ```
+
+4. **Deploy to Production**
+   ```bash
+   make deploy
+   ```
+
+### Step 4: Verify Production Integration
+
+1. **Test Production Donation Flow**
+   - Use real credit card (small amount)
+   - Verify payment appears in Stripe Dashboard
+   - Check webhook events in Stripe Dashboard
+
+2. **Monitor Webhook Events**
+   ```bash
+   # Check webhook delivery status in Stripe Dashboard
+   # Developers → Webhooks → Your endpoint → Events
+   ```
+
+---
+
+## 🎨 Next Steps: UI/UX Improvements
+
+### Current State
+- ✅ Basic donation modal implemented
+- ✅ Stripe payment processing working
+- ✅ Database storage for donations
+
+### Planned Improvements
+
+#### 1. Enhanced Payment Modal
+**Current Issues:**
+- Basic styling, not visually appealing
+- Limited payment method options
+- No progress indicators
+
+**Planned Enhancements:**
+- Modern, branded design matching the app theme
+- Multiple payment method support (cards, Apple Pay, Google Pay)
+- Real-time payment status indicators
+- Better error handling and user feedback
+- Mobile-optimized responsive design
+
+#### 2. Fundraising Goal Bar
+**Features to Add:**
+- Visual progress bar showing donation goal progress
+- Current total raised vs. target amount
+- Recent donors list (with privacy controls)
+- Goal milestones and achievements
+- Social sharing capabilities
+
+**Implementation Plan:**
+```typescript
+// Example component structure
+interface FundraisingGoal {
+  currentAmount: number;
+  targetAmount: number;
+  recentDonors: Donor[];
+  milestones: Milestone[];
+}
+
+// Gallery view integration
+<ProductGrid>
+  <FundraisingBar goal={fundraisingGoal} />
+  <ProductCards />
+</ProductGrid>
+```
+
+#### 3. Donation Analytics Dashboard
+- Real-time donation tracking
+- Donor insights and trends
+- Goal progress analytics
+- Export capabilities for accounting
 
 ---
 
@@ -79,6 +241,7 @@ This single command will:
 
 - Docker and Docker Compose installed
 - Environment variables configured (see `env.example`)
+- Stripe account and API keys (for donation features)
 
 ## Environment Setup
 
@@ -92,6 +255,7 @@ This single command will:
    - Reddit API credentials
    - Zazzle affiliate ID
    - Imgur API credentials
+   - **Stripe API keys (for donations)**
 
 ## GitHub Secrets Management
 
@@ -125,6 +289,9 @@ This script will:
    ZAZZLE_AFFILIATE_ID=your_zazzle_affiliate_id
    IMGUR_CLIENT_ID=your_imgur_client_id
    IMGUR_CLIENT_SECRET=your_imgur_client_secret
+   STRIPE_SECRET_KEY=your_stripe_secret_key
+   STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+   STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
    ```
 
 ### Optional Secrets for Advanced Deployment

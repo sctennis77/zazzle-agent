@@ -80,6 +80,9 @@ read_env_secrets() {
         "ZAZZLE_AFFILIATE_ID"
         "IMGUR_CLIENT_ID"
         "IMGUR_CLIENT_SECRET"
+        "STRIPE_SECRET_KEY"
+        "STRIPE_PUBLISHABLE_KEY"
+        "STRIPE_WEBHOOK_SECRET"
     )
     
     local missing_vars=()
@@ -115,6 +118,9 @@ set_github_secrets() {
     gh secret set ZAZZLE_AFFILIATE_ID --body "$ZAZZLE_AFFILIATE_ID" --repo "$REPO_NAME"
     gh secret set IMGUR_CLIENT_ID --body "$IMGUR_CLIENT_ID" --repo "$REPO_NAME"
     gh secret set IMGUR_CLIENT_SECRET --body "$IMGUR_CLIENT_SECRET" --repo "$REPO_NAME"
+    gh secret set STRIPE_SECRET_KEY --body "$STRIPE_SECRET_KEY" --repo "$REPO_NAME"
+    gh secret set STRIPE_PUBLISHABLE_KEY --body "$STRIPE_PUBLISHABLE_KEY" --repo "$REPO_NAME"
+    gh secret set STRIPE_WEBHOOK_SECRET --body "$STRIPE_WEBHOOK_SECRET" --repo "$REPO_NAME"
     
     success "All secrets set successfully"
 }
@@ -171,6 +177,9 @@ main() {
     echo "  • ZAZZLE_AFFILIATE_ID"
     echo "  • IMGUR_CLIENT_ID"
     echo "  • IMGUR_CLIENT_SECRET"
+    echo "  • STRIPE_SECRET_KEY"
+    echo "  • STRIPE_PUBLISHABLE_KEY"
+    echo "  • STRIPE_WEBHOOK_SECRET"
     echo ""
     
     read -p "Continue? (y/N): " -n 1 -r

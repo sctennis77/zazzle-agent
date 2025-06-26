@@ -20,6 +20,7 @@ Zazzle Agent is an intelligent automation system that discovers trending content
 - **🐳 Docker Ready**: Complete containerized deployment
 - **📈 Usage Tracking**: Comprehensive OpenAI API usage monitoring
 - **🛡️ Error Handling**: Robust error handling and retry mechanisms
+- **💳 Donation System**: Accepts donations via Stripe to support the project
 
 ## 🚀 Quick Start
 
@@ -29,6 +30,7 @@ Zazzle Agent is an intelligent automation system that discovers trending content
 - OpenAI API key
 - Reddit API credentials
 - Zazzle affiliate ID
+- Stripe account (for donation features)
 
 ### 1. Clone the Repository
 
@@ -54,6 +56,11 @@ REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
 REDDIT_USER_AGENT=your_reddit_user_agent
 ZAZZLE_AFFILIATE_ID=your_zazzle_affiliate_id
+IMGUR_CLIENT_ID=your_imgur_client_id
+IMGUR_CLIENT_SECRET=your_imgur_client_secret
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
 ```
 
 ### 3. Deploy with Docker
@@ -189,6 +196,11 @@ make k8s-logs
 | `REDDIT_CLIENT_SECRET` | Reddit API client secret | Yes |
 | `REDDIT_USER_AGENT` | Reddit API user agent | Yes |
 | `ZAZZLE_AFFILIATE_ID` | Zazzle affiliate ID | Yes |
+| `IMGUR_CLIENT_ID` | Imgur client ID | No |
+| `IMGUR_CLIENT_SECRET` | Imgur client secret | No |
+| `STRIPE_SECRET_KEY` | Stripe secret key | No |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key | No |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook secret | No |
 | `OPENAI_IDEA_MODEL` | GPT model for idea generation (default: gpt-3.5-turbo) | No |
 | `DATABASE_URL` | Database connection string | No |
 
@@ -310,6 +322,47 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ ] Social media integration
 - [ ] Advanced analytics dashboard
 - [ ] Multi-language support
+
+## 💳 Donation System
+
+The Zazzle Agent includes a fully integrated donation system powered by Stripe:
+
+### Features
+- ✅ Secure payment processing with Stripe
+- ✅ Anonymous donation option
+- ✅ Custom donation messages
+- ✅ Real-time payment status updates
+- ✅ Database tracking of all donations
+- ✅ Webhook integration for payment events
+
+### Current State
+- Basic donation modal implemented
+- Stripe payment processing working
+- Database storage for donations
+
+### Next Steps: UI/UX Improvements
+
+#### 1. Enhanced Payment Modal
+**Planned Enhancements:**
+- Modern, branded design matching the app theme
+- Multiple payment method support (cards, Apple Pay, Google Pay)
+- Real-time payment status indicators
+- Better error handling and user feedback
+- Mobile-optimized responsive design
+
+#### 2. Fundraising Goal Bar
+**Features to Add:**
+- Visual progress bar showing donation goal progress
+- Current total raised vs. target amount
+- Recent donors list (with privacy controls)
+- Goal milestones and achievements
+- Social sharing capabilities
+
+#### 3. Donation Analytics Dashboard
+- Real-time donation tracking
+- Donor insights and trends
+- Goal progress analytics
+- Export capabilities for accounting
 
 ---
 
