@@ -6,7 +6,8 @@ import {
   Elements,
   useStripe,
   useElements,
-  ExpressCheckoutElement
+  ExpressCheckoutElement,
+  PaymentElement
 } from '@stripe/react-stripe-js';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
@@ -74,54 +75,40 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
   }, [amount, name, email, message, subreddit, redditUsername, isAnonymous]);
 
   // Handle Express Checkout payment
-  useEffect(() => {
+  const handleConfirm = async (event: any) => {
     if (!stripe || !elements || !clientSecret) return;
-
-    const expressCheckoutElement = elements.getElement('expressCheckout');
-    if (!expressCheckoutElement) return;
-
-    const handleConfirm = async (event: any) => {
-      if (event.detail.paymentMethod) {
-        try {
-          setLoading(true);
-          setError(null);
-
-          const { error: confirmError } = await stripe.confirmPayment({
-            elements,
-            clientSecret,
-            confirmParams: {
-              return_url: window.location.origin,
-              payment_method_data: {
-                billing_details: {
-                  name: isAnonymous ? 'Anonymous' : name || undefined,
-                  email: isAnonymous ? undefined : email || undefined,
-                },
+    if (event.detail && event.detail.paymentMethod) {
+      try {
+        setLoading(true);
+        setError(null);
+        const { error: confirmError } = await stripe.confirmPayment({
+          elements,
+          clientSecret,
+          confirmParams: {
+            return_url: window.location.origin,
+            payment_method_data: {
+              billing_details: {
+                name: isAnonymous ? 'Anonymous' : name || undefined,
+                email: isAnonymous ? undefined : email || undefined,
               },
             },
-          });
-
-          if (confirmError) {
-            setError(confirmError.message || 'Payment failed.');
-          } else {
-            setSuccess(true);
-            setTimeout(() => {
-              onClose();
-            }, 3000);
-          }
-        } catch (err: any) {
-          setError(err.message || 'An error occurred.');
-        } finally {
-          setLoading(false);
+          },
+        });
+        if (confirmError) {
+          setError(confirmError.message || 'Payment failed.');
+        } else {
+          setSuccess(true);
+          setTimeout(() => {
+            onClose();
+          }, 3000);
         }
+      } catch (err: any) {
+        setError(err.message || 'An error occurred.');
+      } finally {
+        setLoading(false);
       }
-    };
-
-    // Use the correct event listener API for Express Checkout Element
-    expressCheckoutElement.on('confirm', handleConfirm);
-    return () => {
-      expressCheckoutElement.off('confirm', handleConfirm);
-    };
-  }, [stripe, elements, clientSecret, name, email, isAnonymous, onClose]);
+    }
+  };
 
   if (success) {
     return (
@@ -141,20 +128,41 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
     <div className="space-y-6 p-6">
       {/* Donation Details Form */}
       <div className="space-y-4">
+        {/* Preset Amount Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-            <input
-              type="number"
-              min="0.50"
-              step="0.01"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent"
-              placeholder="5.00"
-              required
-            />
+          <label className="block text-sm font-medium text-gray-700 mb-2">Choose Amount</label>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {[5, 10, 25, 50, 100].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setAmount(preset.toString())}
+                className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                  amount === preset.toString()
+                    ? 'bg-pink-600 text-white border-pink-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                ${preset}
+              </button>
+            ))}
+          </div>
+          
+          {/* Custom Amount Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Custom Amount</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="number"
+                min="0.50"
+                step="0.01"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent"
+                placeholder="Enter custom amount"
+              />
+            </div>
           </div>
         </div>
 
@@ -259,7 +267,11 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
         <div className="space-y-4">
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Choose Payment Method</h3>
-            <ExpressCheckoutElement />
+            <ExpressCheckoutElement onConfirm={handleConfirm} />
+            <div className="mt-6">
+              <h4 className="text-md font-medium text-gray-800 mb-2">Or pay by card</h4>
+              <PaymentElement />
+            </div>
           </div>
         </div>
       )}
