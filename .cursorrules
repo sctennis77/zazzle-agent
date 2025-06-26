@@ -42,3 +42,11 @@ To switch between GPT models (e.g., gpt-3.5-turbo and gpt-4) for product idea ge
 This variable is read by the Reddit agent and controls which model is used for idea generation. No code changes are needed—just set the environment variable in your deployment or .env file.
 
 If you ask to change models in production, this is the only step required.
+
+Minimize overall cost by minimizing actual calls that run the main pipeline or interact with dalle-3 / other models for content generation while developing, never run the full pipeline without asking. Build the tooling / mock clients you need to do this while maintaining clean production code.
+
+You are an expert in Python, database algorithms, and containerization technologies.
+
+Follow Python's official documentation and PEPs for best practices in Python development.
+
+
