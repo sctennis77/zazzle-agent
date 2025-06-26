@@ -23,6 +23,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [subreddit, setSubreddit] = useState(product.reddit_post.subreddit || '');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
             customer_email: isAnonymous ? undefined : email || undefined,
             customer_name: isAnonymous ? 'Anonymous' : name || undefined,
             message: message || undefined,
+            subreddit: subreddit || undefined,
             is_anonymous: isAnonymous
           })
         });
@@ -66,7 +68,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
     // Debounce the API call
     const timeoutId = setTimeout(createPaymentIntent, 500);
     return () => clearTimeout(timeoutId);
-  }, [amount, name, email, message, isAnonymous]);
+  }, [amount, name, email, message, subreddit, isAnonymous]);
 
   // Handle Express Checkout payment
   useEffect(() => {
@@ -85,7 +87,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
             elements,
             clientSecret,
             confirmParams: {
-              return_url: window.location.origin + '/donation-success',
+              return_url: window.location.origin,
               payment_method_data: {
                 billing_details: {
                   name: isAnonymous ? 'Anonymous' : name || undefined,
@@ -101,7 +103,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
             setSuccess(true);
             setTimeout(() => {
               onClose();
-            }, 2000);
+            }, 3000);
           }
         } catch (err: any) {
           setError(err.message || 'An error occurred.');
@@ -167,6 +169,21 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
               required
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit (optional)</label>
+          <select
+            value={subreddit}
+            onChange={e => setSubreddit(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white"
+          >
+            <option value="">None</option>
+            <option value={product.reddit_post.subreddit}>{product.reddit_post.subreddit}</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            This helps us track which communities are supporting the project
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -264,11 +281,9 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
 };
 
 export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, product }) => {
-  const [amount, setAmount] = useState('5.00');
-
   const options = {
     mode: 'payment' as const,
-    amount: Math.round(parseFloat(amount) * 100), // Convert to cents
+    amount: Math.round(parseFloat('5.00') * 100), // Convert to cents
     currency: 'usd' as const,
     appearance: {
       theme: 'stripe' as const,

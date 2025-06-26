@@ -67,6 +67,7 @@ class Donation(Base):
     customer_email = Column(String(255), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
     message = Column(Text, nullable=True)  # Optional message from donor
+    subreddit = Column(String(100), nullable=True, index=True)  # Subreddit associated with the donation
     stripe_metadata = Column(JSON, nullable=True)  # Additional Stripe metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
