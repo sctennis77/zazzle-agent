@@ -476,6 +476,7 @@ class RedditAgent:
         session: Session = None,
         reddit_post_id: int = None,
         subreddit_name: str = "golf",
+        reddit_client: Optional[Any] = None,
     ):
         """
         Initialize the Reddit agent with configuration and database session.
@@ -485,7 +486,8 @@ class RedditAgent:
             pipeline_run_id: ID of the current pipeline run
             session: SQLAlchemy session for DB operations
             reddit_post_id: ID of the current Reddit post
-            subreddit_name: Name of the subreddit to interact with
+            subreddit_name: Name of the subreddit to interact with (None for random pick)
+            reddit_client: RedditClient instance (optional, will create one if not provided)
         """
         model = config.model if config else "dall-e-3"
         prompt_version = IMAGE_GENERATION_BASE_PROMPTS[model]["version"]
@@ -499,16 +501,33 @@ class RedditAgent:
         self.pipeline_run_id = pipeline_run_id
         self.session = session
         self.reddit_post_id = reddit_post_id
+        
         # Initialize Reddit client
-        self.reddit = praw.Reddit(
-            client_id=os.getenv("REDDIT_CLIENT_ID"),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-            user_agent=os.getenv("REDDIT_USER_AGENT", "zazzle-agent/1.0"),
-            username=os.getenv("REDDIT_USERNAME"),
-            password=os.getenv("REDDIT_PASSWORD"),
-        )
-        self.subreddit_name = subreddit_name
+        if reddit_client:
+            self.reddit_client = reddit_client
+            self.reddit = reddit_client.reddit
+        else:
+            self.reddit = praw.Reddit(
+                client_id=os.getenv("REDDIT_CLIENT_ID"),
+                client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+                user_agent=os.getenv("REDDIT_USER_AGENT", "zazzle-agent/1.0"),
+                username=os.getenv("REDDIT_USERNAME"),
+                password=os.getenv("REDDIT_PASSWORD"),
+            )
+            self.reddit_client = None
+        
+        # Handle subreddit selection
+        if subreddit_name is None:
+            # For front page picks, use a random subreddit
+            self.subreddit_name = pick_subreddit()
+            logger.info(f"Using random subreddit for front pick: {self.subreddit_name}")
+        else:
+            self.subreddit_name = subreddit_name
+            
+        # Initialize the subreddit object (works for "all" and specific subreddits)
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
+        logger.info(f"Using subreddit: r/{self.subreddit_name}")
+        
         self.openai = openai
         self.image_generator = ImageGenerator(model=self.config.model)
         self.product_designer = ZazzleProductDesigner()
@@ -726,6 +745,106 @@ class RedditAgent:
             logger.error(f"Error in find_and_create_product: {str(e)}")
             return None
 
+    async def find_and_create_product_for_task(self) -> Optional[ProductInfo]:
+        """
+        Find a trending post and create a product from it using task-specific logic.
+        This method uses _find_trending_post_for_task for easier testing and mocking.
+        Persists RedditContext as RedditPost in the DB if session and pipeline_run_id are provided.
+        Returns:
+            ProductInfo object if successful, None otherwise
+        """
+        try:
+            # Find a trending post using task-specific method
+            trending_post = await self._find_trending_post_for_task()
+            if not trending_post:
+                logger.warning("No suitable trending post found for task")
+                return None
+
+            # Log trending post details
+            logger.info("Found trending post for task:")
+            logger.info(f"Post ID: {trending_post.id}")
+            logger.info(f"Title: {trending_post.title}")
+            logger.info(f"URL: {trending_post.url}")
+            logger.info(f"Subreddit: {trending_post.subreddit.display_name}")
+            logger.info(
+                f"Content: {trending_post.selftext if hasattr(trending_post, 'selftext') else 'No content'}"
+            )
+            logger.info(
+                f"Comment Summary: {getattr(trending_post, 'comment_summary', 'No comment summary')}"
+            )
+
+            # Create RedditContext from the post
+            reddit_context = RedditContext(
+                post_id=trending_post.id,
+                post_title=trending_post.title,
+                post_url=f"https://reddit.com{trending_post.permalink}",
+                subreddit=trending_post.subreddit.display_name,
+                post_content=(
+                    trending_post.selftext
+                    if hasattr(trending_post, "selftext")
+                    else None
+                ),
+                permalink=trending_post.permalink,
+                author=str(trending_post.author) if trending_post.author else None,
+                score=trending_post.score,
+                num_comments=trending_post.num_comments,
+                comments=[
+                    {
+                        "text": getattr(
+                            trending_post, "comment_summary", "No comment summary"
+                        )
+                    }
+                ],
+            )
+
+            # Determine product idea from post (synchronous call)
+            product_idea = self._determine_product_idea(reddit_context)
+            if not product_idea:
+                logger.warning("Could not determine product idea from post")
+                return None
+            if not product_idea.theme or product_idea.theme.lower() == "default theme":
+                raise ValueError("No valid theme was generated from the Reddit context")
+            logger.info(f"Product Idea: {product_idea}")
+            if (
+                not product_idea.image_description
+                or not product_idea.image_description.strip()
+            ):
+                logger.error(
+                    "Image prompt (image_description) is empty. Aborting image generation."
+                )
+                raise ValueError("Image prompt (image_description) cannot be empty.")
+            try:
+                imgur_url, local_path = await self.image_generator.generate_image(
+                    product_idea.image_description,
+                    template_id=self.config.zazzle_template_id,
+                )
+            except Exception as e:
+                logger.error(f"Failed to generate image: {str(e)}")
+                return None
+            design_instructions = DesignInstructions(
+                image=imgur_url,
+                theme=product_idea.theme,
+                image_title=product_idea.design_instructions.get("image_title"),
+                text=product_idea.image_description,
+                product_type=ZAZZLE_PRINT_TEMPLATE.product_type,
+                template_id=self.config.zazzle_template_id,
+                model=self.config.model,
+                prompt_version=self.config.prompt_version,
+            )
+            logger.info(f"Design Instructions: {design_instructions}")
+            product_info = await self.product_designer.create_product(
+                design_instructions=design_instructions, reddit_context=reddit_context
+            )
+            if not product_info:
+                logger.warning("Failed to create product")
+                return None
+            if isinstance(product_info, dict):
+                product_info = ProductInfo.from_dict(product_info)
+            return product_info
+        except Exception as e:
+            logger.error(f"Error in find_and_create_product_for_task: {str(e)}")
+            return None
+
     async def get_product_info(self) -> List[ProductInfo]:
         """
         Get product information from Reddit content.
@@ -741,6 +860,24 @@ class RedditAgent:
             return []
         except Exception as e:
             logger.error(f"Error getting product info: {str(e)}")
+            return []
+
+    async def get_product_info_for_task(self) -> List[ProductInfo]:
+        """
+        Get product information from Reddit content using task-specific logic.
+        This method uses find_and_create_product_for_task for easier testing and mocking.
+
+        Returns:
+            List[ProductInfo]: List of product information objects
+        """
+        try:
+            # Find a trending post and create a product using task-specific method
+            product_info = await self.find_and_create_product_for_task()
+            if product_info:
+                return [product_info]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting product info for task: {str(e)}")
             return []
 
     async def get_product_info_with_design(
@@ -814,6 +951,7 @@ class RedditAgent:
     async def _find_trending_post(self, tries: int = 3, limit: int = 50):
         """
         Find a trending Reddit post that has not already been processed.
+        Works for both specific subreddits and "all" (front page).
         Skips posts that are stickied, too old, or already present in the database (by post_id).
         Returns the first valid post or None if none are found.
         """
@@ -822,10 +960,10 @@ class RedditAgent:
         )
         try:
             for attempt in range(tries):
-                subreddit = self.reddit.subreddit(self.subreddit_name)
-                for submission in subreddit.hot(limit=limit):
+                # Use the existing subreddit object (works for "all" and specific subreddits)
+                for submission in self.subreddit.hot(limit=limit):
                     logger.info(
-                        f"Processing submission: {submission.title} (score: {submission.score}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
+                        f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )
                     if submission.stickied:
                         continue
@@ -837,7 +975,7 @@ class RedditAgent:
                     if not submission.selftext:
                         continue
 
-                    # Debug: Print all post_ids in the DB and session info
+                    # Check if already processed
                     if self.session:
                         existing_post = (
                             self.session.query(RedditPost)
@@ -850,35 +988,8 @@ class RedditAgent:
                             )
                             continue
 
-                    # Get top comments and generate summary
-                    submission.comments.replace_more(
-                        limit=0
-                    )  # Load top-level comments only
-                    top_comments = submission.comments.list()[:5]  # Get top 5 comments
-                    comment_texts = [
-                        comment.body
-                        for comment in top_comments
-                        if hasattr(comment, "body")
-                    ]
-                    if comment_texts:
-                        # Use GPT to summarize comments
-                        response = self.openai.chat.completions.create(
-                            model="gpt-4",
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "Summarize the key points from these Reddit comments in 1-2 sentences.",
-                                },
-                                {
-                                    "role": "user",
-                                    "content": f"Comments:\n{chr(10).join(comment_texts)}",
-                                },
-                            ],
-                        )
-                        comment_summary = response.choices[0].message.content.strip()
-                    else:
-                        comment_summary = "No comments available."
-                    # Add comment summary to submission
+                    # Generate comment summary and add to submission
+                    comment_summary = self._generate_comment_summary(submission)
                     submission.comment_summary = comment_summary
                     return submission
                 # If we reach here, no suitable post was found in this attempt
@@ -889,3 +1000,103 @@ class RedditAgent:
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
             return None
+
+    async def _find_trending_post_for_task(self, tries: int = 3, limit: int = 50):
+        """
+        Find a trending Reddit post specifically for task-based processing.
+        This is a simplified version that can be easily tested and mocked.
+        Works for both specific subreddits and "all" (front page).
+        Skips posts that are stickied, too old, or already present in the database (by post_id).
+        Returns the first valid post or None if none are found.
+        """
+        logger.info(
+            f"Starting _find_trending_post_for_task with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
+        )
+        try:
+            for attempt in range(tries):
+                # Use the existing subreddit object (works for "all" and specific subreddits)
+                for submission in self.subreddit.hot(limit=limit):
+                    logger.info(
+                        f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
+                    )
+                    if submission.stickied:
+                        continue
+                    if (
+                        datetime.now(timezone.utc)
+                        - datetime.fromtimestamp(submission.created_utc, timezone.utc)
+                    ).days > 2:
+                        continue
+                    if not submission.selftext:
+                        continue
+
+                    # Check if already processed
+                    if self.session:
+                        existing_post = (
+                            self.session.query(RedditPost)
+                            .filter_by(post_id=submission.id)
+                            .first()
+                        )
+                        if existing_post:
+                            logger.info(
+                                f"Skipping post {submission.id}: already processed"
+                            )
+                            continue
+
+                    # Generate comment summary and add to submission
+                    comment_summary = self._generate_comment_summary(submission)
+                    submission.comment_summary = comment_summary
+                    return submission
+                # If we reach here, no suitable post was found in this attempt
+                logger.info(
+                    f"No suitable trending post found on attempt {attempt + 1}/{tries}"
+                )
+            return None
+        except Exception as e:
+            logger.error(f"Error finding trending post: {str(e)}")
+            return None
+
+    def _generate_comment_summary(self, submission) -> str:
+        """
+        Generate a summary of the top comments for a Reddit submission.
+        
+        Args:
+            submission: PRAW submission object
+            
+        Returns:
+            str: Comment summary
+        """
+        try:
+            # Get top comments and generate summary
+            submission.comments.replace_more(
+                limit=0
+            )  # Load top-level comments only
+            top_comments = submission.comments.list()[:5]  # Get top 5 comments
+            comment_texts = [
+                comment.body
+                for comment in top_comments
+                if hasattr(comment, "body")
+            ]
+            if comment_texts:
+                # Use GPT to summarize comments
+                response = self.openai.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Summarize the key points from these Reddit comments in 1-2 sentences.",
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Comments:\n{chr(10).join(comment_texts)}",
+                        },
+                    ],
+                )
+                comment_summary = response.choices[0].message.content.strip()
+            else:
+                comment_summary = "No comments available."
+            
+            return comment_summary
+            
+        except Exception as e:
+            logger.error(f"Error generating comment summary: {str(e)}")
+            return "Error generating comment summary."

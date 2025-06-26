@@ -506,6 +506,170 @@ class Pipeline:
             if 'session' in locals() and not self.session:
                 session.close()
 
+    async def run_task_pipeline_specific(self, task_id: int) -> Optional[List[ProductInfo]]:
+        """
+        Run the pipeline for a specific task using task-specific RedditAgent methods.
+        This method uses get_product_info_for_task for easier testing and mocking.
+        
+        Args:
+            task_id: ID of the task to execute
+            
+        Returns:
+            Optional[List[ProductInfo]]: List of generated products or None if failed
+        """
+        try:
+            session = self.session or SessionLocal()
+            task_queue = TaskQueue(session)
+            
+            # Get the task
+            task = session.query(PipelineTask).get(task_id)
+            if not task:
+                logger.error(f"Task {task_id} not found")
+                return None
+            
+            # Mark task as in progress
+            task_queue.mark_in_progress(task_id)
+            
+            # Create a new pipeline run for this task
+            pipeline_run = PipelineRun(
+                status=PipelineStatus.STARTED.value,
+                start_time=datetime.utcnow(),
+                config={"task_id": task_id, "task_type": task.type}
+            )
+            session.add(pipeline_run)
+            session.commit()
+            self.pipeline_run_id = pipeline_run.id
+            
+            logger.info(f"Starting task-specific pipeline for task {task_id} (type: {task.type})")
+            
+            # Configure Reddit agent based on task type
+            if task.type == "SUBREDDIT_POST" and task.subreddit:
+                # Use specific subreddit for subreddit posts
+                self.reddit_agent.subreddit_name = task.subreddit
+                logger.info(f"Using subreddit {task.subreddit} for subreddit post")
+            else:
+                # Default to random subreddit
+                self.reddit_agent.subreddit_name = None
+                logger.info("Using random subreddit")
+            
+            # Get product info using task-specific method
+            products = await self.reddit_agent.get_product_info_for_task()
+            if not products:
+                error_msg = f"No products were generated for task {task_id}. pipeline_run_id: {pipeline_run.id}"
+                raise Exception(error_msg)
+
+            # Convert single product to list for consistency
+            if not isinstance(products, list):
+                products = [products]
+
+            # Generate affiliate links for all products
+            products_with_links = await self.affiliate_linker.generate_links_batch(
+                products
+            )
+            if not products_with_links:
+                error_msg = f"No products were successfully processed with affiliate links for task {task_id}. pipeline_run_id: {pipeline_run.id}"
+                raise Exception(error_msg)
+
+            orm_reddit_post = None
+            if products:
+                reddit_context = products[0].reddit_context
+                orm_reddit_post = reddit_context_to_db(reddit_context, pipeline_run.id)
+                session.add(orm_reddit_post)
+                session.commit()
+                self.reddit_post_id = orm_reddit_post.id
+                logger.info(f"Persisted RedditPost with id {self.reddit_post_id}")
+
+            # Persist only the first ProductInfo to DB using ORM
+            if products_with_links and orm_reddit_post:
+                product_info = products_with_links[0]
+                orm_product_info = product_info_to_db(
+                    product_info, pipeline_run.id, self.reddit_post_id
+                )
+                orm_product_info.reddit_post_id = orm_reddit_post.id
+                session.add(orm_product_info)
+                session.commit()
+                logging.debug(
+                    f"Persisted ProductInfo with ID: {orm_product_info.id} and RedditPost ID: {orm_reddit_post.id}"
+                )
+
+            # Update pipeline run status
+            pipeline_run.status = PipelineStatus.COMPLETED.value
+            pipeline_run.end_time = datetime.utcnow()
+            
+            # Track OpenAI usage for this pipeline run
+            try:
+                usage_tracker = get_usage_tracker()
+                usage_summary = usage_tracker.get_session_summary()
+                
+                # Extract usage data
+                total_tokens = usage_summary.get("total_tokens_used", 0)
+                total_cost = usage_summary.get("total_cost_usd", "$0.0000")
+                model_breakdown = usage_summary.get("model_breakdown", {})
+                
+                # Determine models used
+                idea_model = "gpt-3.5-turbo"  # Default
+                image_model = self.config.model if self.config else "dall-e-3"
+                
+                # Find the actual models used from the breakdown
+                for model, data in model_breakdown.items():
+                    if data.get("calls", 0) > 0:
+                        if "gpt" in model.lower():
+                            idea_model = model
+                        elif "dall" in model.lower():
+                            image_model = model
+                
+                # Calculate token breakdown (approximate)
+                prompt_tokens = int(total_tokens * 0.8)  # Assume 80% prompt, 20% completion
+                completion_tokens = total_tokens - prompt_tokens
+                image_tokens = 0  # DALL-E doesn't use tokens in the same way
+                
+                # Parse cost string to decimal
+                cost_str = total_cost.replace("$", "")
+                total_cost_decimal = Decimal(cost_str)
+                
+                # Create usage record
+                pipeline_usage = PipelineRunUsage(
+                    pipeline_run_id=pipeline_run.id,
+                    idea_model=idea_model,
+                    image_model=image_model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    image_tokens=image_tokens,
+                    total_cost_usd=total_cost_decimal
+                )
+                session.add(pipeline_usage)
+                
+                logger.info(f"Tracked OpenAI usage for task pipeline run {pipeline_run.id}: "
+                          f"idea_model={idea_model}, image_model={image_model}, "
+                          f"tokens={total_tokens}, cost={total_cost}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to track OpenAI usage for task pipeline run {pipeline_run.id}: {str(e)}")
+            
+            session.commit()
+
+            # Mark task as completed
+            task_queue.mark_completed(task_id)
+            
+            logger.info(f"Successfully completed task-specific pipeline for task {task_id}, generated {len(products_with_links)} products")
+            return products_with_links
+            
+        except Exception as e:
+            error_msg = f"Error in task-specific pipeline for task {task_id}: {str(e)}"
+            logger.error(error_msg)
+            
+            # Mark task as failed
+            if 'task_queue' in locals():
+                task_queue.mark_completed(task_id, error_message=error_msg)
+            
+            # Log error to database
+            self.log_error(error_msg, error_type="TASK_PIPELINE_ERROR", component="PIPELINE")
+            
+            return None
+        finally:
+            if 'session' in locals() and not self.session:
+                session.close()
+
     def check_task_queue_first(self) -> Optional[int]:
         """
         Check if there are any tasks in the queue that should be processed first.

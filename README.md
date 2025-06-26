@@ -369,3 +369,30 @@ The Zazzle Agent includes a fully integrated donation system powered by Stripe:
 **Made with ❤️ by the Zazzle Agent Team**
 
 *Transform Reddit trends into profitable products with AI-powered automation.*
+
+## Dual Implementation: Legacy vs Task-Based Product Generation
+
+This codebase now supports two independent implementations for finding trending Reddit posts and generating products:
+
+### 1. Legacy Implementation
+- **Method:** `RedditAgent._find_trending_post`
+- **Pipeline:** `Pipeline.run_pipeline`
+- **Testing:** Legacy tests in `tests/test_reddit_agent.py` (e.g., `test_find_trending_post`, `test_find_reddit_post_skips_processed`)
+- **Usage:** Used by the original pipeline and API endpoints for random or legacy product generation.
+
+### 2. Task-Based Implementation
+- **Method:** `RedditAgent._find_trending_post_for_task`
+- **Pipeline:** `Pipeline.run_task_pipeline_specific`
+- **Testing:** Task-based tests in `tests/test_reddit_agent.py` (e.g., `test_find_trending_post_for_task_simple`, `test_get_product_info_for_task_simple`)
+- **Usage:** Used by the new task queue, task runner, and event-driven product generation.
+
+**Both implementations are fully tested and can be maintained or refactored independently.**
+
+### How to Run Tests
+- To run all tests: `make test`
+- To run only Reddit agent tests: `make test-pattern tests/test_reddit_agent.py`
+- To run only pipeline tests: `make test-pattern tests/test_pipeline.py`
+
+---
+
+For more details, see the docstrings in `app/agents/reddit_agent.py` and `app/pipeline.py`.

@@ -166,7 +166,7 @@ class TaskRunner:
             )
             
             # Run the task pipeline
-            products = await pipeline.run_task_pipeline(task_id)
+            products = await pipeline.run_task_pipeline_specific(task_id)
             
             if products:
                 logger.info(f"Task {task_id} completed successfully, generated {len(products)} products")
