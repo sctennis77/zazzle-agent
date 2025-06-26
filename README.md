@@ -1013,179 +1013,352 @@ To fully reset and test the environment, follow these steps:
 
 # Zazzle Agent
 
-An automated AI-powered product generation system that creates custom merchandise based on trending Reddit content.
+An AI-powered product generation system that creates custom merchandise based on trending Reddit content.
 
-## 🚀 Quick Start (One Command Deployment)
+## Features
 
-For a complete deployment from scratch:
+- **Reddit Integration**: Automatically finds trending posts from specified subreddits
+- **AI-Powered Content Generation**: Uses GPT models to generate product ideas and descriptions
+- **Image Generation**: Creates custom artwork using DALL-E models
+- **QR Code Integration**: Adds scannable QR codes with custom signatures
+- **Zazzle Integration**: Automatically creates products on Zazzle with affiliate links
+- **Docker Deployment**: Complete containerized deployment with health checks
+- **Automated Pipeline**: End-to-end automation from Reddit to product creation
 
-```bash
-make deploy
-```
+## Quick Start
 
-This single command handles everything:
-- ✅ Prerequisites validation
-- ✅ Environment setup
-- ✅ Docker image building
-- ✅ Service orchestration
-- ✅ Health checks
-- ✅ Initial pipeline run
-
-## 📋 Prerequisites
+### Prerequisites
 
 - Docker and Docker Compose
-- API keys for OpenAI, Reddit, Zazzle, and Imgur
+- Python 3.12+ (for local development)
+- Poetry (for dependency management)
+- Environment variables (see `env.example`)
 
-## 🛠️ Setup
+### Local Development (Recommended for Fast Iteration)
 
-1. **Clone the repository**
+1. **Setup Environment**:
    ```bash
-   git clone <repository-url>
-   cd zazzle-agent
-   ```
-
-2. **Configure environment**
-   ```bash
+   # Install dependencies
+   poetry install
+   
+   # Copy environment template
    cp env.example .env
    # Edit .env with your API keys
    ```
 
-3. **Deploy**
+2. **Run Tests Locally**:
    ```bash
-   make deploy
+   # Run all tests
+   python -m pytest tests/
+   
+   # Run specific test
+   python -m pytest tests/test_image_generator.py
+   
+   # Run with coverage
+   python -m pytest --cov=app tests/
    ```
 
-## 🎯 What It Does
+3. **Test Logic Without API Costs**:
+   ```bash
+   # Test image optimization logic
+   python test_image_optimization.py
+   
+   # Test specific components
+   python -c "from app.image_generator import ImageGenerator; print('Import successful')"
+   ```
 
-The Zazzle Agent automatically:
+### Docker Development (When Integration Testing Needed)
 
-1. **Discovers trending content** from Reddit subreddits
-2. **Generates product ideas** using AI analysis
-3. **Creates custom artwork** with DALL-E
-4. **Designs products** on Zazzle with affiliate links
-5. **Engages with communities** through Reddit interactions
+1. **Fast Rebuilds** (for code changes):
+   ```bash
+   # Uses Docker cache for unchanged layers
+   docker-compose build pipeline
+   docker-compose restart pipeline
+   ```
 
-## 🏗️ Architecture
+2. **Full Rebuild** (for dependency changes):
+   ```bash
+   # Use --no-cache only when needed
+   docker-compose build --no-cache pipeline
+   ```
 
-- **Frontend**: React + TypeScript + Vite
-- **Backend**: FastAPI + Python 3.12
-- **Database**: SQLite (with Alembic migrations)
-- **AI**: OpenAI GPT and DALL-E
-- **Infrastructure**: Docker + Docker Compose
-- **Monitoring**: Health checks + structured logging
+3. **Run Pipeline**:
+   ```bash
+   docker-compose exec pipeline python app/main.py --mode full
+   ```
 
-## 📊 Services
+### Production Deployment
 
-- **API Server** (Port 8000): FastAPI backend with product management
-- **Frontend** (Port 5173): React interface for viewing products
-- **Pipeline**: Automated product generation (every 6 hours)
-- **Interaction Agent**: Reddit engagement (every 2 hours)
-- **Database**: SQLite with persistent storage
-
-## 🔧 Management Commands
-
-### Deployment
 ```bash
-make deploy              # Full deployment
-make deploy-clean        # Clean deployment (removes old images)
-make deploy-quick        # Quick deployment (skips initial pipeline)
+# Complete deployment from scratch
+make deploy
+
+# Or use the deployment script directly
+./deploy.sh
 ```
 
-### Monitoring
+## Development Workflow
+
+### When to Use Local vs Docker
+
+**Use Local Development For**:
+- ✅ Code changes and logic testing
+- ✅ Unit tests and component testing
+- ✅ Fast iteration cycles
+- ✅ Avoiding API costs during development
+- ✅ Debugging and troubleshooting
+
+**Use Docker For**:
+- ✅ Integration testing
+- ✅ End-to-end pipeline testing
+- ✅ Production-like environment testing
+- ✅ When local environment has issues
+
+### Docker Build Strategies
+
+**Regular Builds** (Most Common):
 ```bash
-make deployment-status   # Check service status
-make validate-deployment # Validate all services
-make show-logs          # View all logs
-make show-logs-api      # View API logs
-make show-logs-pipeline # View pipeline logs
+docker-compose build pipeline  # Uses cache, fast
+docker-compose restart pipeline
 ```
 
-### Pipeline Control
+**Use --no-cache When**:
+- 📦 Dependency changes (`requirements.txt`, `package.json`)
+- 🐳 Dockerfile changes (base image, build steps)
+- 📁 Build context changes (new files affecting COPY)
+- 🔄 CI/CD pipelines (reproducible builds)
+
+**Don't Use --no-cache For**:
+- 📝 Code changes (Python/TypeScript files)
+- ⚙️ Configuration changes (`.env`, config files)
+- 📚 Documentation updates
+
+### Testing Strategy
+
+1. **Unit Tests**: Run locally for fast feedback
+2. **Integration Tests**: Run in Docker for full pipeline testing
+3. **End-to-End Tests**: Run in staging environment
+4. **Performance Tests**: Run in production-like environment
+
+## Architecture
+
+### Core Components
+
+- **Reddit Agent**: Finds trending posts and generates product ideas
+- **Image Generator**: Creates artwork using DALL-E with QR code integration
+- **Content Generator**: Generates product descriptions and marketing copy
+- **Zazzle Designer**: Creates products on Zazzle with affiliate links
+- **Pipeline**: Orchestrates the entire process
+
+### Services
+
+- **API**: FastAPI backend with health checks
+- **Frontend**: React/TypeScript UI for product management
+- **Pipeline**: Background processing for product generation
+- **Database**: SQLite with Alembic migrations
+- **Interaction**: Reddit interaction management
+
+## Configuration
+
+### Environment Variables
+
+Copy `env.example` to `.env` and configure:
+
 ```bash
-make run-pipeline       # Run pipeline manually
-docker-compose down     # Stop all services
-docker-compose up -d    # Start all services
+# OpenAI API
+OPENAI_API_KEY=your_openai_key
+
+# Reddit API
+REDDIT_CLIENT_ID=your_reddit_client_id
+REDDIT_CLIENT_SECRET=your_reddit_client_secret
+REDDIT_USER_AGENT=your_user_agent
+
+# Zazzle Integration
+ZAZZLE_AFFILIATE_ID=your_affiliate_id
+ZAZZLE_TRACKING_CODE=your_tracking_code
+
+# Imgur API
+IMGUR_CLIENT_ID=your_imgur_client_id
 ```
 
-## 🌐 Access Points
+### Model Configuration
 
-After deployment:
-- **Frontend**: http://localhost:5173
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **Idea Generation**: GPT-3.5-turbo (default) or GPT-4
+- **Image Generation**: DALL-E-3 (default) or DALL-E-2
+- **Content Generation**: GPT-3.5-turbo
 
-## 📈 Features
+## API Endpoints
 
-### AI-Powered Product Generation
-- Analyzes Reddit trends using GPT
-- Creates custom artwork with DALL-E
-- Generates product descriptions and titles
-- Optimizes for engagement and sales
+- `GET /health`: Health check
+- `GET /api/generated_products`: List generated products
+- `POST /api/generate`: Manual product generation
+- `GET /docs`: API documentation (Swagger UI)
 
-### Automated Workflow
-- Scheduled pipeline execution
-- Reddit community engagement
-- Affiliate link generation
-- Product tracking and analytics
+## Monitoring
 
-### Modern Tech Stack
-- TypeScript frontend with modern UI
-- FastAPI backend with automatic docs
-- Docker containerization
-- Health monitoring and logging
+### Health Checks
 
-## 🔒 Security & Best Practices
+All services include health checks:
+- **API**: `/health` endpoint
+- **Database**: Connection and migration status
+- **Services**: Process status and resource usage
 
-- Environment variable validation
-- Structured logging with rotation
-- Health checks for all services
-- Graceful error handling
-- API rate limiting
-- Secure credential management
+### Logging
 
-## 📚 Documentation
+Structured logging with consistent format:
+- **DEBUG**: Detailed debugging information
+- **INFO**: General operational information
+- **WARNING**: Potential issues
+- **ERROR**: Error conditions
 
-- [Deployment Guide](DEPLOYMENT.md) - Complete deployment instructions
-- [Environment Setup](env.example) - Environment variable reference
-- [API Documentation](http://localhost:8000/docs) - Interactive API docs
+## Deployment
 
-## 🚀 Production Deployment
+### Docker Compose
 
-For production environments:
+```bash
+# Start all services
+docker-compose up -d
 
-1. **Use the deployment script**:
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+### Kubernetes
+
+Complete K8s manifests available in `k8s/`:
+- Deployments for all services
+- ConfigMaps and Secrets
+- Ingress configuration
+- Persistent volumes
+
+### GitHub Actions
+
+Automated CI/CD pipeline:
+- Testing on pull requests
+- Automated deployment
+- Secret management
+- Kubernetes deployment
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Docker Build Issues**:
    ```bash
-   ./deploy.sh --clean-images
+   # Clear Docker cache
+   docker system prune
+   
+   # Rebuild with no cache
+   docker-compose build --no-cache
    ```
 
-2. **Monitor the deployment**:
+2. **Python Import Errors**:
    ```bash
-   make deployment-status
-   make validate-deployment
+   # Check virtual environment
+   which python
+   pip list
+   
+   # Reinstall dependencies
+   poetry install
    ```
 
-3. **Set up monitoring**:
+3. **Service Startup Issues**:
    ```bash
-   make show-logs
+   # Check logs
+   docker-compose logs service_name
+   
+   # Check health status
+   docker-compose ps
    ```
 
-## 🤝 Contributing
+### Performance Optimization
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `make test`
-5. Submit a pull request
+1. **Use .dockerignore** to exclude unnecessary files
+2. **Optimize Dockerfile** with proper layer ordering
+3. **Leverage build cache** for dependencies
+4. **Use multi-stage builds** to reduce image size
 
-## 📄 License
+## Contributing
 
-This project is licensed under the MIT License.
+1. **Local Development**: Write and test code locally first
+2. **Unit Tests**: Ensure all tests pass locally
+3. **Integration Tests**: Test in Docker before committing
+4. **Code Quality**: Run linting and formatting
+5. **Documentation**: Update docs for new features
 
-## 🆘 Support
+## License
 
-For issues or questions:
-1. Check the [troubleshooting section](DEPLOYMENT.md#troubleshooting)
-2. Review service logs: `make show-logs`
-3. Validate deployment: `make validate-deployment`
-4. Check service status: `make deployment-status` 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the documentation
+3. Open an issue on GitHub
+4. Check the logs for error details
+
+## Project Rules & Best Practices
+
+### Development Workflow
+
+**Local-First Development**:
+- Write and test code locally before Docker
+- Use virtual environments for dependency isolation
+- Run unit tests locally for fast feedback
+- Mock external services to avoid API costs during development
+
+**Docker Efficiency**:
+- Leverage Docker layer caching for fast rebuilds
+- Use multi-stage builds to reduce image size
+- Optimize .dockerignore to exclude unnecessary files
+- Use build cache for dependency installation
+
+**Testing Strategy**:
+- Unit tests: Run locally for fast feedback
+- Integration tests: Run in Docker for full pipeline testing
+- End-to-end tests: Run in staging environment
+- Performance tests: Run in production-like environment
+
+**Code Quality**:
+- Linting: Run locally before commits
+- Type checking: Use mypy for Python, TypeScript compiler
+- Formatting: Use black for Python, prettier for TypeScript
+- Pre-commit hooks: Automate quality checks
+
+### Docker Build Guidelines
+
+**When to Use --no-cache**:
+- Dependency changes: `requirements.txt`, `package.json`, `pyproject.toml`
+- Dockerfile changes: Base image, build steps, system packages
+- Build context changes: New files that affect COPY commands
+- CI/CD pipelines: Ensure reproducible builds
+
+**When NOT to Use --no-cache**:
+- Code changes: Python/TypeScript files (Docker detects changes automatically)
+- Configuration changes: `.env`, config files
+- Documentation: README, docs (unless they affect build)
+
+### Performance Optimization
+
+1. **Use .dockerignore** to exclude unnecessary files
+2. **Optimize Dockerfile** with proper layer ordering
+3. **Use multi-stage builds** to reduce final image size
+4. **Leverage build cache** for dependencies
+
+### Security Considerations
+
+**Secrets Management**:
+- Environment variables for sensitive data
+- GitHub Secrets for CI/CD
+- Kubernetes Secrets for production
+- No hardcoded secrets in code
+
+**Container Security**:
+- Non-root users in containers
+- Minimal base images to reduce attack surface
+- Regular security updates for base images
+- Vulnerability scanning in CI/CD 
