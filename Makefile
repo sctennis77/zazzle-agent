@@ -698,5 +698,45 @@ restart:
 export-requirements:
 	poetry run pip freeze > requirements.txt
 
+# =====================
+# Subreddit Tier Management
+# =====================
+
+create-subreddit-tiers:
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Error: Please specify SUBREDDIT"; \
+		echo "Usage: make create-subreddit-tiers SUBREDDIT=funny"; \
+		exit 1; \
+	fi
+	@echo "Creating subreddit tiers for $(SUBREDDIT)..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.subreddit_tier_service import SubredditTierService; from decimal import Decimal; session = SessionLocal(); service = SubredditTierService(session); tiers = service.create_subreddit_tiers('$(SUBREDDIT)', [{'level': 1, 'min_total_donation': Decimal('100')}, {'level': 2, 'min_total_donation': Decimal('500')}, {'level': 3, 'min_total_donation': Decimal('1000')}]); print(f'Created {len(tiers)} tiers for $(SUBREDDIT)'); session.close()"
+
+create-fundraising-goal:
+	@if [ -z "$(SUBREDDIT)" ] || [ -z "$(GOAL_AMOUNT)" ]; then \
+		echo "Error: Please specify SUBREDDIT and GOAL_AMOUNT"; \
+		echo "Usage: make create-fundraising-goal SUBREDDIT=funny GOAL_AMOUNT=500"; \
+		exit 1; \
+	fi
+	@echo "Creating fundraising goal for $(SUBREDDIT): $$(GOAL_AMOUNT)..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.subreddit_tier_service import SubredditTierService; from decimal import Decimal; session = SessionLocal(); service = SubredditTierService(session); goal = service.create_fundraising_goal('$(SUBREDDIT)', Decimal('$(GOAL_AMOUNT)')); print(f'Created goal {goal.id} for $(SUBREDDIT): $$(GOAL_AMOUNT)'); session.close()"
+
+show-subreddit-stats:
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Error: Please specify SUBREDDIT"; \
+		echo "Usage: make show-subreddit-stats SUBREDDIT=funny"; \
+		exit 1; \
+	fi
+	@echo "Showing stats for $(SUBREDDIT)..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.subreddit_tier_service import SubredditTierService; session = SessionLocal(); service = SubredditTierService(session); stats = service.get_subreddit_stats('$(SUBREDDIT)'); import json; print(json.dumps(stats, indent=2)); session.close()"
+
+check-subreddit-tiers:
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Error: Please specify SUBREDDIT"; \
+		echo "Usage: make check-subreddit-tiers SUBREDDIT=funny"; \
+		exit 1; \
+	fi
+	@echo "Checking tiers for $(SUBREDDIT)..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.subreddit_tier_service import SubredditTierService; session = SessionLocal(); service = SubredditTierService(session); completed = service.check_and_update_tiers('$(SUBREDDIT)'); print(f'Completed {len(completed)} tiers for $(SUBREDDIT)'); session.close()"
+
 %::
 	@: 

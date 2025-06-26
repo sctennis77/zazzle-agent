@@ -22,6 +22,7 @@ from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
+from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
 
@@ -813,6 +814,158 @@ async def update_task_status(
         raise
     except Exception as e:
         logger.error(f"Error updating task status: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/subreddit/{subreddit}/stats")
+async def get_subreddit_stats(subreddit: str, db: Session = Depends(get_db)):
+    """
+    Get comprehensive stats for a subreddit.
+    
+    Args:
+        subreddit: Subreddit name
+        db: Database session
+        
+    Returns:
+        Dict: Subreddit statistics
+    """
+    try:
+        tier_service = SubredditTierService(db)
+        return tier_service.get_subreddit_stats(subreddit)
+    except Exception as e:
+        logger.error(f"Error getting subreddit stats: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/subreddit/{subreddit}/tiers")
+async def create_subreddit_tiers(
+    subreddit: str,
+    tier_levels: List[Dict[str, Any]],
+    db: Session = Depends(get_db)
+):
+    """
+    Create subreddit tiers for a subreddit.
+    
+    Args:
+        subreddit: Subreddit name
+        tier_levels: List of tier configurations
+        db: Database session
+        
+    Returns:
+        Dict: Created tiers information
+    """
+    try:
+        tier_service = SubredditTierService(db)
+        tiers = tier_service.create_subreddit_tiers(subreddit, tier_levels)
+        
+        return {
+            "subreddit": subreddit,
+            "created_tiers": len(tiers),
+            "tiers": [
+                {
+                    "id": tier.id,
+                    "level": tier.tier_level,
+                    "min_total_donation": float(tier.min_total_donation),
+                    "status": tier.status
+                }
+                for tier in tiers
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error creating subreddit tiers: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/subreddit/{subreddit}/goals")
+async def create_fundraising_goal(
+    subreddit: str,
+    goal_amount: float,
+    deadline: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a fundraising goal for a subreddit.
+    
+    Args:
+        subreddit: Subreddit name
+        goal_amount: Goal amount
+        deadline: Optional deadline (ISO format)
+        db: Database session
+        
+    Returns:
+        Dict: Created goal information
+    """
+    try:
+        from decimal import Decimal
+        from datetime import datetime
+        
+        tier_service = SubredditTierService(db)
+        
+        # Parse deadline if provided
+        deadline_dt = None
+        if deadline:
+            try:
+                deadline_dt = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid deadline format")
+        
+        goal = tier_service.create_fundraising_goal(
+            subreddit=subreddit,
+            goal_amount=Decimal(str(goal_amount)),
+            deadline=deadline_dt
+        )
+        
+        return {
+            "id": goal.id,
+            "subreddit": goal.subreddit,
+            "goal_amount": float(goal.goal_amount),
+            "current_amount": float(goal.current_amount),
+            "deadline": goal.deadline.isoformat() if goal.deadline else None,
+            "status": goal.status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating fundraising goal: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/subreddit/{subreddit}/tiers/check")
+async def check_subreddit_tiers(subreddit: str, db: Session = Depends(get_db)):
+    """
+    Check and update subreddit tiers for a subreddit.
+    
+    Args:
+        subreddit: Subreddit name
+        db: Database session
+        
+    Returns:
+        Dict: Updated tiers information
+    """
+    try:
+        tier_service = SubredditTierService(db)
+        completed_tiers = tier_service.check_and_update_tiers(subreddit)
+        
+        return {
+            "subreddit": subreddit,
+            "completed_tiers": len(completed_tiers),
+            "tiers": [
+                {
+                    "id": tier.id,
+                    "level": tier.tier_level,
+                    "min_total_donation": float(tier.min_total_donation),
+                    "status": tier.status,
+                    "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
+                }
+                for tier in completed_tiers
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error checking subreddit tiers: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 

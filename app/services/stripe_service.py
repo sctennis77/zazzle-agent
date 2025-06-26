@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Donation, Sponsor, SponsorTier
 from app.models import DonationRequest, DonationStatus
+from app.subreddit_tier_service import SubredditTierService
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,33 @@ class StripeService:
             logger.error(f"Error creating sponsor record: {str(e)}")
             raise
 
+    def process_subreddit_tiers(self, db: Session, donation: Donation) -> Dict:
+        """
+        Process subreddit tiers and fundraising goals for a donation.
+        
+        Args:
+            db: Database session
+            donation: The successful donation record
+            
+        Returns:
+            Dict: Processing results
+        """
+        try:
+            if not donation.subreddit:
+                return {"subreddit": None, "completed_tiers": [], "completed_goals": []}
+            
+            tier_service = SubredditTierService(db)
+            results = tier_service.process_donation(donation)
+            
+            logger.info(f"Processed subreddit tiers for {donation.subreddit}: "
+                      f"{len(results['completed_tiers'])} tiers, {len(results['completed_goals'])} goals")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error processing subreddit tiers: {str(e)}")
+            return {"subreddit": donation.subreddit, "completed_tiers": [], "completed_goals": [], "error": str(e)}
+
     def update_donation_status(self, db: Session, payment_intent_id: str, status: DonationStatus) -> Optional[Donation]:
         """
         Update donation status in the database.
@@ -230,6 +258,10 @@ class StripeService:
                 # Create sponsor record if donation succeeded
                 if status == DonationStatus.SUCCEEDED:
                     self.create_sponsor_record(db, donation)
+                    
+                    # Process subreddit tiers and fundraising goals
+                    tier_results = self.process_subreddit_tiers(db, donation)
+                    logger.info(f"Subreddit tier processing results: {tier_results}")
                 
                 return donation
             else:
