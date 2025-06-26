@@ -32,42 +32,52 @@ class TaskQueue:
     def add_task(
         self,
         task_type: str,
-        subreddit: Optional[str] = None,
+        subreddit: str,
         sponsor_id: Optional[int] = None,
         priority: int = 0,
         scheduled_for: Optional[datetime] = None,
         context_data: Optional[Dict[str, Any]] = None,
     ) -> PipelineTask:
         """
-        Add a new task to the queue.
+        Add a task to the queue.
         
         Args:
-            task_type: Type of task (SPONSORED_POST, FRONT_PICK, CROSS_POST, SUBREDDIT_TIER_POST)
-            subreddit: Target subreddit (optional)
-            sponsor_id: Associated sponsor ID (optional)
+            task_type: Type of task (SUBREDDIT_POST)
+            subreddit: Target subreddit (use "all" for front page)
+            sponsor_id: Associated sponsor ID
             priority: Task priority (higher number = higher priority)
-            scheduled_for: When to execute the task (optional)
-            context_data: Additional context data (optional)
+            scheduled_for: When to execute the task
+            context_data: Additional context data
             
         Returns:
             PipelineTask: The created task
+            
+        Raises:
+            ValueError: If task type is invalid or subreddit is missing
         """
         try:
+            # Validate task type
+            if task_type != "SUBREDDIT_POST":
+                raise ValueError(f"Invalid task type: {task_type}. Only SUBREDDIT_POST is supported")
+            
+            # Validate subreddit
+            if not subreddit:
+                raise ValueError("Subreddit is required")
+            
             task = PipelineTask(
                 type=task_type,
                 subreddit=subreddit,
                 sponsor_id=sponsor_id,
-                status="pending",
                 priority=priority,
                 scheduled_for=scheduled_for,
-                context_data=context_data,
+                context_data=context_data or {},
+                status="pending",
             )
             
             self.session.add(task)
             self.session.commit()
-            self.session.refresh(task)
             
-            logger.info(f"Added task {task.id} of type {task_type} to queue")
+            logger.info(f"Added task {task.id} of type {task_type} for r/{subreddit} to queue")
             return task
             
         except Exception as e:
@@ -213,29 +223,27 @@ class TaskQueue:
             logger.error(f"Error getting queue status: {str(e)}")
             raise
 
-    def add_sponsored_task(self, sponsor_id: int, subreddit: str, priority: int = 10) -> PipelineTask:
+    def add_subreddit_task(self, subreddit: str, priority: int = 5) -> PipelineTask:
         """
-        Add a sponsored task to the queue.
+        Add a subreddit task to the queue.
         
         Args:
-            sponsor_id: ID of the sponsor
-            subreddit: Target subreddit
-            priority: Task priority (sponsored tasks get high priority)
+            subreddit: Target subreddit (use "all" for front page)
+            priority: Task priority
             
         Returns:
             PipelineTask: The created task
         """
         return self.add_task(
-            task_type="SPONSORED_POST",
+            task_type="SUBREDDIT_POST",
             subreddit=subreddit,
-            sponsor_id=sponsor_id,
             priority=priority,
-            context_data={"sponsored": True}
+            context_data={"subreddit_task": True}
         )
 
-    def add_front_pick_task(self, priority: int = 0) -> PipelineTask:
+    def add_front_task(self, priority: int = 0) -> PipelineTask:
         """
-        Add a front pick task to the queue.
+        Add a front page task to the queue (uses "all" subreddit).
         
         Args:
             priority: Task priority
@@ -244,25 +252,48 @@ class TaskQueue:
             PipelineTask: The created task
         """
         return self.add_task(
-            task_type="FRONT_PICK",
+            task_type="SUBREDDIT_POST",
+            subreddit="all",
             priority=priority,
-            context_data={"front_pick": True}
+            context_data={"front_task": True}
         )
 
-    def add_subreddit_tier_task(self, subreddit: str, priority: int = 5) -> PipelineTask:
+    def cleanup_stuck_tasks(self, max_duration_minutes: int = 30) -> int:
         """
-        Add a subreddit tier task to the queue.
+        Clean up tasks that have been stuck in 'in_progress' for too long.
         
         Args:
-            subreddit: Target subreddit
-            priority: Task priority
+            max_duration_minutes: Maximum time a task can be in progress before being reset
             
         Returns:
-            PipelineTask: The created task
+            int: Number of tasks cleaned up
         """
-        return self.add_task(
-            task_type="SUBREDDIT_TIER_POST",
-            subreddit=subreddit,
-            priority=priority,
-            context_data={"subreddit_tier": True}
-        ) 
+        try:
+            from datetime import timedelta
+            
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_duration_minutes)
+            
+            stuck_tasks = (
+                self.session.query(PipelineTask)
+                .filter(PipelineTask.status == "in_progress")
+                .filter(PipelineTask.created_at < cutoff_time)
+                .all()
+            )
+            
+            cleaned_count = 0
+            for task in stuck_tasks:
+                task.status = "pending"  # Reset to pending so it can be retried
+                task.error_message = f"Task was stuck in progress for {max_duration_minutes} minutes, reset to pending"
+                cleaned_count += 1
+                logger.warning(f"Reset stuck task {task.id} (type: {task.type}) back to pending")
+            
+            if cleaned_count > 0:
+                self.session.commit()
+                logger.info(f"Cleaned up {cleaned_count} stuck tasks")
+            
+            return cleaned_count
+            
+        except Exception as e:
+            self.session.rollback()
+            logger.error(f"Error cleaning up stuck tasks: {str(e)}")
+            raise 

@@ -73,6 +73,10 @@ class Donation(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
     is_anonymous = Column(Boolean, default=False, nullable=False)
+    subreddit_fundraising_goal_id = Column(Integer, ForeignKey("subreddit_fundraising_goals.id"), nullable=True, index=True)  # Associated fundraising goal
+
+    # Relationships
+    subreddit_fundraising_goal = relationship("SubredditFundraisingGoal", back_populates="donations")
 
 
 class SponsorTier(Base):
@@ -126,13 +130,15 @@ class SubredditFundraisingGoal(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     completed_at = Column(DateTime, nullable=True, index=True)
 
+    donations = relationship("Donation", back_populates="subreddit_fundraising_goal")
+
 
 class PipelineTask(Base):
     """Task queue for pipeline execution"""
     __tablename__ = "pipeline_tasks"
     id = Column(Integer, primary_key=True)
-    type = Column(String(32), nullable=False, index=True)  # SPONSORED_POST, FRONT_PICK, CROSS_POST, SUBREDDIT_TIER_POST
-    subreddit = Column(String(100), nullable=True, index=True)  # Target subreddit
+    type = Column(String(32), nullable=False, index=True)  # SUBREDDIT_POST
+    subreddit = Column(String(100), nullable=False, index=True)  # Target subreddit (use "all" for front page)
     sponsor_id = Column(Integer, ForeignKey("sponsors.id"), nullable=True, index=True)  # Associated sponsor
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending, in_progress, completed, failed
     priority = Column(Integer, default=0, nullable=False, index=True)  # Higher number = higher priority
@@ -141,8 +147,10 @@ class PipelineTask(Base):
     completed_at = Column(DateTime, nullable=True, index=True)  # When completed
     error_message = Column(Text, nullable=True)  # Error message if failed
     context_data = Column(JSON, nullable=True)  # Additional context data
+    pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=True, index=True)  # Associated pipeline run
 
     sponsor = relationship("Sponsor", backref="tasks")
+    pipeline_run = relationship("PipelineRun", backref="tasks")
 
 
 class RedditPost(Base):

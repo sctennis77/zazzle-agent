@@ -281,7 +281,7 @@ async def test_pipeline_uses_correct_model(mock_determine, mock_find_post, mock_
 
 
 @pytest.mark.asyncio
-async def test_run_task_pipeline_specific(self):
+async def test_run_task_pipeline_specific():
     """Test the task-specific pipeline method."""
     # Create mock components
     mock_reddit_agent = MagicMock()
@@ -306,10 +306,10 @@ async def test_run_task_pipeline_specific(self):
     # Mock the task-specific method
     mock_product_info = MagicMock()
     mock_product_info.product_id = "test_product_123"
-    mock_reddit_agent.get_product_info_for_task = MagicMock(return_value=[mock_product_info])
+    mock_reddit_agent.get_product_info_for_task = AsyncMock(return_value=[mock_product_info])
     
     # Mock affiliate linking
-    mock_affiliate_linker.generate_links_batch = MagicMock(return_value=[mock_product_info])
+    mock_affiliate_linker.generate_links_batch = AsyncMock(return_value=[mock_product_info])
     
     # Mock session and task
     with patch('app.pipeline.SessionLocal') as mock_session_local:
@@ -348,9 +348,9 @@ async def test_run_task_pipeline_specific(self):
                     result = await pipeline.run_task_pipeline_specific(1)
                     
                     # Verify the result
-                    self.assertIsNotNone(result)
-                    self.assertEqual(len(result), 1)
-                    self.assertEqual(result[0].product_id, "test_product_123")
+                    assert result is not None
+                    assert len(result) == 1
+                    assert result[0].product_id == "test_product_123"
                     
                     # Verify task-specific method was called
                     mock_reddit_agent.get_product_info_for_task.assert_called_once()

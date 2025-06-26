@@ -191,22 +191,17 @@ run-task-runner-once:
 	@echo "Running Task Runner once..."
 	$(POETRY) run python -c "import asyncio; from app.task_runner import TaskRunner; asyncio.run(TaskRunner().run_once())"
 
-add-front-pick-task:
-	@echo "Adding front pick task to queue..."
-	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_front_pick_task(); print(f'Added task {task.id}'); session.close()"
-
-add-sponsored-task:
-	@if [ -z "$(SPONSOR_ID)" ] || [ -z "$(SUBREDDIT)" ]; then \
-		echo "Error: Please specify SPONSOR_ID and SUBREDDIT"; \
-		echo "Usage: make add-sponsored-task SPONSOR_ID=1 SUBREDDIT=funny"; \
-		exit 1; \
-	fi
-	@echo "Adding sponsored task to queue..."
-	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_sponsored_task($(SPONSOR_ID), '$(SUBREDDIT)'); print(f'Added sponsored task {task.id} for subreddit $(SUBREDDIT)'); session.close()"
+add-front-task:
+	@echo "Adding front page task to queue..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_front_task(); print(f'Added front page task {task.id}'); session.close()"
 
 show-task-queue:
 	@echo "Showing task queue status..."
 	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); status = queue.get_queue_status(); import json; print(json.dumps(status, indent=2)); session.close()"
+
+cleanup-stuck-tasks:
+	@echo "Cleaning up stuck tasks..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); cleaned = queue.cleanup_stuck_tasks(); print(f'Cleaned up {cleaned} stuck tasks'); session.close()"
 
 # =====================
 # Frontend (React) targets
@@ -737,6 +732,15 @@ check-subreddit-tiers:
 	fi
 	@echo "Checking tiers for $(SUBREDDIT)..."
 	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.subreddit_tier_service import SubredditTierService; session = SessionLocal(); service = SubredditTierService(session); completed = service.check_and_update_tiers('$(SUBREDDIT)'); print(f'Completed {len(completed)} tiers for $(SUBREDDIT)'); session.close()"
+
+add-subreddit-task:
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Error: Please specify SUBREDDIT"; \
+		echo "Usage: make add-subreddit-task SUBREDDIT=funny"; \
+		exit 1; \
+	fi
+	@echo "Adding subreddit task to queue..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_subreddit_task('$(SUBREDDIT)'); print(f'Added subreddit task {task.id} for r/$(SUBREDDIT)'); session.close()"
 
 %::
 	@: 

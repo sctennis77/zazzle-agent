@@ -6,7 +6,7 @@ from typing import Dict, Optional
 import stripe
 from sqlalchemy.orm import Session
 
-from app.db.models import Donation, Sponsor, SponsorTier
+from app.db.models import Donation, Sponsor, SponsorTier, SubredditFundraisingGoal, PipelineTask
 from app.models import DonationRequest, DonationStatus
 from app.subreddit_tier_service import SubredditTierService
 
@@ -131,6 +131,16 @@ class StripeService:
             Donation: The created donation record
         """
         try:
+            # Find active fundraising goal for the subreddit, if any
+            fundraising_goal_id = None
+            if donation_request.subreddit:
+                goal = db.query(SubredditFundraisingGoal).filter_by(
+                    subreddit=donation_request.subreddit,
+                    status="active"
+                ).order_by(SubredditFundraisingGoal.created_at.desc()).first()
+                if goal:
+                    fundraising_goal_id = goal.id
+
             donation = Donation(
                 stripe_payment_intent_id=payment_intent_data["payment_intent_id"],
                 amount_cents=payment_intent_data["amount_cents"],
@@ -144,6 +154,7 @@ class StripeService:
                 reddit_username=donation_request.reddit_username,
                 is_anonymous=donation_request.is_anonymous,
                 stripe_metadata=payment_intent_data.get("metadata", {}),
+                subreddit_fundraising_goal_id=fundraising_goal_id,
             )
             
             db.add(donation)
@@ -257,7 +268,11 @@ class StripeService:
                 
                 # Create sponsor record if donation succeeded
                 if status == DonationStatus.SUCCEEDED:
-                    self.create_sponsor_record(db, donation)
+                    sponsor = self.create_sponsor_record(db, donation)
+                    
+                    # Create pipeline task for the sponsor
+                    if sponsor:
+                        self.create_sponsor_task(db, sponsor, donation)
                     
                     # Process subreddit tiers and fundraising goals
                     tier_results = self.process_subreddit_tiers(db, donation)
@@ -272,6 +287,49 @@ class StripeService:
             db.rollback()
             logger.error(f"Error updating donation status: {str(e)}")
             raise
+
+    def create_sponsor_task(self, db: Session, sponsor: Sponsor, donation: Donation) -> Optional[PipelineTask]:
+        """
+        Create a pipeline task for a sponsor when their donation succeeds.
+        
+        Args:
+            db: Database session
+            sponsor: The sponsor record
+            donation: The donation record
+            
+        Returns:
+            PipelineTask: The created task or None if creation failed
+        """
+        try:
+            from app.task_queue import TaskQueue
+            
+            task_queue = TaskQueue(db)
+            
+            # Determine subreddit for the task
+            subreddit = donation.subreddit or "all"
+            
+            # Create task with sponsor priority (higher priority for sponsors)
+            task = task_queue.add_task(
+                task_type="SUBREDDIT_POST",
+                subreddit=subreddit,
+                sponsor_id=sponsor.id,
+                priority=10,  # Higher priority for sponsor tasks
+                context_data={
+                    "donation_id": donation.id,
+                    "donation_amount": float(donation.amount_usd),
+                    "sponsor_tier": sponsor.tier.name if sponsor.tier else "unknown",
+                    "customer_name": donation.customer_name,
+                    "is_anonymous": donation.is_anonymous
+                }
+            )
+            
+            logger.info(f"Created sponsor task {task.id} for sponsor {sponsor.id} "
+                      f"in r/{subreddit} with priority {task.priority}")
+            return task
+            
+        except Exception as e:
+            logger.error(f"Error creating sponsor task: {str(e)}")
+            return None
 
     def get_donation_by_payment_intent(self, db: Session, payment_intent_id: str) -> Optional[Donation]:
         """

@@ -735,45 +735,63 @@ async def get_queue_status(db: Session = Depends(get_db)):
 @app.post("/api/tasks")
 async def add_task(
     task_type: str,
-    subreddit: Optional[str] = None,
-    sponsor_id: Optional[int] = None,
+    subreddit: str,
     priority: int = 0,
-    db: Session = Depends(get_db)
+    sponsor_id: Optional[int] = None,
+    scheduled_for: Optional[datetime] = None,
+    db: Session = Depends(get_db),
 ):
     """
-    Add a new task to the queue.
+    Add a task to the queue.
     
     Args:
-        task_type: Type of task
-        subreddit: Target subreddit (optional)
-        sponsor_id: Associated sponsor ID (optional)
-        priority: Task priority
-        db: Database session
+        task_type: Type of task (SUBREDDIT_POST)
+        subreddit: Target subreddit (use "all" for front page)
+        priority: Task priority (higher number = higher priority)
+        sponsor_id: Associated sponsor ID
+        scheduled_for: When to execute the task
         
     Returns:
-        Dict: Created task information
+        Dict: Task information
     """
     try:
         task_queue = TaskQueue(db)
+        
+        # Validate task type
+        if task_type != "SUBREDDIT_POST":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid task type: {task_type}. Only SUBREDDIT_POST is supported"
+            )
+        
+        # Validate subreddit
+        if not subreddit:
+            raise HTTPException(
+                status_code=400,
+                detail="Subreddit is required"
+            )
+        
         task = task_queue.add_task(
             task_type=task_type,
             subreddit=subreddit,
             sponsor_id=sponsor_id,
-            priority=priority
+            priority=priority,
+            scheduled_for=scheduled_for,
         )
         
         return {
             "id": task.id,
             "type": task.type,
             "subreddit": task.subreddit,
-            "sponsor_id": task.sponsor_id,
-            "status": task.status,
             "priority": task.priority,
-            "created_at": task.created_at.isoformat()
+            "status": task.status,
+            "created_at": task.created_at.isoformat(),
         }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error adding task: {str(e)}")
-        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

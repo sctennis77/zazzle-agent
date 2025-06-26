@@ -540,6 +540,10 @@ class Pipeline:
             session.commit()
             self.pipeline_run_id = pipeline_run.id
             
+            # Link the task to the pipeline run
+            task.pipeline_run_id = pipeline_run.id
+            session.commit()
+            
             logger.info(f"Starting task-specific pipeline for task {task_id} (type: {task.type})")
             
             # Configure Reddit agent based on task type

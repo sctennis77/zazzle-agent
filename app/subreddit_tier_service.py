@@ -37,7 +37,7 @@ class SubredditTierService:
 
     def get_subreddit_total_donations(self, subreddit: str) -> Decimal:
         """
-        Get total donations for a subreddit.
+        Get total donations for a subreddit, counting each donation only once.
         
         Args:
             subreddit: Subreddit name
@@ -45,14 +45,16 @@ class SubredditTierService:
         Returns:
             Decimal: Total donation amount
         """
-        total = (
+        # Query all succeeded donations for this subreddit (direct or via fundraising goal)
+        donations = (
             self.session.query(Donation)
             .filter(Donation.subreddit == subreddit)
             .filter(Donation.status == "succeeded")
-            .with_entities(Donation.amount_usd)
             .all()
         )
-        return sum(row[0] for row in total) if total else Decimal('0')
+        # Use a set to ensure uniqueness by donation id
+        unique_donations = {d.id: d for d in donations}.values()
+        return sum(d.amount_usd for d in unique_donations) if unique_donations else Decimal('0')
 
     def get_subreddit_tiers(self, subreddit: str) -> List[SubredditTier]:
         """
