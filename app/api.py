@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SponsorTier, Sponsor, SubredditTier, SubredditFundraisingGoal
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SponsorTier, Sponsor, SubredditTier, SubredditFundraisingGoal, PipelineTask
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus
@@ -22,6 +22,7 @@ from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
+from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
 
 # Setup logging
@@ -665,6 +666,153 @@ async def get_subreddit_fundraising(db: Session = Depends(get_db)):
         ]
     except Exception as e:
         logger.error(f"Error getting subreddit fundraising: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/tasks")
+async def get_tasks(db: Session = Depends(get_db)):
+    """
+    Get all tasks in the queue.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List[Dict]: List of tasks
+    """
+    try:
+        tasks = (
+            db.query(PipelineTask)
+            .order_by(PipelineTask.priority.desc(), PipelineTask.created_at.asc())
+            .limit(50)
+            .all()
+        )
+        
+        return [
+            {
+                "id": task.id,
+                "type": task.type,
+                "subreddit": task.subreddit,
+                "sponsor_id": task.sponsor_id,
+                "status": task.status,
+                "priority": task.priority,
+                "created_at": task.created_at.isoformat(),
+                "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                "error_message": task.error_message,
+                "context_data": task.context_data
+            }
+            for task in tasks
+        ]
+    except Exception as e:
+        logger.error(f"Error getting tasks: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/tasks/queue")
+async def get_queue_status(db: Session = Depends(get_db)):
+    """
+    Get the current status of the task queue.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        Dict: Queue status information
+    """
+    try:
+        task_queue = TaskQueue(db)
+        return task_queue.get_queue_status()
+    except Exception as e:
+        logger.error(f"Error getting queue status: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/tasks")
+async def add_task(
+    task_type: str,
+    subreddit: Optional[str] = None,
+    sponsor_id: Optional[int] = None,
+    priority: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    Add a new task to the queue.
+    
+    Args:
+        task_type: Type of task
+        subreddit: Target subreddit (optional)
+        sponsor_id: Associated sponsor ID (optional)
+        priority: Task priority
+        db: Database session
+        
+    Returns:
+        Dict: Created task information
+    """
+    try:
+        task_queue = TaskQueue(db)
+        task = task_queue.add_task(
+            task_type=task_type,
+            subreddit=subreddit,
+            sponsor_id=sponsor_id,
+            priority=priority
+        )
+        
+        return {
+            "id": task.id,
+            "type": task.type,
+            "subreddit": task.subreddit,
+            "sponsor_id": task.sponsor_id,
+            "status": task.status,
+            "priority": task.priority,
+            "created_at": task.created_at.isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error adding task: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.put("/api/tasks/{task_id}/status")
+async def update_task_status(
+    task_id: int,
+    status: str,
+    error_message: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Update task status.
+    
+    Args:
+        task_id: ID of the task
+        status: New status
+        error_message: Error message if failed (optional)
+        db: Database session
+        
+    Returns:
+        Dict: Success response
+    """
+    try:
+        task_queue = TaskQueue(db)
+        
+        if status == "completed":
+            success = task_queue.mark_completed(task_id, error_message)
+        elif status == "in_progress":
+            success = task_queue.mark_in_progress(task_id)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        return {"success": True, "message": f"Task {task_id} status updated to {status}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating task status: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 

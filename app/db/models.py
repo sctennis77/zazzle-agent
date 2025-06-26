@@ -127,6 +127,24 @@ class SubredditFundraisingGoal(Base):
     completed_at = Column(DateTime, nullable=True, index=True)
 
 
+class PipelineTask(Base):
+    """Task queue for pipeline execution"""
+    __tablename__ = "pipeline_tasks"
+    id = Column(Integer, primary_key=True)
+    type = Column(String(32), nullable=False, index=True)  # SPONSORED_POST, FRONT_PICK, CROSS_POST, SUBREDDIT_TIER_POST
+    subreddit = Column(String(100), nullable=True, index=True)  # Target subreddit
+    sponsor_id = Column(Integer, ForeignKey("sponsors.id"), nullable=True, index=True)  # Associated sponsor
+    status = Column(String(32), default="pending", nullable=False, index=True)  # pending, in_progress, completed, failed
+    priority = Column(Integer, default=0, nullable=False, index=True)  # Higher number = higher priority
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    scheduled_for = Column(DateTime, nullable=True, index=True)  # When to execute
+    completed_at = Column(DateTime, nullable=True, index=True)  # When completed
+    error_message = Column(Text, nullable=True)  # Error message if failed
+    context_data = Column(JSON, nullable=True)  # Additional context data
+
+    sponsor = relationship("Sponsor", backref="tasks")
+
+
 class RedditPost(Base):
     __tablename__ = "reddit_posts"
     id = Column(Integer, primary_key=True)
