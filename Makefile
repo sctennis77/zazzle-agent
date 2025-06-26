@@ -55,6 +55,10 @@ help:
 	@echo "  make cleanup        # Clean up Docker resources"
 	@echo "  make health-logs    # Check health with logs"
 
+# =====================
+# Development Setup
+# =====================
+
 install-poetry:
 	@echo "Installing Poetry..."
 	curl -sSL https://install.python-poetry.org | python3 -
@@ -95,6 +99,10 @@ test-pattern:
 	fi
 	$(POETRY) run pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
+# =====================
+# Core Application Commands
+# =====================
+
 run-full:
 	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
@@ -106,7 +114,9 @@ clean:
 	rm -rf outputs/ .coverage
 	@echo "(DB is preserved)"
 
-# Docker targets
+# =====================
+# Docker Commands
+# =====================
 
 docker-build: test
 	docker build -t zazzle-affiliate-agent .
@@ -114,8 +124,38 @@ docker-build: test
 docker-run:
 	docker run -v $(PWD)/outputs:/app/outputs zazzle-affiliate-agent 
 
-scrape:
-	$(POETRY) run python -m app.product_scraper 
+docker-build-all:
+	@echo "🐳 Building all Docker images..."
+	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
+	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
+	@docker build -f Dockerfile.pipeline -t zazzle-agent/pipeline:latest .
+	@docker build -f Dockerfile.interaction -t zazzle-agent/interaction:latest .
+	@echo "✅ All Docker images built successfully"
+
+docker-run-local:
+	@echo "🚀 Starting Zazzle Agent with Docker Compose..."
+	@docker-compose up -d
+	@echo "✅ Services started. Check http://localhost:5173 for frontend"
+	@echo "📊 API available at http://localhost:8000"
+
+docker-stop-local:
+	@echo "🛑 Stopping Docker Compose services..."
+	@docker-compose down
+	@echo "✅ Services stopped"
+
+docker-logs:
+	@echo "📋 Showing Docker Compose logs..."
+	@docker-compose logs -f
+
+docker-clean:
+	@echo "🧹 Cleaning up Docker resources..."
+	@docker-compose down -v
+	@docker system prune -f
+	@echo "✅ Docker cleanup completed"
+
+# =====================
+# API Management
+# =====================
 
 run-api:
 	@echo "Stopping any existing API instances..."
@@ -143,39 +183,28 @@ stop-api:
 # Frontend (React) targets
 # =====================
 
-# Start the React development server (hot reload, for local development)
 frontend-dev:
 	cd frontend && npm run dev
 
-# Build the React frontend for production (outputs to frontend/dist)
 frontend-build:
 	cd frontend && npm run build
 
-# Preview the production build locally (serves frontend/dist)
 frontend-preview:
 	cd frontend && npm run preview
 
-# Install frontend dependencies
 frontend-install:
 	cd frontend && npm install
 
-# Lint the frontend code
 frontend-lint:
 	cd frontend && npm run lint
 
-# Clean frontend node_modules and cache
 frontend-clean:
 	rm -rf frontend/node_modules frontend/.vite frontend/dist
 
-# Usage:
-#   make frontend-dev      # Start dev server at http://localhost:5173 (or next available port)
-#   make frontend-build    # Build production bundle
-#   make frontend-preview  # Preview production build
-#   make frontend-install  # Install dependencies
-#   make frontend-lint     # Lint code
-#   make frontend-clean    # Remove node_modules, .vite, and dist 
+# =====================
+# Database Management
+# =====================
 
-# Alembic commands
 alembic-init:
 	@echo "Initializing Alembic for database migrations."
 	$(POETRY) run alembic init alembic
@@ -192,8 +221,6 @@ alembic-downgrade:
 	@echo "Downgrading the database to the previous migration."
 	$(POETRY) run alembic downgrade -1 
 
-# Database & Monitoring targets
-
 check-db:
 	@echo "Checking database contents..."
 	$(POETRY) run python3 -m scripts.check_db
@@ -207,19 +234,23 @@ get-last-run:
 	$(POETRY) run python3 -m scripts.get_last_run
 
 backup-db:
-	@echo "Creating database backup..."
-	@if [ -f zazzle_pipeline.db ]; then \
-		cp zazzle_pipeline.db zazzle_pipeline.db.backup.$$(date +%Y%m%d_%H%M%S); \
-		echo "Database backed up to zazzle_pipeline.db.backup.$$(date +%Y%m%d_%H%M%S)"; \
-	else \
-		echo "No database file found to backup"; \
-	fi
+	@echo "💾 Creating database backup..."
+	@./scripts/backup-restore.sh backup-db
 
 restore-db:
-	@echo "Available backups:"
-	@ls -la zazzle_pipeline.db.backup.* 2>/dev/null || echo "No backups found"
-	@echo ""
-	@echo "To restore, run: cp zazzle_pipeline.db.backup.<timestamp> zazzle_pipeline.db"
+	@echo "💾 Restoring database..."
+	@if [ -z "$(DB)" ]; then \
+		echo "❌ No database file specified. Usage: make restore-db DB=filename.db"; \
+		echo ""; \
+		echo "Available database backups:"; \
+		./scripts/backup-restore.sh restore-db; \
+		exit 1; \
+	fi
+	@./scripts/backup-restore.sh restore-db $(DB)
+
+backup-list:
+	@echo "💾 Listing available backups..."
+	@./scripts/backup-restore.sh list
 
 # DANGEROUS: Only use these if you want to clear all data in the main database!
 reset-db:
@@ -235,11 +266,9 @@ reset-db:
 # Alias for reset-db
 fresh-db: reset-db
 
-health-check:
-	@echo "Running comprehensive health check..."
-	$(POETRY) run python3 -m scripts.health_check
-
-# Pipeline Management targets
+# =====================
+# Pipeline Management
+# =====================
 
 run-pipeline-debug:
 	@echo "Running pipeline with debug logging..."
@@ -257,11 +286,17 @@ run-pipeline-batch:
 	@echo "Running pipeline for batch processing..."
 	source .env && $(POETRY) run python -m app.main --mode full --model "$(MODEL)" $(if $(SUBREDDIT),--subreddit $(SUBREDDIT),)
 
+run-pipeline:
+	@echo "🚀 Running pipeline manually..."
+	@docker-compose exec -T pipeline python app/main.py --mode full
+
 monitor-pipeline:
 	@echo "Starting pipeline monitor..."
 	$(POETRY) run python3 -m scripts.pipeline_monitor
 
-# Logging & Debugging targets
+# =====================
+# Logging & Debugging
+# =====================
 
 logs-tail:
 	@echo "Tailing application logs..."
@@ -277,6 +312,26 @@ logs-clear:
 	@rm -f *.log
 	@echo "Logs cleared"
 
+show-logs:
+	@echo "📋 Showing logs for all services..."
+	@docker-compose logs -f
+
+show-logs-api:
+	@echo "📋 Showing API logs..."
+	@docker-compose logs -f api
+
+show-logs-pipeline:
+	@echo "📋 Showing pipeline logs..."
+	@docker-compose logs -f pipeline
+
+show-logs-frontend:
+	@echo "📋 Showing frontend logs..."
+	@docker-compose logs -f frontend
+
+# =====================
+# Testing & Development
+# =====================
+
 test-interaction-agent:
 	@echo "Testing Reddit interaction agent..."
 	$(POETRY) run python test_interaction_agent.py
@@ -284,6 +339,216 @@ test-interaction-agent:
 create-test-db:
 	@echo "Creating test database with sample data..."
 	$(POETRY) run python3 scripts/create_test_db.py
+
+scrape:
+	$(POETRY) run python -m app.product_scraper 
+
+# =====================
+# Service Management
+# =====================
+
+start-services:
+	@echo "🚀 Starting all services..."
+	@make run-api &
+	@cd frontend && npm run dev &
+	@echo "⏳ Services starting..."
+	@sleep 5
+	@echo "✅ All services started"
+	@echo "   • API: http://localhost:8000"
+	@echo "   • Frontend: http://localhost:5173"
+
+stop-services:
+	@echo "🛑 Stopping all services..."
+	@make stop-api
+	@pkill -f "npm run dev" || true
+	@echo "✅ All services stopped"
+
+restart-services:
+	@echo "🔄 Restarting all services..."
+	@make stop-services
+	@sleep 2
+	@make start-services
+
+# =====================
+# Health Check and Status
+# =====================
+
+status:
+	@echo "📊 System Status Check"
+	@echo "=================================================="
+	@echo "🔍 Checking API server..."
+	@if curl -s http://localhost:8000/api/generated_products > /dev/null; then \
+		echo "✅ API Server: RUNNING (http://localhost:8000)"; \
+	else \
+		echo "❌ API Server: NOT RUNNING"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking frontend..."
+	@if curl -s http://localhost:5173 > /dev/null; then \
+		echo "✅ Frontend: RUNNING (http://localhost:5173)"; \
+	else \
+		echo "❌ Frontend: NOT RUNNING"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking database..."
+	@if [ -f "data/zazzle_pipeline.db" ]; then \
+		echo "✅ Database: EXISTS (data/zazzle_pipeline.db)"; \
+		ls -lh data/zazzle_pipeline.db; \
+	else \
+		echo "❌ Database: NOT FOUND"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking virtual environment..."
+	@if [ -d "$(VENV_NAME)" ]; then \
+		echo "✅ Virtual Environment: EXISTS ($(VENV_NAME))"; \
+	else \
+		echo "❌ Virtual Environment: NOT FOUND"; \
+	fi
+	@echo ""
+	@echo "🔍 Checking frontend dependencies..."
+	@if [ -d "frontend/node_modules" ]; then \
+		echo "✅ Frontend Dependencies: INSTALLED"; \
+	else \
+		echo "❌ Frontend Dependencies: NOT INSTALLED"; \
+	fi
+
+health-check:
+	@echo "🏥 Running essential health check..."
+	@./scripts/health-monitor.sh --quick
+
+health-logs:
+	@echo "🏥 Running health check with logs..."
+	@./scripts/health-monitor.sh --logs
+
+# =====================
+# Kubernetes Commands
+# =====================
+
+k8s-deploy:
+	@echo "🚀 Deploying to Kubernetes..."
+	@kubectl apply -f k8s/namespace.yaml
+	@kubectl apply -f k8s/configmap.yaml
+	@kubectl apply -f k8s/secrets.yaml
+	@kubectl apply -f k8s/persistent-volume.yaml
+	@kubectl apply -f k8s/api-deployment.yaml
+	@kubectl apply -f k8s/frontend-deployment.yaml
+	@kubectl apply -f k8s/pipeline-deployment.yaml
+	@kubectl apply -f k8s/interaction-deployment.yaml
+	@kubectl apply -f k8s/ingress.yaml
+	@echo "✅ Kubernetes deployment completed"
+
+k8s-status:
+	@echo "📊 Kubernetes deployment status:"
+	@kubectl get pods -n zazzle-agent
+	@echo ""
+	@echo "🌐 Services:"
+	@kubectl get services -n zazzle-agent
+	@echo ""
+	@echo "🔗 Ingress:"
+	@kubectl get ingress -n zazzle-agent
+
+k8s-logs:
+	@echo "📋 Showing Kubernetes logs..."
+	@kubectl logs -f deployment/zazzle-agent-api -n zazzle-agent
+
+k8s-delete:
+	@echo "🗑️ Deleting Kubernetes deployment..."
+	@kubectl delete namespace zazzle-agent
+	@echo "✅ Kubernetes deployment deleted"
+
+# =====================
+# Production Deployment
+# =====================
+
+deploy-production:
+	@echo "🚀 Starting production deployment..."
+	@echo "Step 1: Running tests..."
+	@make test
+	@echo "Step 2: Building Docker images..."
+	@make docker-build-all
+	@echo "Step 3: Deploying to Kubernetes..."
+	@make k8s-deploy
+	@echo "Step 4: Checking deployment status..."
+	@make k8s-status
+	@echo "✅ Production deployment completed!"
+
+# =====================
+# Environment Setup
+# =====================
+
+setup-prod:
+	@echo "🔧 Setting up production environment..."
+	@./scripts/setup-environment.sh --production
+
+setup-dev:
+	@echo "🔧 Setting up development environment..."
+	@./scripts/setup-environment.sh
+
+setup-quick:
+	@echo "🔧 Quick environment setup (skipping API tests)..."
+	@./scripts/setup-environment.sh --skip-tests
+
+# =====================
+# Deployment Commands
+# =====================
+
+deploy:
+	@echo "🚀 Deploying Zazzle Agent from scratch..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh
+
+deploy-clean:
+	@echo "🚀 Deploying Zazzle Agent with clean images..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh --clean-images
+
+deploy-quick:
+	@echo "🚀 Quick deployment (skipping initial pipeline)..."
+	@if [ ! -f .env ]; then \
+		echo "❌ .env file not found. Please create one with required environment variables."; \
+		echo "See .env.example for required variables."; \
+		echo ""; \
+		echo "Run this first to set up your environment:"; \
+		echo "  make setup-prod"; \
+		exit 1; \
+	fi
+	@./deploy.sh --skip-pipeline
+
+validate-deployment:
+	@echo "🔍 Validating deployment..."
+	@echo "Checking API health..."
+	@curl -f -s http://localhost:8000/health > /dev/null && echo "✅ API is healthy" || echo "❌ API health check failed"
+	@echo "Checking frontend..."
+	@curl -f -s http://localhost:5173 > /dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend check failed"
+	@echo "Checking database..."
+	@docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT COUNT(*) FROM reddit_posts;" 2>/dev/null && echo "✅ Database is accessible" || echo "❌ Database check failed"
+
+deployment-status:
+	@echo "📊 Deployment Status"
+	@echo "==================="
+	@docker-compose ps
+	@echo ""
+	@echo "🔗 Service URLs:"
+	@echo "  • Frontend: http://localhost:5173"
+	@echo "  • API: http://localhost:8000"
+	@echo "  • API Docs: http://localhost:8000/docs"
+	@echo ""
+	@echo "📋 Recent logs:"
+	@docker-compose logs --tail=10
 
 # =====================
 # Complete Fresh Environment Setup
@@ -353,7 +618,7 @@ full_from_fresh_env:
 	@echo ""
 
 # =====================
-# Quick Development Setup (without full cleanup)
+# Quick Development Setup
 # =====================
 
 dev_setup:
@@ -383,453 +648,24 @@ dev_setup:
 	@echo "   • Frontend: http://localhost:5173"
 
 # =====================
-# Service Management
+# Maintenance
 # =====================
 
-start-services:
-	@echo "🚀 Starting all services..."
-	@make run-api &
-	@cd frontend && npm run dev &
-	@echo "⏳ Services starting..."
-	@sleep 5
-	@echo "✅ All services started"
-	@echo "   • API: http://localhost:8000"
-	@echo "   • Frontend: http://localhost:5173"
-
-stop-services:
-	@echo "🛑 Stopping all services..."
-	@make stop-api
-	@pkill -f "npm run dev" || true
-	@echo "✅ All services stopped"
-
-restart-services:
-	@echo "🔄 Restarting all services..."
-	@make stop-services
-	@sleep 2
-	@make start-services
-
-# =====================
-# Health Check and Status
-# =====================
-
-status:
-	@echo "📊 System Status Check"
-	@echo "=================================================="
-	@echo "🔍 Checking API server..."
-	@if curl -s http://localhost:8000/api/generated_products > /dev/null; then \
-		echo "✅ API Server: RUNNING (http://localhost:8000)"; \
-	else \
-		echo "❌ API Server: NOT RUNNING"; \
-	fi
-	@echo ""
-	@echo "🔍 Checking frontend..."
-	@if curl -s http://localhost:5173 > /dev/null; then \
-		echo "✅ Frontend: RUNNING (http://localhost:5173)"; \
-	else \
-		echo "❌ Frontend: NOT RUNNING"; \
-	fi
-	@echo ""
-	@echo "🔍 Checking database..."
-	@if [ -f "zazzle_pipeline.db" ]; then \
-		echo "✅ Database: EXISTS (zazzle_pipeline.db)"; \
-		ls -lh zazzle_pipeline.db; \
-	else \
-		echo "❌ Database: NOT FOUND"; \
-	fi
-	@echo ""
-	@echo "🔍 Checking virtual environment..."
-	@if [ -d "$(VENV_NAME)" ]; then \
-		echo "✅ Virtual Environment: EXISTS ($(VENV_NAME))"; \
-	else \
-		echo "❌ Virtual Environment: NOT FOUND"; \
-	fi
-	@echo ""
-	@echo "🔍 Checking frontend dependencies..."
-	@if [ -d "frontend/node_modules" ]; then \
-		echo "✅ Frontend Dependencies: INSTALLED"; \
-	else \
-		echo "❌ Frontend Dependencies: NOT INSTALLED"; \
-	fi
-
-# =====================
-# Docker Commands
-# =====================
-
-docker-build-all:
-	@echo "🐳 Building all Docker images..."
-	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
-	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
-	@docker build -f Dockerfile.pipeline -t zazzle-agent/pipeline:latest .
-	@docker build -f Dockerfile.interaction -t zazzle-agent/interaction:latest .
-	@echo "✅ All Docker images built successfully"
-
-docker-run-local:
-	@echo "🚀 Starting Zazzle Agent with Docker Compose..."
-	@docker-compose up -d
-	@echo "✅ Services started. Check http://localhost:5173 for frontend"
-	@echo "📊 API available at http://localhost:8000"
-
-docker-stop-local:
-	@echo "🛑 Stopping Docker Compose services..."
-	@docker-compose down
-	@echo "✅ Services stopped"
-
-docker-logs:
-	@echo "📋 Showing Docker Compose logs..."
-	@docker-compose logs -f
-
-docker-clean:
-	@echo "🧹 Cleaning up Docker resources..."
-	@docker-compose down -v
-	@docker system prune -f
-	@echo "✅ Docker cleanup completed"
-
-# =====================
-# Kubernetes Commands
-# =====================
-
-k8s-deploy:
-	@echo "🚀 Deploying to Kubernetes..."
-	@kubectl apply -f k8s/namespace.yaml
-	@kubectl apply -f k8s/configmap.yaml
-	@kubectl apply -f k8s/secrets.yaml
-	@kubectl apply -f k8s/persistent-volume.yaml
-	@kubectl apply -f k8s/api-deployment.yaml
-	@kubectl apply -f k8s/frontend-deployment.yaml
-	@kubectl apply -f k8s/pipeline-deployment.yaml
-	@kubectl apply -f k8s/interaction-deployment.yaml
-	@kubectl apply -f k8s/ingress.yaml
-	@echo "✅ Kubernetes deployment completed"
-
-k8s-status:
-	@echo "📊 Kubernetes deployment status:"
-	@kubectl get pods -n zazzle-agent
-	@echo ""
-	@echo "🌐 Services:"
-	@kubectl get services -n zazzle-agent
-	@echo ""
-	@echo "🔗 Ingress:"
-	@kubectl get ingress -n zazzle-agent
-
-k8s-logs:
-	@echo "📋 Showing Kubernetes logs..."
-	@kubectl logs -f deployment/zazzle-agent-api -n zazzle-agent
-
-k8s-delete:
-	@echo "🗑️ Deleting Kubernetes deployment..."
-	@kubectl delete namespace zazzle-agent
-	@echo "✅ Kubernetes deployment deleted"
-
-# =====================
-# Production Deployment
-# =====================
-
-deploy-production:
-	@echo "🚀 Starting production deployment..."
-	@echo "Step 1: Running tests..."
-	@make test
-	@echo "Step 2: Building Docker images..."
-	@make docker-build-all
-	@echo "Step 3: Deploying to Kubernetes..."
-	@make k8s-deploy
-	@echo "Step 4: Checking deployment status..."
-	@make k8s-status
-	@echo "✅ Production deployment completed!"
-
-# =====================
-# Simplified Deployment Commands
-# =====================
-
-# One-command deployment from scratch
-deploy:
-	@echo "🚀 Deploying Zazzle Agent from scratch..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh
-
-# Deploy with clean images
-deploy-clean:
-	@echo "🚀 Deploying Zazzle Agent with clean images..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh --clean-images
-
-# Deploy without running initial pipeline
-deploy-quick:
-	@echo "🚀 Quick deployment (skipping initial pipeline)..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh --skip-pipeline
-
-# Validate deployment
-validate-deployment:
-	@echo "🔍 Validating deployment..."
-	@echo "Checking API health..."
-	@curl -f -s http://localhost:8000/health > /dev/null && echo "✅ API is healthy" || echo "❌ API health check failed"
-	@echo "Checking frontend..."
-	@curl -f -s http://localhost:5173 > /dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend check failed"
-	@echo "Checking database..."
-	@docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT COUNT(*) FROM reddit_posts;" 2>/dev/null && echo "✅ Database is accessible" || echo "❌ Database check failed"
-
-# Show deployment status
-deployment-status:
-	@echo "📊 Deployment Status"
-	@echo "==================="
-	@docker-compose ps
-	@echo ""
-	@echo "🔗 Service URLs:"
-	@echo "  • Frontend: http://localhost:5173"
-	@echo "  • API: http://localhost:8000"
-	@echo "  • API Docs: http://localhost:8000/docs"
-	@echo ""
-	@echo "📋 Recent logs:"
-	@docker-compose logs --tail=10
-
-# Run pipeline manually
-run-pipeline:
-	@echo "🚀 Running pipeline manually..."
-	@docker-compose exec -T pipeline python app/main.py --mode full
-
-# Show logs
-show-logs:
-	@echo "📋 Showing logs for all services..."
-	@docker-compose logs -f
-
-# Show logs for specific service
-show-logs-api:
-	@echo "📋 Showing API logs..."
-	@docker-compose logs -f api
-
-show-logs-pipeline:
-	@echo "📋 Showing pipeline logs..."
-	@docker-compose logs -f pipeline
-
-show-logs-frontend:
-	@echo "📋 Showing frontend logs..."
-	@docker-compose logs -f frontend
-
-# Always run this after changing Poetry dependencies to keep Docker in sync
-export-requirements:
-	poetry run pip freeze > requirements.txt
-
-# =====================
-# Environment Setup (CRITICAL)
-# =====================
-
-# Setup environment for production (CRITICAL)
-setup-prod:
-	@echo "🔧 Setting up production environment..."
-	@./scripts/setup-environment.sh --production
-
-# Setup environment for development (Optional)
-setup-dev:
-	@echo "🔧 Setting up development environment..."
-	@./scripts/setup-environment.sh
-
-# Setup environment without API tests (CRITICAL)
-setup-quick:
-	@echo "🔧 Quick environment setup (skipping API tests)..."
-	@./scripts/setup-environment.sh --skip-tests
-
-# =====================
-# Health Monitoring (CRITICAL)
-# =====================
-
-# Essential health check (CRITICAL)
-health-check:
-	@echo "🏥 Running essential health check..."
-	@./scripts/health-monitor.sh --quick
-
-# Health check with logs (CRITICAL)
-health-logs:
-	@echo "🏥 Running health check with logs..."
-	@./scripts/health-monitor.sh --logs
-
-# =====================
-# Database Safety (CRITICAL)
-# =====================
-
-# Create database backup (CRITICAL)
-backup-db:
-	@echo "💾 Creating database backup..."
-	@./scripts/backup-restore.sh backup-db
-
-# Restore database (CRITICAL)
-restore-db:
-	@echo "💾 Restoring database..."
-	@if [ -z "$(DB)" ]; then \
-		echo "❌ No database file specified. Usage: make restore-db DB=filename.db"; \
-		echo ""; \
-		echo "Available database backups:"; \
-		./scripts/backup-restore.sh restore-db; \
-		exit 1; \
-	fi
-	@./scripts/backup-restore.sh restore-db $(DB)
-
-# List database backups (ESSENTIAL)
-backup-list:
-	@echo "💾 Listing available backups..."
-	@./scripts/backup-restore.sh list
-
-# =====================
-# Deployment (CRITICAL)
-# =====================
-
-# Deploy from scratch (CRITICAL)
-deploy:
-	@echo "🚀 Deploying Zazzle Agent from scratch..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh
-
-# Deploy with clean images
-deploy-clean:
-	@echo "🚀 Deploying Zazzle Agent with clean images..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh --clean-images
-
-# Deploy without running initial pipeline
-deploy-quick:
-	@echo "🚀 Quick deployment (skipping initial pipeline)..."
-	@if [ ! -f .env ]; then \
-		echo "❌ .env file not found. Please create one with required environment variables."; \
-		echo "See .env.example for required variables."; \
-		echo ""; \
-		echo "Run this first to set up your environment:"; \
-		echo "  make setup-prod"; \
-		exit 1; \
-	fi
-	@./deploy.sh --skip-pipeline
-
-# =====================
-# Status and Operations (CRITICAL)
-# =====================
-
-# Validate deployment (CRITICAL)
-validate-deployment:
-	@echo "🔍 Validating deployment..."
-	@echo "Checking API health..."
-	@curl -f -s http://localhost:8000/health > /dev/null && echo "✅ API is healthy" || echo "❌ API health check failed"
-	@echo "Checking frontend..."
-	@curl -f -s http://localhost:5173 > /dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend check failed"
-	@echo "Checking database..."
-	@docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT COUNT(*) FROM reddit_posts;" 2>/dev/null && echo "✅ Database is accessible" || echo "❌ Database check failed"
-
-# Show deployment status (CRITICAL)
-deployment-status:
-	@echo "📊 Deployment Status"
-	@echo "==================="
-	@docker-compose ps
-	@echo ""
-	@echo "🔗 Service URLs:"
-	@echo "  • Frontend: http://localhost:5173"
-	@echo "  • API: http://localhost:8000"
-	@echo "  • API Docs: http://localhost:8000/docs"
-	@echo ""
-	@echo "📋 Recent logs:"
-	@docker-compose logs --tail=10
-
-# Run pipeline manually (CRITICAL)
-run-pipeline:
-	@echo "🚀 Running pipeline manually..."
-	@docker-compose exec -T pipeline python app/main.py --mode full
-
-# Show logs (CRITICAL)
-show-logs:
-	@echo "📋 Showing logs for all services..."
-	@docker-compose logs -f
-
-# Show logs for specific service
-show-logs-api:
-	@echo "📋 Showing API logs..."
-	@docker-compose logs -f api
-
-show-logs-pipeline:
-	@echo "📋 Showing pipeline logs..."
-	@docker-compose logs -f pipeline
-
-# =====================
-# Database Operations (CRITICAL)
-# =====================
-
-# Check database (CRITICAL)
-check-db:
-	@echo "Checking database contents..."
-	$(POETRY) run python3 -m scripts.check_db
-
-# =====================
-# Essential Maintenance (CRITICAL)
-# =====================
-
-# Quick cleanup (ESSENTIAL)
 cleanup:
 	@echo "🧹 Quick cleanup..."
 	@echo "Cleaning Docker resources..."
 	@docker system prune -f
 	@echo "✅ Cleanup completed"
 
-# Emergency restart (CRITICAL)
 restart:
 	@echo "🔄 Restarting all services..."
 	@docker-compose restart
 	@echo "✅ Services restarted"
 
 # =====================
-# Development (Optional)
+# Dependencies
 # =====================
 
-# Install dependencies
-install-deps:
-	@echo "Installing dependencies with Poetry..."
-	$(POETRY) install
-
-# Run tests
-test:
-	$(POETRY) run pytest tests/ --cov=app
-
-# Format code
-format:
-	@echo "Formatting code with black and isort..."
-	$(POETRY) run black .
-	$(POETRY) run isort .
-
-# Lint code
-lint:
-	@echo "Linting code with flake8..."
-	$(POETRY) run flake8 app/ tests/
-
-# Always run this after changing Poetry dependencies to keep Docker in sync
 export-requirements:
 	poetry run pip freeze > requirements.txt
 
