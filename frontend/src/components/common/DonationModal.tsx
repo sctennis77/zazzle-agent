@@ -5,7 +5,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
   useStripe,
-  useElements
+  useElements,
+  ExpressCheckoutElement
 } from '@stripe/react-stripe-js';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
@@ -121,22 +122,6 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
       expressCheckoutElement.off('confirm', handleConfirm);
     };
   }, [stripe, elements, clientSecret, name, email, isAnonymous, onClose]);
-
-  // Mount Express Checkout Element when client secret is available
-  useEffect(() => {
-    if (!stripe || !elements || !clientSecret) return;
-
-    const expressCheckoutElement = elements.getElement('expressCheckout');
-    if (expressCheckoutElement) {
-      expressCheckoutElement.mount('#express-checkout-element');
-    }
-
-    return () => {
-      if (expressCheckoutElement) {
-        expressCheckoutElement.unmount();
-      }
-    };
-  }, [stripe, elements, clientSecret]);
 
   if (success) {
     return (
@@ -274,9 +259,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
         <div className="space-y-4">
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Choose Payment Method</h3>
-            <div id="express-checkout-element" className="w-full">
-              {/* Stripe Express Checkout Element will be mounted here */}
-            </div>
+            <ExpressCheckoutElement />
           </div>
         </div>
       )}
@@ -307,26 +290,6 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, p
       variables: {
         colorPrimary: '#ec4899', // Pink color to match theme
         borderRadius: '12px',
-      },
-    },
-    elements: {
-      expressCheckout: {
-        buttonType: {
-          applePay: 'donate' as const,
-          googlePay: 'donate' as const,
-          paypal: 'pay' as const,
-          klarna: 'pay' as const,
-        },
-        buttonTheme: {
-          applePay: 'white-outline' as const,
-          googlePay: 'white' as const,
-          paypal: 'gold' as const,
-        },
-        layout: {
-          maxColumns: 2,
-          maxRows: 3,
-          overflow: 'auto' as const,
-        },
       },
     },
   };
