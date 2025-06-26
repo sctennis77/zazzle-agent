@@ -57,6 +57,9 @@ class StripeService:
             if donation_request.subreddit:
                 metadata["subreddit"] = donation_request.subreddit[:100]  # Limit subreddit length
             
+            if donation_request.reddit_username:
+                metadata["reddit_username"] = donation_request.reddit_username[:100]  # Limit username length
+            
             # Create payment intent
             payment_intent = stripe.PaymentIntent.create(
                 amount=amount_cents,
@@ -137,6 +140,7 @@ class StripeService:
                 customer_name=donation_request.customer_name,
                 message=donation_request.message,
                 subreddit=donation_request.subreddit,
+                reddit_username=donation_request.reddit_username,
                 is_anonymous=donation_request.is_anonymous,
                 stripe_metadata=payment_intent_data.get("metadata", {}),
             )

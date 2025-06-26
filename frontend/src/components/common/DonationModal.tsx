@@ -24,6 +24,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [subreddit, setSubreddit] = useState(product.reddit_post.subreddit || '');
+  const [redditUsername, setRedditUsername] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
             customer_name: isAnonymous ? 'Anonymous' : name || undefined,
             message: message || undefined,
             subreddit: subreddit || undefined,
+            reddit_username: redditUsername || undefined,
             is_anonymous: isAnonymous
           })
         });
@@ -68,7 +70,7 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
     // Debounce the API call
     const timeoutId = setTimeout(createPaymentIntent, 500);
     return () => clearTimeout(timeoutId);
-  }, [amount, name, email, message, subreddit, isAnonymous]);
+  }, [amount, name, email, message, subreddit, redditUsername, isAnonymous]);
 
   // Handle Express Checkout payment
   useEffect(() => {
@@ -183,6 +185,21 @@ const DonationForm: React.FC<{ product: GeneratedProduct; onClose: () => void }>
           </select>
           <p className="text-xs text-gray-500 mt-1">
             This helps us track which communities are supporting the project
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Reddit Username (optional)</label>
+          <input
+            type="text"
+            value={redditUsername}
+            onChange={e => setRedditUsername(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent"
+            placeholder="u/your_username"
+            disabled={isAnonymous}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            We'll credit you as a sponsor (unless you choose to donate anonymously)
           </p>
         </div>
 

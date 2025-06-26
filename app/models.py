@@ -679,6 +679,7 @@ class DonationRequest(BaseModel):
     customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
     message: Optional[str] = Field(None, max_length=1000, description="Optional message from donor")
     subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit associated with the donation")
+    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
     is_anonymous: bool = Field(False, description="Whether the donation should be anonymous")
 
 
@@ -700,6 +701,7 @@ class DonationSchema(BaseModel):
     customer_name: Optional[str]
     message: Optional[str]
     subreddit: Optional[str]
+    reddit_username: Optional[str]
     is_anonymous: bool
     created_at: datetime
     updated_at: datetime
