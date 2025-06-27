@@ -269,7 +269,37 @@ alembic-upgrade:
 
 alembic-downgrade:
 	@echo "Downgrading the database to the previous migration."
-	$(POETRY) run alembic downgrade -1 
+	$(POETRY) run alembic downgrade -1
+
+# Fresh database setup with proper initialization
+setup-fresh-db:
+	@echo "🔄 Setting up fresh database..."
+	@echo "Removing existing database..."
+	@rm -f data/zazzle_pipeline.db
+	@echo "Creating data directory..."
+	@mkdir -p data
+	@echo "Applying Alembic migrations..."
+	@$(POETRY) run alembic upgrade head
+	@echo "Seeding sponsor tiers..."
+	@$(POETRY) run python scripts/seed_sponsor_tiers.py
+	@echo "✅ Fresh database setup completed!"
+
+# Quick database reset (alias for setup-fresh-db)
+reset-db: setup-fresh-db
+
+# DANGEROUS: Only use these if you want to clear all data in the main database!
+reset-db-dangerous:
+	@echo "WARNING: This will delete all data in the database!"
+	@read -p "Are you sure? Type 'yes' to confirm: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		rm -f data/zazzle_pipeline.db; \
+		echo "Database reset. Run 'make setup-fresh-db' to recreate tables."; \
+	else \
+		echo "Database reset cancelled."; \
+	fi
+
+# Alias for reset-db
+fresh-db: setup-fresh-db
 
 check-db:
 	@echo "Checking database contents..."
@@ -301,20 +331,6 @@ restore-db:
 backup-list:
 	@echo "💾 Listing available backups..."
 	@./scripts/backup-restore.sh list
-
-# DANGEROUS: Only use these if you want to clear all data in the main database!
-reset-db:
-	@echo "WARNING: This will delete all data in the database!"
-	@read -p "Are you sure? Type 'yes' to confirm: " confirm; \
-	if [ "$$confirm" = "yes" ]; then \
-		rm -f data/zazzle_pipeline.db; \
-		echo "Database reset. Run 'make alembic-upgrade' to recreate tables."; \
-	else \
-		echo "Database reset cancelled."; \
-	fi
-
-# Alias for reset-db
-fresh-db: reset-db
 
 # =====================
 # Pipeline Management
@@ -385,6 +401,10 @@ show-logs-frontend:
 test-interaction-agent:
 	@echo "Testing Reddit interaction agent..."
 	$(POETRY) run python test_interaction_agent.py
+
+test-commission-flow:
+	@echo "🚀 Running comprehensive commission workflow test..."
+	@./scripts/test_commission_workflow.sh
 
 create-test-db:
 	@echo "Creating test database with sample data..."
