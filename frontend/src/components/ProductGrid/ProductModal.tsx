@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import type { GeneratedProduct } from '../../types/productTypes';
-import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
+import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
+import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem, FaPaintBrush } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 
 interface ProductModalProps {
@@ -30,10 +30,36 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   // Expand/collapse state for post content
   const [showFullPost, setShowFullPost] = useState(false);
   const [showDonation, setShowDonation] = useState(false);
+  const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
+  const [loadingDonation, setLoadingDonation] = useState(false);
   const postContent = product.reddit_post.content || '';
   const previewLength = 200;
   const isLong = postContent.length > previewLength;
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
+
+  // Fetch donation information when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchDonationInfo = async () => {
+        setLoadingDonation(true);
+        try {
+          const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.commission_info) {
+              setCommissionInfo(data.commission_info);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching donation info:', error);
+        } finally {
+          setLoadingDonation(false);
+        }
+      };
+
+      fetchDonationInfo();
+    }
+  }, [isOpen, product.pipeline_run.id]);
 
   return (
     <>
@@ -91,8 +117,41 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             </div>
             {/* Details Section */}
             <div className="space-y-6">
-              {/* Sponsor Information */}
-              {product.product_info.sponsor_info && (
+              {/* Commission Information */}
+              {commissionInfo && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-gray-900">Commissioned by</h4>
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-purple-100 border border-purple-200">
+                        <FaPaintBrush size={20} className="text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">
+                            {commissionInfo.reddit_username}
+                          </span>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {commissionInfo.commission_type || 'Commission'}
+                          </span>
+                        </div>
+                        {commissionInfo.commission_message && (
+                          <p className="text-sm text-gray-600 mt-1 italic">
+                            "{commissionInfo.commission_message}"
+                          </p>
+                        )}
+                        {commissionInfo.donation_amount && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            Donated ${commissionInfo.donation_amount.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Fallback to Sponsor Information */}
+              {!commissionInfo && product.product_info.sponsor_info && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-900">Sponsored by</h4>
                   <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">

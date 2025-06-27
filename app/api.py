@@ -120,7 +120,7 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                             "donation_amount": float(donation.amount_usd),
                             "is_anonymous": donation.is_anonymous
                         }
-
+                
                 # Get subreddit name for reddit context
                 subreddit_name = reddit_post.subreddit.subreddit_name if reddit_post.subreddit else "unknown"
 
@@ -1097,6 +1097,71 @@ async def get_post_sponsors(
         
     except Exception as e:
         logger.error(f"Error getting sponsors for post {post_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/products/{pipeline_run_id}/donations")
+async def get_product_donations(
+    pipeline_run_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get donation information for a specific product (pipeline run).
+    
+    Args:
+        pipeline_run_id: Pipeline run ID
+        db: Database session
+        
+    Returns:
+        Dict: Donation information including sponsor and commission details
+    """
+    try:
+        # Get the pipeline task for this run
+        pipeline_task = db.query(PipelineTask).filter_by(pipeline_run_id=pipeline_run_id).first()
+        
+        if not pipeline_task:
+            return {"sponsor_info": None, "commission_info": None}
+        
+        result = {"sponsor_info": None, "commission_info": None}
+        
+        # Get sponsor information if available
+        if pipeline_task.sponsor_id:
+            sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
+            if sponsor:
+                donation = sponsor.donation
+                tier = sponsor.tier
+                result["sponsor_info"] = {
+                    "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                    "tier_name": tier.name,
+                    "tier_min_amount": float(tier.min_amount),
+                    "donation_amount": float(donation.amount_usd),
+                    "is_anonymous": donation.is_anonymous
+                }
+        
+        # Get commission information if available
+        if pipeline_task.context_data:
+            context_data = pipeline_task.context_data
+            if context_data.get("commission_message") or context_data.get("commission_type"):
+                # Get the donation from the sponsor if available
+                donation = None
+                if pipeline_task.sponsor_id:
+                    sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
+                    if sponsor:
+                        donation = sponsor.donation
+                
+                result["commission_info"] = {
+                    "commission_message": context_data.get("commission_message"),
+                    "commission_type": context_data.get("commission_type"),
+                    "reddit_username": donation.reddit_username if donation and not donation.is_anonymous else "Anonymous",
+                    "donation_amount": float(donation.amount_usd) if donation else None,
+                    "is_anonymous": donation.is_anonymous if donation else False
+                }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting donations for pipeline run {pipeline_run_id}: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

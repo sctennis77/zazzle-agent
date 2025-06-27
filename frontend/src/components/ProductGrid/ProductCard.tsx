@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import type { GeneratedProduct } from '../../types/productTypes';
-import { FaExpand, FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
+import React, { useState, useEffect } from 'react';
+import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
+import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaPaintBrush } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {
@@ -23,10 +23,34 @@ const getTierDisplay = (tierName: string) => {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [showModal, setShowModal] = useState(false);
+  const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
+  const [loadingDonation, setLoadingDonation] = useState(false);
 
   const handleImageClick = () => {
     setShowModal(true);
   };
+
+  // Fetch donation information when component mounts
+  useEffect(() => {
+    const fetchDonationInfo = async () => {
+      setLoadingDonation(true);
+      try {
+        const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.commission_info) {
+            setCommissionInfo(data.commission_info);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching donation info:', error);
+      } finally {
+        setLoadingDonation(false);
+      }
+    };
+
+    fetchDonationInfo();
+  }, [product.pipeline_run.id]);
 
   return (
     <>
@@ -57,8 +81,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             >
               <FaExpand size={16} />
             </button>
-            {/* Sponsor indicator */}
-            {product.product_info.sponsor_info && (
+            {/* Commission indicator */}
+            {commissionInfo && (
+              <div className="absolute top-2 left-2">
+                <div className="p-1.5 rounded-full bg-purple-100 border border-white shadow-sm" title={`Commissioned by ${commissionInfo.reddit_username}${commissionInfo.commission_message ? `: ${commissionInfo.commission_message}` : ''}`}>
+                  <FaPaintBrush size={12} className="text-purple-600" />
+                </div>
+              </div>
+            )}
+            {/* Fallback to sponsor indicator if no commission info */}
+            {!commissionInfo && product.product_info.sponsor_info && (
               <div className="absolute top-2 left-2">
                 {(() => {
                   const tierDisplay = getTierDisplay(product.product_info.sponsor_info.tier_name);

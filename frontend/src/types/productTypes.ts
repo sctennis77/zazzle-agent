@@ -15,6 +15,14 @@ export interface SponsorInfo {
   is_anonymous: boolean;
 }
 
+export interface CommissionInfo {
+  commission_message?: string;
+  commission_type?: string;
+  reddit_username: string;
+  donation_amount?: number;
+  is_anonymous: boolean;
+}
+
 export interface ProductInfo {
   id: number;
   pipeline_run_id: number;
