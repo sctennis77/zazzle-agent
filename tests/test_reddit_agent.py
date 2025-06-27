@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.agents.reddit_agent import RedditAgent, pick_subreddit
 from app.db.database import Base, SessionLocal, engine
-from app.db.models import PipelineRun, RedditPost
+from app.db.models import PipelineRun, RedditPost, Subreddit
 from app.pipeline_status import PipelineStatus
 from app.models import (
     DesignInstructions,
@@ -48,23 +48,19 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             prompt_version="1.0.0",
         )
         self.reddit_agent = RedditAgent(self.config)
-        self.reddit_agent.reddit = MagicMock()
-        self.reddit_agent.personality = {
-            "engagement_rules": {
-                "max_posts_per_day": 5,
-                "max_comments_per_day": 10,
-                "max_upvotes_per_day": 20,
-                "revenue_focus": {"max_affiliate_links_per_day": 3},
-                "min_time_between_actions": 0,
-            }
-        }
-        self.reddit_agent.daily_stats = {
-            "posts": 0,
-            "comments": 0,
-            "upvotes": 0,
-            "affiliate_posts": 0,
-            "last_action_time": None,
-        }
+        
+        # Fix: Use correct attribute names that match the actual RedditAgent constructor
+        self.reddit_agent.reddit_client = MagicMock()
+        self.reddit_agent.zazzle_designer = AsyncMock()
+        
+        # Remove references to non-existent attributes
+        # self.reddit_agent.reddit = MagicMock()  # This doesn't exist
+        # self.reddit_agent.product_designer = MagicMock()  # This doesn't exist
+        # self.reddit_agent.subreddit = MagicMock()  # This doesn't exist
+        
+        # Remove personality and daily_stats as they don't exist in the current RedditAgent
+        # self.reddit_agent.personality = {...}  # This doesn't exist
+        # self.reddit_agent.daily_stats = {...}  # This doesn't exist
 
         self.patcher_env = patch.dict(
             os.environ,
@@ -167,11 +163,8 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         result = await self.reddit_agent.find_and_create_product()
         self.assertEqual(result, mock_product_info)
 
-    @patch(
-        "app.zazzle_product_designer.ZazzleProductDesigner.create_product",
-        new_callable=AsyncMock,
-    )
-    async def test_create_product(self, mock_create_product):
+    async def test_create_product(self):
+        """Test the Reddit agent's ability to create products."""
         # Setup
         mock_post = MagicMock()
         mock_post.id = "test_post_id"
@@ -183,10 +176,10 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_post.comment_summary = "Test comment summary"
 
         mock_product_info = MagicMock()
-        mock_create_product.return_value = mock_product_info
+        self.reddit_agent.zazzle_designer.create_product.return_value = mock_product_info
 
-        # Simulate calling create_product via the agent's product_designer
-        result = await self.reddit_agent.product_designer.create_product(
+        # Simulate calling create_product via the agent's zazzle_designer
+        result = await self.reddit_agent.zazzle_designer.create_product(
             DesignInstructions(
                 image="https://example.com/image.jpg",
                 theme="test_theme",
@@ -203,6 +196,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
                 subreddit="test_subreddit",
             ),
         )
+        # The AsyncMock will return the mock_product_info we set up
         self.assertEqual(result, mock_product_info)
 
     @patch(
@@ -254,6 +248,12 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         # Create a session and add a processed post
         session = SessionLocal()
         Base.metadata.create_all(bind=engine)
+        
+        # Create a subreddit first
+        subreddit = Subreddit(subreddit_name="test_subreddit")
+        session.add(subreddit)
+        session.commit()
+        
         pipeline_run = PipelineRun(status=PipelineStatus.STARTED.value)
         session.add(pipeline_run)
         session.commit()
@@ -263,7 +263,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             post_id="test_post_id_1",
             title="Test Post Title 1",
             content="Test Content 1",
-            subreddit="test_subreddit",
+            subreddit_id=subreddit.id,  # Use subreddit_id instead of subreddit
             url="https://reddit.com/test1",
             permalink="/r/test/123",
             author="test_user",
@@ -276,8 +276,10 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         # Create agent with session
         agent = RedditAgent(pipeline_run_id=pipeline_run.id, session=session)
 
-        # Patch agent.subreddit.hot to return both posts
-        agent.subreddit.hot = MagicMock(return_value=[mock_post1, mock_post2])
+        # Patch agent.reddit_client.reddit.subreddit().hot to return both posts
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = [mock_post1, mock_post2]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
 
         # Mock the comment summary generation
         agent._generate_comment_summary = MagicMock(return_value="Test comment summary")
@@ -333,131 +335,11 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             self.assertEqual(result.product_id, "12345")
             self.assertEqual(result.product_url, "https://example.com/product")
 
-    async def test_analyze_post_context(self):
-        """Test the Reddit agent's ability to analyze post context."""
-        mock_post = MagicMock()
-        mock_post.title = "Test Post Title"
-        mock_post.selftext = "Test post content"
-        mock_post.score = 100
-        mock_post.num_comments = 5
-
-        mock_comment1 = MagicMock()
-        mock_comment1.body = "First comment"
-        mock_comment1.author = "user1"
-        mock_comment1.score = 50
-
-        mock_comment2 = MagicMock()
-        mock_comment2.body = "Second comment"
-        mock_comment2.author = "user2"
-        mock_comment2.score = 30
-
-        mock_comment1.stickied = False
-        mock_comment2.stickied = False
-
-        mock_comments = MagicMock()
-        mock_comments.replace_more.return_value = []
-        mock_comments.list.return_value = [mock_comment1, mock_comment2]
-        mock_post.comments = mock_comments
-        mock_post.subreddit.display_name = "golf"
-
-        self.reddit_agent._analyze_post_context = AsyncMock(
-            return_value={
-                "title": mock_post.title,
-                "content": mock_post.selftext,
-                "score": mock_post.score,
-                "num_comments": mock_post.num_comments,
-                "top_comments": [
-                    {"text": mock_comment1.body, "author": mock_comment1.author},
-                    {"text": mock_comment2.body, "author": mock_comment2.author},
-                ],
-            }
-        )
-        context = await self.reddit_agent._analyze_post_context(mock_post)
-
-        assert context["title"] == "Test Post Title"
-        assert context["content"] == "Test post content"
-        assert context["score"] == 100
-        assert context["num_comments"] == 5
-        assert len(context["top_comments"]) == 2
-
-    async def test_generate_engaging_comment(self):
-        """Test the Reddit agent's ability to generate engaging comments."""
-        context = {
-            "title": "Test Post Title",
-            "content": "Test post content",
-            "score": 100,
-            "num_comments": 5,
-            "top_comments": [
-                {"text": "First comment", "author": "user1"},
-                {"text": "Second comment", "author": "user2"},
-            ],
-        }
-
-        self.mock_openai_instance.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Generated engaging comment"))]
-        )
-
-        self.reddit_agent._generate_engaging_comment = AsyncMock(
-            return_value="Generated engaging comment"
-        )
-        comment = await self.reddit_agent._generate_engaging_comment(context)
-        assert comment == "Generated engaging comment"
-
-    async def test_generate_marketing_comment(self):
-        """Test the Reddit agent's ability to generate marketing comments."""
-        reddit_context = RedditContext(
-            post_id="test_post_id",
-            post_title="Test Post Title",
-            post_url="https://reddit.com/test",
-            subreddit="test_subreddit",
-        )
-
-        product_info = ProductInfo(
-            product_id="12345",
-            name="Test Product",
-            product_type="sticker",
-            zazzle_template_id="template123",
-            zazzle_tracking_code="tracking456",
-            image_url="https://example.com/image.jpg",
-            product_url="https://example.com/product",
-            theme="test_theme",
-            model="dall-e-3",
-            prompt_version="1.0.0",
-            reddit_context=reddit_context,
-            design_instructions={"image": "https://example.com/image.jpg"},
-            image_local_path="/path/to/image.jpg",
-        )
-
-        post_context = {
-            "title": "Test Post Title",
-            "content": "Test post content",
-            "score": 100,
-            "num_comments": 5,
-            "top_comments": [
-                {"text": "First comment", "author": "user1"},
-                {"text": "Second comment", "author": "user2"},
-            ],
-        }
-
-        self.mock_openai_instance.chat.completions.create.return_value = MagicMock(
-            choices=[
-                MagicMock(message=MagicMock(content="Generated marketing comment"))
-            ]
-        )
-
-        self.reddit_agent._generate_marketing_comment = AsyncMock(
-            return_value="Generated marketing comment"
-        )
-        comment = await self.reddit_agent._generate_marketing_comment(
-            product_info, post_context
-        )
-        assert comment == "Generated marketing comment"
-
     @patch("app.agents.reddit_agent.openai")
     async def test_find_trending_post(self, mock_openai):
         agent = RedditAgent(subreddit_name="test_subreddit")
         agent.openai = mock_openai
-        # Patch agent.subreddit.hot to return a mock submission
+        # Patch agent.reddit_client.reddit.subreddit().hot to return a mock submission
         mock_submission = MagicMock()
         mock_submission.title = "Test Post"
         mock_submission.score = 100
@@ -470,7 +352,10 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_comment.body = "Test comment"
         mock_submission.comments.replace_more = MagicMock(side_effect=lambda limit=0: None)
         mock_submission.comments.list.return_value = [mock_comment]
-        agent.subreddit.hot = MagicMock(return_value=[mock_submission])
+        
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = [mock_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
 
         # Mock the comment summary generation
         agent._generate_comment_summary = MagicMock(return_value="Summary of comments")
@@ -506,7 +391,9 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_submission.num_comments = 25
         
         # Mock the subreddit.hot method
-        agent.subreddit.hot = MagicMock(return_value=[mock_submission])
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = [mock_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
         
         # Mock the comment summary generation
         agent._generate_comment_summary = MagicMock(return_value="Test comment summary")
@@ -524,10 +411,37 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         """Test the task-specific get_product_info_for_task method."""
         agent = RedditAgent(subreddit_name="test_subreddit")
         
-        # Mock the find_and_create_product_for_task method
+        # Mock the _find_trending_post_for_task method to return a valid post
+        mock_submission = MagicMock()
+        mock_submission.id = "test_post_id"
+        mock_submission.title = "Test Post"
+        mock_submission.selftext = "Test content"
+        mock_submission.subreddit.display_name = "test_subreddit"
+        mock_submission.permalink = "/r/test/123"
+        mock_submission.url = "https://reddit.com/test"
+        mock_submission.author = "test_user"
+        mock_submission.score = 100
+        mock_submission.num_comments = 25
+        mock_submission.comment_summary = "Test comment summary"
+        
+        agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
+        
+        # Mock the _determine_product_idea method
+        mock_product_idea = MagicMock()
+        mock_product_idea.theme = "Test Theme"
+        mock_product_idea.image_description = "Test image description"
+        mock_product_idea.design_instructions = {"image_title": "Test Image"}
+        agent._determine_product_idea = MagicMock(return_value=mock_product_idea)
+        
+        # Mock the image generator
+        agent.image_generator = MagicMock()
+        agent.image_generator.generate_image = AsyncMock(return_value=("https://imgur.com/test.jpg", "/tmp/test.jpg"))
+        
+        # Mock the product designer
         mock_product_info = MagicMock()
         mock_product_info.product_id = "test_product_123"
-        agent.find_and_create_product_for_task = AsyncMock(return_value=mock_product_info)
+        agent.zazzle_designer = AsyncMock()
+        agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
         
         # Test the method
         result = await agent.get_product_info_for_task()
@@ -570,8 +484,8 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         # Mock the product designer
         mock_product_info = MagicMock()
         mock_product_info.product_id = "test_product_123"
-        agent.product_designer = MagicMock()
-        agent.product_designer.create_product = AsyncMock(return_value=mock_product_info)
+        agent.zazzle_designer = MagicMock()
+        agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
         
         # Test the method
         result = await agent.find_and_create_product_for_task()

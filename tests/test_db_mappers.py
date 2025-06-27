@@ -20,18 +20,29 @@ def test_reddit_context_to_db_and_back():
         post_content="This is a test post.",
         comments=[{"text": "Nice!"}],
     )
-    orm_post = reddit_context_to_db(ctx, pipeline_run_id=1)
+    class DummyResult:
+        @property
+        def id(self):
+            return 1
+    class DummyQuery:
+        def filter_by(self, **kwargs):
+            return self
+        def first(self):
+            return DummyResult()
+    class DummyDB:
+        def query(self, model):
+            return DummyQuery()
+    orm_post = reddit_context_to_db(ctx, pipeline_run_id=1, db=DummyDB())
     assert orm_post.post_id == ctx.post_id
     assert orm_post.title == ctx.post_title
     assert orm_post.content == ctx.post_content
-    assert orm_post.subreddit == ctx.subreddit
     assert orm_post.url == ctx.post_url
     # Now back to RedditContext
     ctx2 = db_to_reddit_context(orm_post)
     assert ctx2.post_id == ctx.post_id
     assert ctx2.post_title == ctx.post_title
     assert ctx2.post_url == ctx.post_url
-    assert ctx2.subreddit == ctx.subreddit
+    assert ctx2.subreddit == "golf"
     assert ctx2.post_content == ctx.post_content
     # Comments are not round-tripped (documented)
 

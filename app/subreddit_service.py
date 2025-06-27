@@ -219,5 +219,4 @@ class SubredditService:
 # Global instance for use throughout the application
 def get_subreddit_service() -> SubredditService:
     """Get the global subreddit service instance."""
-    from app.clients.reddit_client import get_reddit_client
-    return SubredditService(get_reddit_client()) 
+    return SubredditService(RedditClient()) 

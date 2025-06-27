@@ -204,6 +204,32 @@ cleanup-stuck-tasks:
 	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); cleaned = queue.cleanup_stuck_tasks(); print(f'Cleaned up {cleaned} stuck tasks'); session.close()"
 
 # =====================
+# Testing Commands
+# =====================
+
+test-task-runner:
+	@echo "🧪 Testing Task Runner independently..."
+	$(POETRY) run python scripts/test_task_runner.py
+
+test-end-to-end:
+	@echo "🚀 Testing full end-to-end pipeline..."
+	$(POETRY) run python scripts/test_end_to_end.py
+
+test-pipeline-curl:
+	@echo "🔄 Testing pipeline with curl donation + webhook replay..."
+	@echo "Step 1: Creating donation via curl..."
+	@curl -s -X POST http://localhost:8000/api/donations/create-checkout-session \
+		-H "Content-Type: application/json" \
+		-d '{"amount": 25.0, "subreddit": "golf", "donation_type": "commission"}' | jq .
+	@echo ""
+	@echo "Step 2: Replaying webhook (requires custom_webhook.json)..."
+	@if [ -f custom_webhook.json ]; then \
+		echo "✅ Webhook file found, you can now run: make test-end-to-end"; \
+	else \
+		echo "❌ custom_webhook.json not found. Please run a webhook first."; \
+	fi
+
+# =====================
 # Frontend (React) targets
 # =====================
 

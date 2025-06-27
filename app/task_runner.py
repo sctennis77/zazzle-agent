@@ -24,10 +24,12 @@ from app.image_generator import ImageGenerator
 from app.models import PipelineConfig
 from app.pipeline import Pipeline
 from app.task_queue import TaskQueue
-from app.utils.logging_config import get_logger
+from app.utils.logging_config import get_logger, setup_logging
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
+# Set up logging for task runner
+setup_logging(log_level="INFO", console_output=True)
 logger = get_logger(__name__)
 
 
@@ -73,7 +75,6 @@ class TaskRunner:
             # Get the next task
             task = task_queue.get_next_task()
             if not task:
-                logger.debug("No tasks available for processing")
                 return
             
             task_id = task.id  # Store the ID
@@ -88,7 +89,7 @@ class TaskRunner:
                 logger.error(f"Failed to process task {task_id}")
                 
         except Exception as e:
-            logger.error(f"Error processing tasks: {str(e)}")
+            logger.error(f"Error processing tasks: {str(e)}", exc_info=True)
         finally:
             if session:
                 session.close()
@@ -145,6 +146,7 @@ class TaskRunner:
                 pipeline_run_id=None,  # Will be set by pipeline
                 session=session,
                 subreddit_name=subreddit_name,  # Could be "all" or specific subreddit
+                task_context=task.context_data,  # Pass task context for commissioning
             )
             
             content_generator = ContentGenerator()
@@ -184,14 +186,14 @@ class TaskRunner:
                 
         except Exception as e:
             error_msg = f"Error processing task {task_id}: {str(e)}"
-            logger.error(error_msg)
+            logger.error(error_msg, exc_info=True)
             
             # Mark task as failed - fetch fresh from session
             try:
                 task_queue = TaskQueue(session)
                 task_queue.mark_completed(task_id, error_message=error_msg)
             except Exception as mark_error:
-                logger.error(f"Error marking task {task_id} as failed: {str(mark_error)}")
+                logger.error(f"Error marking task {task_id} as failed: {str(mark_error)}", exc_info=True)
             
             return False
 

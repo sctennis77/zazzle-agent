@@ -2,11 +2,12 @@ import logging
 import os
 import traceback
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import stripe
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -16,10 +17,11 @@ from app.db.database import SessionLocal, get_db, init_db
 from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SponsorTier, Sponsor, SubredditTier, SubredditFundraisingGoal, PipelineTask
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
-    DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus
+    DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus,
+    CheckoutSessionResponse, ProductInfoSchema, RedditContext
 )
 from app.models import ProductInfo as ProductInfoDataClass
-from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
+from app.models import RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
 from app.subreddit_service import get_subreddit_service
@@ -137,57 +139,36 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     ),
                 )
 
-                product_info_data = ProductInfoDataClass(
-                    product_id=str(product_info.id),
-                    name=product_info.theme,
-                    product_type=product_info.product_type,
-                    image_url=product_info.image_url,
-                    product_url=product_info.product_url,
-                    zazzle_template_id=product_info.template_id,
-                    zazzle_tracking_code="",  # This should come from config
-                    theme=product_info.theme,
-                    model=product_info.model,
-                    prompt_version=product_info.prompt_version,
-                    reddit_context=reddit_context,
-                    design_instructions={
-                        "description": product_info.design_description
-                    },
-                    affiliate_link=product_info.affiliate_link,
-                )
-
                 # Convert to Pydantic schemas using model_validate
-                try:
-                    product_schema = ProductInfoSchema.model_validate(product_info)
-                    pipeline_schema = PipelineRunSchema.model_validate(run)
-                    reddit_schema = RedditPostSchema.model_validate(reddit_post)
-                    
-                    # Fetch usage data
-                    usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
-                    usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
+                product_schema = ProductInfoSchema.model_validate(product_info)
+                pipeline_schema = PipelineRunSchema.model_validate(run)
+                reddit_post_dict = reddit_post.__dict__.copy()
+                reddit_post_dict['subreddit'] = reddit_post.subreddit.subreddit_name if reddit_post.subreddit else None
+                reddit_schema = RedditPostSchema.model_validate(reddit_post_dict)
+                
+                # Fetch usage data
+                usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
+                usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
 
-                    # Add sponsor info to the schema if available
-                    if sponsor_info:
-                        product_schema.sponsor_info = sponsor_info
+                # Add sponsor info to the schema if available
+                if sponsor_info:
+                    product_schema.sponsor_info = sponsor_info
 
-                    products.append(
-                        GeneratedProductSchema(
-                            product_info=product_schema,
-                            pipeline_run=pipeline_schema,
-                            reddit_post=reddit_schema,
-                            usage=usage_schema,
-                        )
+                products.append(
+                    GeneratedProductSchema(
+                        product_info=product_schema,
+                        pipeline_run=pipeline_schema,
+                        reddit_post=reddit_schema,
+                        usage=usage_schema,
                     )
-                    logger.info(
-                        f"Successfully converted pipeline run {run.id} to schema with usage data"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Error converting pipeline run {run.id} to schema: {str(e)}"
-                    )
-                    logger.error(traceback.format_exc())
-                    continue
+                )
+                logger.info(
+                    f"Successfully converted pipeline run {run.id} to schema with usage data"
+                )
             except Exception as e:
-                logger.error(f"Error processing pipeline run {run.id}: {str(e)}")
+                logger.error(
+                    f"Error converting pipeline run {run.id} to schema: {str(e)}"
+                )
                 logger.error(traceback.format_exc())
                 continue
         logger.info(f"Returning {len(products)} products.")
@@ -300,136 +281,228 @@ async def get_product_by_image(image_name: str):
         db.close()
 
 
-@app.post("/api/donations/create-payment-intent", response_model=DonationResponse)
-async def create_donation_payment_intent(
+@app.post("/api/donations/create-checkout-session", response_model=CheckoutSessionResponse)
+async def create_checkout_session(
     donation_request: DonationRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Create a Stripe payment intent for a donation.
+    Create a Stripe Checkout session for Express Checkout Element.
     
-    Args:
-        donation_request: The donation request
-        db: Database session
-        
-    Returns:
-        DonationResponse: Payment intent information
+    This follows Stripe's best practices by using their hosted checkout page
+    which handles all payment processing securely on Stripe's servers.
     """
     try:
-        logger.info(f"Creating payment intent for donation: ${donation_request.amount_usd}")
+        logger.info(f"Creating checkout session for {donation_request.donation_type} donation: ${donation_request.amount_usd}")
         
-        # Create payment intent
-        payment_intent_data = stripe_service.create_payment_intent(donation_request)
+        # --- NEW: Check post_id existence for support donations ---
+        if donation_request.donation_type == "support":
+            if not donation_request.post_id:
+                raise HTTPException(status_code=422, detail="post_id is required for support donations")
+            # Check if post_id exists in a completed pipeline run
+            from app.db.models import PipelineRun, RedditPost
+            pipeline_run = (
+                db.query(PipelineRun)
+                .join(RedditPost, PipelineRun.id == RedditPost.pipeline_run_id)
+                .filter(
+                    PipelineRun.status == "completed",
+                    RedditPost.post_id == donation_request.post_id
+                )
+                .first()
+            )
+            if not pipeline_run:
+                raise HTTPException(status_code=422, detail=f"No completed pipeline run found for post_id '{donation_request.post_id}'")
+        # --- END NEW ---
+
+        # Convert amount to cents for Stripe
+        amount_cents = int(float(donation_request.amount_usd) * 100)
         
-        # Save donation to database
-        donation = stripe_service.save_donation_to_db(db, payment_intent_data, donation_request)
+        # Create checkout session with Express Checkout support
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card', 'link'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': f'{donation_request.donation_type.title()} Donation',
+                        'description': f'Donation to r/{donation_request.subreddit}',
+                    },
+                    'unit_amount': amount_cents,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/success?session_id={{CHECKOUT_SESSION_ID}}',
+            cancel_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/cancel',
+            customer_email=donation_request.customer_email,
+            metadata={
+                'donation_type': donation_request.donation_type,
+                'subreddit': donation_request.subreddit,
+                'post_id': donation_request.post_id or '',
+                'commission_message': donation_request.commission_message or '',
+                'message': donation_request.message or '',
+                'customer_name': donation_request.customer_name or '',
+                'reddit_username': donation_request.reddit_username or '',
+                'is_anonymous': str(donation_request.is_anonymous),
+            },
+            payment_intent_data={
+                'metadata': {
+                    'donation_type': donation_request.donation_type,
+                    'subreddit': donation_request.subreddit,
+                    'post_id': donation_request.post_id or '',
+                    'commission_message': donation_request.commission_message or '',
+                    'message': donation_request.message or '',
+                    'customer_name': donation_request.customer_name or '',
+                    'reddit_username': donation_request.reddit_username or '',
+                    'is_anonymous': str(donation_request.is_anonymous),
+                }
+            }
+        )
         
-        logger.info(f"Successfully created payment intent {payment_intent_data['payment_intent_id']} for donation {donation.id}")
+        logger.info(f"Created checkout session {checkout_session.id} for donation")
         
-        return DonationResponse(
-            client_secret=payment_intent_data["client_secret"],
-            payment_intent_id=payment_intent_data["payment_intent_id"],
-            amount_cents=payment_intent_data["amount_cents"],
-            amount_usd=payment_intent_data["amount_usd"],
+        return CheckoutSessionResponse(
+            session_id=checkout_session.id,
+            url=checkout_session.url
         )
         
     except Exception as e:
-        logger.error(f"Error creating payment intent: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error creating checkout session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
 
 
 @app.post("/api/donations/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    """
-    Handle Stripe webhook events.
-    
-    Args:
-        request: FastAPI request object
-        db: Database session
-        
-    Returns:
-        Dict: Success response
-    """
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
     try:
-        # Get the raw body
         body = await request.body()
-        sig_header = request.headers.get("stripe-signature")
+        sig_header = request.headers.get('stripe-signature')
         
-        if not sig_header:
-            raise HTTPException(status_code=400, detail="Missing stripe-signature header")
-        
-        # Verify webhook signature
-        try:
-            webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-            if not webhook_secret:
-                logger.warning("STRIPE_WEBHOOK_SECRET not set, skipping signature verification")
-                event = stripe.Webhook.construct_event(body, sig_header, webhook_secret or "dummy")
-            else:
-                event = stripe.Webhook.construct_event(body, sig_header, webhook_secret)
-        except ValueError as e:
-            logger.error(f"Invalid payload: {str(e)}")
-            raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.error.SignatureVerificationError as e:
-            logger.error(f"Invalid signature: {str(e)}")
-            raise HTTPException(status_code=400, detail="Invalid signature")
+        # For development/testing with Stripe CLI, skip signature verification
+        webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+        if not webhook_secret or os.getenv('STRIPE_CLI_MODE', 'false').lower() == 'true':
+            # Parse event without signature verification for development
+            import json
+            event = json.loads(body)
+            logger.info("Skipping webhook signature verification (development mode)")
+        else:
+            if not sig_header:
+                raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+            
+            # Verify webhook signature
+            try:
+                event = stripe.Webhook.construct_event(
+                    body, sig_header, webhook_secret
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail="Invalid payload")
+            except stripe.error.SignatureVerificationError as e:
+                raise HTTPException(status_code=400, detail="Invalid signature")
         
         logger.info(f"Received Stripe webhook event: {event['type']}")
         
         # Handle the event
-        if event["type"] == "payment_intent.succeeded":
-            payment_intent = event["data"]["object"]
-            payment_intent_id = payment_intent["id"]
-            
-            # Update donation status
-            donation = stripe_service.update_donation_status(
-                db, payment_intent_id, DonationStatus.SUCCEEDED
-            )
-            
-            if donation:
-                logger.info(f"Successfully processed payment for donation {donation.id}")
-            else:
-                logger.warning(f"No donation found for payment intent {payment_intent_id}")
-                
-        elif event["type"] == "payment_intent.payment_failed":
-            payment_intent = event["data"]["object"]
-            payment_intent_id = payment_intent["id"]
-            
-            # Update donation status
-            donation = stripe_service.update_donation_status(
-                db, payment_intent_id, DonationStatus.FAILED
-            )
-            
-            if donation:
-                logger.info(f"Payment failed for donation {donation.id}")
-            else:
-                logger.warning(f"No donation found for payment intent {payment_intent_id}")
-                
-        elif event["type"] == "payment_intent.canceled":
-            payment_intent = event["data"]["object"]
-            payment_intent_id = payment_intent["id"]
-            
-            # Update donation status
-            donation = stripe_service.update_donation_status(
-                db, payment_intent_id, DonationStatus.CANCELED
-            )
-            
-            if donation:
-                logger.info(f"Payment canceled for donation {donation.id}")
-            else:
-                logger.warning(f"No donation found for payment intent {payment_intent_id}")
-                
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            await handle_checkout_session_completed(session)
+        elif event['type'] == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            await handle_payment_intent_succeeded(payment_intent)
+        elif event['type'] == 'payment_intent.payment_failed':
+            payment_intent = event['data']['object']
+            await handle_payment_intent_failed(payment_intent)
         else:
             logger.info(f"Unhandled event type: {event['type']}")
         
-        return {"success": True}
+        return {"status": "success"}
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+
+async def handle_checkout_session_completed(session):
+    """Handle successful checkout session completion."""
+    try:
+        logger.info(f"Processing completed checkout session: {session.id}")
+        
+        # Get database session
+        db = SessionLocal()
+        try:
+            # Extract donation data from session metadata
+            metadata = session.metadata
+            payment_intent_id = session.payment_intent
+            
+            # Create donation request from metadata
+            donation_request = DonationRequest(
+                amount_usd=Decimal(session.amount_total / 100),
+                customer_email=session.customer_email,
+                customer_name=metadata.get('customer_name'),
+                message=metadata.get('message'),
+                subreddit=metadata.get('subreddit'),
+                reddit_username=metadata.get('reddit_username'),
+                is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
+                donation_type=metadata.get('donation_type'),
+                post_id=metadata.get('post_id') if metadata.get('post_id') else None,
+                commission_message=metadata.get('commission_message'),
+            )
+            
+            # Save donation to database
+            stripe_service = StripeService()
+            donation = stripe_service.save_donation_to_db(db, {
+                'payment_intent_id': payment_intent_id,
+                'amount_cents': session.amount_total,
+                'amount_usd': str(donation_request.amount_usd),
+                'metadata': metadata
+            }, donation_request)
+            
+            # Update donation status to succeeded
+            stripe_service.update_donation_status(db, payment_intent_id, DonationStatus.SUCCEEDED)
+            
+            logger.info(f"Successfully processed checkout session {session.id} for donation {donation.id}")
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling checkout session completion: {str(e)}")
+        raise
+
+
+async def handle_payment_intent_succeeded(payment_intent):
+    """Handle successful payment intent."""
+    try:
+        logger.info(f"Processing successful payment intent: {payment_intent.id}")
+        
+        # Get database session
+        db = SessionLocal()
+        try:
+            stripe_service = StripeService()
+            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling payment intent success: {str(e)}")
+        raise
+
+
+async def handle_payment_intent_failed(payment_intent):
+    """Handle failed payment intent."""
+    try:
+        logger.info(f"Processing failed payment intent: {payment_intent.id}")
+        
+        # Get database session
+        db = SessionLocal()
+        try:
+            stripe_service = StripeService()
+            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.FAILED)
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling payment intent failure: {str(e)}")
+        raise
 
 
 @app.get("/api/donations/summary", response_model=DonationSummary)
@@ -453,7 +526,10 @@ async def get_donation_summary(db: Session = Depends(get_db)):
             recent_donations=[
                 DonationSchema(
                     id=donation.id,
+                    stripe_payment_intent_id=donation.stripe_payment_intent_id,
+                    amount_cents=int(float(donation.amount_usd) * 100),
                     amount_usd=donation.amount_usd,
+                    currency="usd",
                     customer_name=donation.customer_name,
                     customer_email=donation.customer_email,
                     message=donation.message,
@@ -462,6 +538,7 @@ async def get_donation_summary(db: Session = Depends(get_db)):
                     is_anonymous=donation.is_anonymous,
                     status=donation.status,
                     created_at=donation.created_at,
+                    updated_at=donation.updated_at,
                 )
                 for donation in summary_data["recent_donations"]
             ],
@@ -496,7 +573,10 @@ async def get_donation_by_payment_intent(
         
         return DonationSchema(
             id=donation.id,
+            stripe_payment_intent_id=donation.stripe_payment_intent_id,
+            amount_cents=int(float(donation.amount_usd) * 100),
             amount_usd=donation.amount_usd,
+            currency="usd",
             customer_name=donation.customer_name,
             customer_email=donation.customer_email,
             message=donation.message,
@@ -505,6 +585,7 @@ async def get_donation_by_payment_intent(
             is_anonymous=donation.is_anonymous,
             status=donation.status,
             created_at=donation.created_at,
+            updated_at=donation.updated_at,
         )
         
     except HTTPException:
@@ -981,6 +1062,41 @@ async def check_subreddit_tiers(subreddit: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error checking subreddit tiers: {str(e)}")
         logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/posts/{post_id}/sponsors")
+async def get_post_sponsors(
+    post_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all sponsors for a specific post.
+    
+    Args:
+        post_id: Reddit post ID
+        db: Database session
+        
+    Returns:
+        List[SponsorSchema]: List of sponsors for the post
+    """
+    try:
+        # Find donations for this post
+        donations = (
+            db.query(Donation)
+            .filter_by(post_id=post_id, status=DonationStatus.SUCCEEDED.value)
+            .all()
+        )
+        
+        sponsors = []
+        for donation in donations:
+            if donation.sponsor:
+                sponsors.append(donation.sponsor)
+        
+        return sponsors
+        
+    except Exception as e:
+        logger.error(f"Error getting sponsors for post {post_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

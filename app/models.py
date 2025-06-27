@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.utils.logging_config import get_logger
 
@@ -44,6 +44,26 @@ class RedditPostSchema(BaseModel):
     author: Optional[str] = None
     score: Optional[int] = None
     num_comments: Optional[int] = None
+
+    @field_validator("subreddit", mode="before")
+    @classmethod
+    def extract_subreddit_name(cls, value):
+        """Extract subreddit name from relationship object if needed."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        # Handle SQLAlchemy relationship object
+        if hasattr(value, 'subreddit_name'):
+            return value.subreddit_name
+        # Handle case where subreddit might be a different object
+        if hasattr(value, '__class__') and 'Subreddit' in str(value.__class__):
+            # Try to get subreddit_name attribute
+            try:
+                return getattr(value, 'subreddit_name', str(value))
+            except:
+                return str(value)
+        return str(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -680,9 +700,59 @@ class DonationRequest(BaseModel):
     customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
     customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
     message: Optional[str] = Field(None, max_length=1000, description="Optional message from donor")
-    subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit associated with the donation")
-    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
+    subreddit: str = Field(..., max_length=100, description="Subreddit name (required for all donations)")
+    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor (if blank, donation is anonymous)")
     is_anonymous: bool = Field(False, description="Whether the donation should be anonymous")
+    donation_type: str = Field(..., description="Type of donation: 'commission' or 'support'")
+    post_id: Optional[str] = Field(None, max_length=100, description="Reddit post ID (required for support donations, optional for commission)")
+    commission_message: Optional[str] = Field(None, max_length=1000, description="Optional commission message (for commission donations)")
+
+    @field_validator('donation_type')
+    @classmethod
+    def validate_donation_type(cls, v):
+        """Validate donation type."""
+        if v not in ["commission", "support"]:
+            raise ValueError("donation_type must be 'commission' or 'support'")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_post_id_for_support(self):
+        """Validate that post_id is provided for support donations."""
+        if self.donation_type == "support":
+            if not self.post_id or self.post_id.strip() == "":
+                raise ValueError("post_id is required for support donations")
+        return self
+    
+    @field_validator('reddit_username')
+    @classmethod
+    def validate_anonymous_donation(cls, v, info):
+        """Set is_anonymous to True if reddit_username is blank."""
+        if not v:
+            info.data['is_anonymous'] = True
+        return v
+
+
+class CommissionRequest(BaseModel):
+    """Request model for commissioning a post."""
+    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
+    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
+    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
+    subreddit: str = Field(..., max_length=100, description="Subreddit to commission from")
+    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
+    is_anonymous: bool = Field(False, description="Whether the commission should be anonymous")
+    post_id: Optional[str] = Field(None, max_length=32, description="Reddit post ID for Gold/Platinum tiers")
+    commission_message: Optional[str] = Field(None, max_length=500, description="Optional message to display with commission badge")
+
+
+class SponsorRequest(BaseModel):
+    """Request model for sponsoring an existing post."""
+    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
+    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
+    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
+    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
+    is_anonymous: bool = Field(False, description="Whether the sponsorship should be anonymous")
+    post_id: str = Field(..., max_length=32, description="Reddit post ID to sponsor")
+    sponsor_message: Optional[str] = Field(None, max_length=500, description="Optional message from sponsor")
 
 
 class DonationResponse(BaseModel):
@@ -718,3 +788,9 @@ class DonationSummary(BaseModel):
     total_amount_usd: Decimal
     total_donors: int
     recent_donations: List[DonationSchema]
+
+
+class CheckoutSessionResponse(BaseModel):
+    """Response model for Stripe Checkout session creation."""
+    session_id: str
+    url: str

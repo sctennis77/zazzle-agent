@@ -39,14 +39,18 @@ def db_to_product_idea(
 
 
 def reddit_context_to_db(
-    reddit_context: RedditContext, pipeline_run_id: int
+    reddit_context: RedditContext, pipeline_run_id: int, db
 ) -> ORMRedditPost:
+    # Look up the Subreddit ORM instance by name
+    from app.db.models import Subreddit
+    subreddit_obj = db.query(Subreddit).filter_by(subreddit_name=reddit_context.subreddit).first()
+    subreddit_id = subreddit_obj.id if subreddit_obj else None
     return ORMRedditPost(
         pipeline_run_id=pipeline_run_id,
         post_id=reddit_context.post_id,
         title=reddit_context.post_title,
         content=getattr(reddit_context, "post_content", None),
-        subreddit=reddit_context.subreddit,
+        subreddit_id=subreddit_id,
         url=reddit_context.post_url,
         permalink=getattr(reddit_context, "permalink", None),
         author=getattr(reddit_context, "author", None),
@@ -67,7 +71,7 @@ def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:
         post_id=orm_reddit_post.post_id,
         post_title=orm_reddit_post.title,
         post_url=orm_reddit_post.url,
-        subreddit=orm_reddit_post.subreddit,
+        subreddit=orm_reddit_post.subreddit.subreddit_name if orm_reddit_post.subreddit else None,
         post_content=orm_reddit_post.content,
         permalink=orm_reddit_post.permalink,
         author=orm_reddit_post.author,
@@ -96,7 +100,7 @@ def product_info_to_db(product_info, pipeline_run_id, reddit_post_id):
         prompt_version=getattr(product_info, "prompt_version", None),
         product_type=getattr(product_info, "product_type", None),
         design_description=(
-            product_info.design_instructions.get("text")
+            product_info.design_instructions.get("description")
             if hasattr(product_info, "design_instructions")
             and isinstance(product_info.design_instructions, dict)
             else str(getattr(product_info, "design_instructions", ""))

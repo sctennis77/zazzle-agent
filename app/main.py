@@ -247,7 +247,7 @@ async def run_full_pipeline(
     raise Exception(error_msg)
 
 
-async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-2") -> None:
+async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-3") -> None:
     """Run the image generation pipeline with a given prompt."""
     image_generator = ImageGenerator(model=model)
     try:

@@ -89,14 +89,15 @@ class ImageGenerator:
     VALID_MODELS = {"dall-e-2", "dall-e-3"}
     DEFAULT_STYLES = {"dall-e-3": "vivid", "dall-e-2": "vivid"}
 
-    def __init__(self, model: str = "dall-e-2", style: Optional[str] = None) -> None:
+    def __init__(self, model: str = "dall-e-3", style: Optional[str] = None) -> None:
         """
         Initialize the image generator with OpenAI and Imgur clients.
 
         Args:
             model (str): The DALL-E model to use. Must be one of VALID_MODELS.
-                Defaults to "dall-e-2".
+                Defaults to "dall-e-3".
             style (str, optional): The style to use for image generation (e.g., "vivid", "natural").
+                Only used for DALL-E 2. DALL-E 3 doesn't support style parameter.
                 Defaults to the model's default style.
 
         Raises:
@@ -115,7 +116,11 @@ class ImageGenerator:
         self.imgur_client = ImgurClient()
         self.image_processor = ImageProcessor()
         self.model = model
-        self.style = style or self.DEFAULT_STYLES[model]
+        # Only set style for DALL-E 2, as DALL-E 3 doesn't support it
+        if model == "dall-e-2":
+            self.style = style or self.DEFAULT_STYLES[model]
+        else:
+            self.style = None
         logger.info(f"Initialized ImageGenerator with model: {model} and style: {self.style}")
 
     def get_prompt_info(self) -> Dict[str, str]:
@@ -130,7 +135,7 @@ class ImageGenerator:
     @track_openai_call(model="dall-e-3", operation="image")
     def _generate_dalle_image(self, prompt: str, size: str) -> ImagesResponse:
         """
-        Generate an image using DALL-E with tracking.
+        Generate an image using DALL-E API.
 
         Args:
             prompt (str): The text prompt for image generation
@@ -143,14 +148,25 @@ class ImageGenerator:
             ImageGenerationError: If DALL-E API call fails
         """
         try:
-            return self.client.images.generate(
-                model=self.model,
-                prompt=prompt,
-                size=size,
-                n=1,
-                style=self.style,
-                response_format="b64_json",
-            )
+            # DALL-E 3 doesn't support the style parameter
+            if self.model == "dall-e-3":
+                return self.client.images.generate(
+                    model=self.model,
+                    prompt=prompt,
+                    size=size,
+                    n=1,
+                    response_format="b64_json",
+                )
+            else:
+                # DALL-E 2 supports style parameter
+                return self.client.images.generate(
+                    model=self.model,
+                    prompt=prompt,
+                    size=size,
+                    n=1,
+                    style=self.style,
+                    response_format="b64_json",
+                )
         except Exception as e:
             raise ImageGenerationError(f"DALL-E API call failed: {str(e)}") from e
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
-import { DonationModal } from '../common/DonationModal';
+import DonationModal from '../common/DonationModal';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
@@ -231,7 +231,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
       <DonationModal
         isOpen={showDonation}
         onClose={() => setShowDonation(false)}
-        product={product}
+        subreddit={product.reddit_post.subreddit}
+        postId={product.reddit_post.post_id}
       />
     </>
   );

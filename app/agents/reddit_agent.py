@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import openai
 import praw
+from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.clients.reddit_client import RedditClient
@@ -42,6 +43,7 @@ from app.utils.logging_config import get_logger
 from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
+from app.affiliate_linker import ZazzleAffiliateLinker
 
 logger = get_logger(__name__)
 
@@ -477,69 +479,68 @@ class RedditAgent:
         reddit_post_id: int = None,
         subreddit_name: str = "golf",
         reddit_client: Optional[Any] = None,
+        task_context: Optional[Dict[str, Any]] = None,
     ):
         """
-        Initialize the Reddit agent with configuration and database session.
+        Initialize the Reddit agent.
 
         Args:
             config: Pipeline configuration
             pipeline_run_id: ID of the current pipeline run
             session: SQLAlchemy session for DB operations
             reddit_post_id: ID of the current Reddit post
-            subreddit_name: Name of the subreddit to interact with (None for random pick)
-            reddit_client: RedditClient instance (optional, will create one if not provided)
+            subreddit_name: Target subreddit name
+            reddit_client: Optional Reddit client for testing
+            task_context: Optional task context data for commissioning
         """
-        model = config.model if config else "dall-e-3"
-        prompt_version = IMAGE_GENERATION_BASE_PROMPTS[model]["version"]
         self.config = config or PipelineConfig(
-            model=model,
+            model="dall-e-3",
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
-            prompt_version=prompt_version,
+            prompt_version="1.0.0",
         )
         self.pipeline_run_id = pipeline_run_id
         self.session = session
         self.reddit_post_id = reddit_post_id
+        self.subreddit_name = subreddit_name
+        self.commission_message = None  # Optional commission message for commissioned posts
+        self.task_context = task_context or {}  # Task context for commissioning logic
         
         # Initialize Reddit client
         if reddit_client:
             self.reddit_client = reddit_client
-            self.reddit = reddit_client.reddit
         else:
-            self.reddit = praw.Reddit(
-                client_id=os.getenv("REDDIT_CLIENT_ID"),
-                client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-                user_agent=os.getenv("REDDIT_USER_AGENT", "zazzle-agent/1.0"),
-                username=os.getenv("REDDIT_USERNAME"),
-                password=os.getenv("REDDIT_PASSWORD"),
-            )
-            self.reddit_client = None
+            self.reddit_client = RedditClient()
         
-        # Handle subreddit selection
-        if subreddit_name is None:
-            # For front page picks, use a random subreddit
-            self.subreddit_name = pick_subreddit()
-            logger.info(f"Using random subreddit for front pick: {self.subreddit_name}")
-        else:
-            self.subreddit_name = subreddit_name
-            
-        # Initialize the subreddit object (works for "all" and specific subreddits)
-        self.subreddit = self.reddit.subreddit(self.subreddit_name)
-        logger.info(f"Using subreddit: r/{self.subreddit_name}")
-        
-        self.openai = openai
+        # Initialize other components
+        self.imgur_client = ImgurClient()
         self.image_generator = ImageGenerator(model=self.config.model)
-        self.product_designer = ZazzleProductDesigner()
-        if not hasattr(self, "daily_stats"):
-            self.daily_stats = {
-                "posts": 0,
-                "comments": 0,
-                "upvotes": 0,
-                "affiliate_posts": 0,
-                "organic_posts": 0,
-                "last_action_time": None,
-            }
+        self.zazzle_designer = ZazzleProductDesigner()
+        self.affiliate_linker = ZazzleAffiliateLinker(
+            zazzle_affiliate_id=self.config.zazzle_affiliate_id,
+            zazzle_tracking_code=self.config.zazzle_tracking_code,
+        )
+        
+        # Set OpenAI API key and initialize client
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        if not openai.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        self.openai = OpenAI(api_key=openai.api_key)  # Initialize the OpenAI client
+        
+        # Set the idea generation model
+        self.idea_model = self._get_idea_model()
+        
+        logger.info(f"Initialized RedditAgent for subreddit: {self.subreddit_name}")
+        logger.info(f"Using idea model: {self.idea_model}")
+        logger.info(f"Using image model: {self.config.model}")
+        logger.info(f"Pipeline run ID: {self.pipeline_run_id}")
+        logger.info(f"Reddit post ID: {self.reddit_post_id}")
+        if self.task_context:
+            logger.info(f"Task context: {self.task_context}")
+        
+        # Initialize usage tracking
+        log_session_summary()
 
     def _get_idea_model(self) -> str:
         """
@@ -732,7 +733,7 @@ class RedditAgent:
                 prompt_version=self.config.prompt_version,
             )
             logger.info(f"Design Instructions: {design_instructions}")
-            product_info = await self.product_designer.create_product(
+            product_info = await self.zazzle_designer.create_product(
                 design_instructions=design_instructions, reddit_context=reddit_context
             )
             if not product_info:
@@ -832,7 +833,7 @@ class RedditAgent:
                 prompt_version=self.config.prompt_version,
             )
             logger.info(f"Design Instructions: {design_instructions}")
-            product_info = await self.product_designer.create_product(
+            product_info = await self.zazzle_designer.create_product(
                 design_instructions=design_instructions, reddit_context=reddit_context
             )
             if not product_info:
@@ -864,20 +865,104 @@ class RedditAgent:
 
     async def get_product_info_for_task(self) -> List[ProductInfo]:
         """
-        Get product information from Reddit content using task-specific logic.
-        This method uses find_and_create_product_for_task for easier testing and mocking.
-
+        Get product info for a task (random post from subreddit).
+        
         Returns:
-            List[ProductInfo]: List of product information objects
+            List[ProductInfo]: List of generated products
         """
-        try:
-            # Find a trending post and create a product using task-specific method
-            product_info = await self.find_and_create_product_for_task()
-            if product_info:
-                return [product_info]
+        logger.info(f"Getting product info for task from subreddit: {self.subreddit_name}")
+        
+        # Find a trending post from the subreddit
+        submission = await self._find_trending_post_for_task()
+        if not submission:
+            logger.error("Failed to find trending post for task")
             return []
+        
+        # Create RedditContext from the submission
+        reddit_context = RedditContext(
+            post_id=submission.id,
+            post_title=submission.title,
+            post_url=f"https://reddit.com{submission.permalink}",
+            subreddit=submission.subreddit.display_name,
+            post_content=submission.selftext if hasattr(submission, 'selftext') else None,
+            permalink=submission.permalink,
+            author=str(submission.author) if submission.author else None,
+            score=submission.score,
+            num_comments=submission.num_comments,
+            comments=[
+                {
+                    "text": getattr(submission, "comment_summary", "No comment summary")
+                }
+            ],
+        )
+        
+        # Generate product idea
+        product_idea = self._determine_product_idea(reddit_context)
+        if not product_idea:
+            logger.error("Failed to determine product idea for task")
+            return []
+        
+        # Create product
+        product_info = await self.find_and_create_product_for_task()
+        if not product_info:
+            logger.error("Failed to create product for task")
+            return []
+        
+        return [product_info]
+
+    async def get_product_info_for_specific_post(self, post_id: str) -> List[ProductInfo]:
+        """
+        Get product info for a specific post (commission).
+        
+        Args:
+            post_id: Reddit post ID to commission
+            
+        Returns:
+            List[ProductInfo]: List of generated products
+        """
+        logger.info(f"Getting product info for specific post: {post_id}")
+        
+        try:
+            # Fetch the specific post
+            submission = self.reddit_client.get_submission(post_id)
+            if not submission:
+                logger.error(f"Failed to fetch post {post_id}")
+                return []
+            
+            # Create RedditContext from the submission
+            reddit_context = RedditContext(
+                post_id=submission.id,
+                post_title=submission.title,
+                post_url=submission.url,
+                subreddit=submission.subreddit.display_name,
+                post_content=submission.selftext if hasattr(submission, 'selftext') else None,
+                permalink=submission.permalink,
+                author=submission.author.name if submission.author else None,
+                score=submission.score,
+                num_comments=submission.num_comments,
+            )
+            
+            # Add commission message to context if available
+            if self.commission_message:
+                reddit_context.comments = [{"text": f"Commission message: {self.commission_message}"}]
+                logger.info(f"Added commission message: {self.commission_message}")
+            
+            # Generate product idea
+            product_idea = self._determine_product_idea(reddit_context)
+            if not product_idea:
+                logger.error("Failed to determine product idea for specific post")
+                return []
+            
+            # Create product
+            product_info = await self.find_and_create_product_for_task()
+            if not product_info:
+                logger.error("Failed to create product for specific post")
+                return []
+            
+            return [product_info]
+            
         except Exception as e:
-            logger.error(f"Error getting product info for task: {str(e)}")
+            logger.error(f"Error getting product info for specific post {post_id}: {str(e)}")
             return []
 
     async def get_product_info_with_design(
@@ -906,7 +991,7 @@ class RedditAgent:
             )
 
             # Create the product using the product designer
-            product_info = await self.product_designer.create_product(
+            product_info = await self.zazzle_designer.create_product(
                 design_instructions=design_instructions, reddit_context=reddit_context
             )
 
@@ -935,7 +1020,7 @@ class RedditAgent:
         reddit_post_id = None
         if self.session and self.pipeline_run_id:
             try:
-                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id)
+                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id, self.session)
                 self.session.add(orm_post)
                 self.session.commit()
                 reddit_post_id = orm_post.id
@@ -961,7 +1046,7 @@ class RedditAgent:
         try:
             for attempt in range(tries):
                 # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.subreddit.hot(limit=limit):
+                for submission in self.reddit_client.reddit.subreddit(self.subreddit_name).hot(limit=limit):
                     logger.info(
                         f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )
@@ -1012,10 +1097,33 @@ class RedditAgent:
         logger.info(
             f"Starting _find_trending_post_for_task with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
         )
+        
+        # Check if we have a specific post to commission from task context
+        if hasattr(self, 'task_context') and self.task_context:
+            post_id = self.task_context.get('post_id')
+            if post_id:
+                logger.info(f"Commissioning specific post: {post_id}")
+                try:
+                    # Fetch the specific post
+                    submission = self.reddit_client.get_submission(post_id)
+                    if submission:
+                        # Generate comment summary and add to submission
+                        comment_summary = self._generate_comment_summary(submission)
+                        submission.comment_summary = comment_summary
+                        logger.info(f"Successfully fetched commissioned post: {submission.title}")
+                        return submission
+                    else:
+                        logger.error(f"Failed to fetch commissioned post {post_id}")
+                        return None
+                except Exception as e:
+                    logger.error(f"Error fetching commissioned post {post_id}: {str(e)}")
+                    return None
+        
+        # Otherwise, find a random trending post
         try:
             for attempt in range(tries):
                 # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.subreddit.hot(limit=limit):
+                for submission in self.reddit_client.reddit.subreddit(self.subreddit_name).hot(limit=limit):
                     logger.info(
                         f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )

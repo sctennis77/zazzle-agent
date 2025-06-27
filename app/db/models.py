@@ -102,6 +102,9 @@ class Donation(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
     is_anonymous = Column(Boolean, default=False, nullable=False)
     subreddit_fundraising_goal_id = Column(Integer, ForeignKey("subreddit_fundraising_goals.id"), nullable=True, index=True)  # Associated fundraising goal
+    donation_type = Column(String(32), default="sponsor", nullable=False, index=True)  # "commission" or "sponsor"
+    post_id = Column(String(32), nullable=True, index=True)  # Reddit post ID for commissioning specific posts
+    commission_message = Column(Text, nullable=True)  # Optional message to display with commission badge
 
     # Relationships
     subreddit = relationship("Subreddit", back_populates="donations")
@@ -229,10 +232,12 @@ class ProductInfo(Base):
         index=True,
     )
     reddit_post_id = Column(
-        Integer, ForeignKey("reddit_posts.id", ondelete="CASCADE"), index=True
+        Integer,
+        ForeignKey("reddit_posts.id", ondelete="CASCADE"), index=True
     )
     theme = Column(String(256), index=True)
     image_title = Column(String(256), nullable=True, index=True)
+    image_url = Column(Text, nullable=True)  # URL to the product image
     product_url = Column(Text)
     affiliate_link = Column(Text)
     template_id = Column(String(64), index=True)

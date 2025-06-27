@@ -285,7 +285,7 @@ class Pipeline:
             orm_reddit_post = None
             if products:
                 reddit_context = products[0].reddit_context
-                orm_reddit_post = reddit_context_to_db(reddit_context, pipeline_run.id)
+                orm_reddit_post = reddit_context_to_db(reddit_context, pipeline_run.id, session)
                 session.add(orm_reddit_post)
                 session.commit()
                 self.reddit_post_id = orm_reddit_post.id
@@ -546,18 +546,39 @@ class Pipeline:
             
             logger.info(f"Starting task-specific pipeline for task {task_id} (type: {task.type})")
             
-            # Configure Reddit agent based on task type
-            if task.type == "SUBREDDIT_POST" and task.subreddit:
-                # Use specific subreddit for subreddit posts
-                self.reddit_agent.subreddit_name = task.subreddit
-                logger.info(f"Using subreddit {task.subreddit} for subreddit post")
+            # Configure Reddit agent based on task type and context
+            if task.type == "SPECIFIC_POST" and task.context_data and task.context_data.get("post_id"):
+                # Handle specific post commission
+                post_id = task.context_data["post_id"]
+                self.reddit_agent.subreddit_name = task.subreddit.subreddit_name if task.subreddit else None
+                logger.info(f"Using specific post {post_id} from subreddit {self.reddit_agent.subreddit_name}")
+                
+                # Set commission message if available
+                if task.context_data.get("commission_message"):
+                    self.reddit_agent.commission_message = task.context_data["commission_message"]
+                    logger.info(f"Commission message: {task.context_data['commission_message']}")
+                
+                # Get product info for specific post
+                products = await self.reddit_agent.get_product_info_for_specific_post(post_id)
+                
+            elif task.type == "SUBREDDIT_POST":
+                # Handle subreddit post (random or commission)
+                self.reddit_agent.subreddit_name = task.subreddit.subreddit_name if task.subreddit else None
+                
+                # Set commission message if available
+                if task.context_data and task.context_data.get("commission_message"):
+                    self.reddit_agent.commission_message = task.context_data["commission_message"]
+                    logger.info(f"Commission message: {task.context_data['commission_message']}")
+                
+                logger.info(f"Using subreddit {self.reddit_agent.subreddit_name} for subreddit post")
+                products = await self.reddit_agent.get_product_info_for_task()
+                
             else:
                 # Default to random subreddit
                 self.reddit_agent.subreddit_name = None
                 logger.info("Using random subreddit")
+                products = await self.reddit_agent.get_product_info_for_task()
             
-            # Get product info using task-specific method
-            products = await self.reddit_agent.get_product_info_for_task()
             if not products:
                 error_msg = f"No products were generated for task {task_id}. pipeline_run_id: {pipeline_run.id}"
                 raise Exception(error_msg)
@@ -577,7 +598,7 @@ class Pipeline:
             orm_reddit_post = None
             if products:
                 reddit_context = products[0].reddit_context
-                orm_reddit_post = reddit_context_to_db(reddit_context, pipeline_run.id)
+                orm_reddit_post = reddit_context_to_db(reddit_context, pipeline_run.id, session)
                 session.add(orm_reddit_post)
                 session.commit()
                 self.reddit_post_id = orm_reddit_post.id
@@ -599,75 +620,40 @@ class Pipeline:
             # Update pipeline run status
             pipeline_run.status = PipelineStatus.COMPLETED.value
             pipeline_run.end_time = datetime.utcnow()
-            
-            # Track OpenAI usage for this pipeline run
-            try:
-                usage_tracker = get_usage_tracker()
-                usage_summary = usage_tracker.get_session_summary()
-                
-                # Extract usage data
-                total_tokens = usage_summary.get("total_tokens_used", 0)
-                total_cost = usage_summary.get("total_cost_usd", "$0.0000")
-                model_breakdown = usage_summary.get("model_breakdown", {})
-                
-                # Determine models used
-                idea_model = "gpt-3.5-turbo"  # Default
-                image_model = self.config.model if self.config else "dall-e-3"
-                
-                # Find the actual models used from the breakdown
-                for model, data in model_breakdown.items():
-                    if data.get("calls", 0) > 0:
-                        if "gpt" in model.lower():
-                            idea_model = model
-                        elif "dall" in model.lower():
-                            image_model = model
-                
-                # Calculate token breakdown (approximate)
-                prompt_tokens = int(total_tokens * 0.8)  # Assume 80% prompt, 20% completion
-                completion_tokens = total_tokens - prompt_tokens
-                image_tokens = 0  # DALL-E doesn't use tokens in the same way
-                
-                # Parse cost string to decimal
-                cost_str = total_cost.replace("$", "")
-                total_cost_decimal = Decimal(cost_str)
-                
-                # Create usage record
-                pipeline_usage = PipelineRunUsage(
-                    pipeline_run_id=pipeline_run.id,
-                    idea_model=idea_model,
-                    image_model=image_model,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    image_tokens=image_tokens,
-                    total_cost_usd=total_cost_decimal
-                )
-                session.add(pipeline_usage)
-                
-                logger.info(f"Tracked OpenAI usage for task pipeline run {pipeline_run.id}: "
-                          f"idea_model={idea_model}, image_model={image_model}, "
-                          f"tokens={total_tokens}, cost={total_cost}")
-                
-            except Exception as e:
-                logger.warning(f"Failed to track OpenAI usage for task pipeline run {pipeline_run.id}: {str(e)}")
-            
+            pipeline_run.duration = int((pipeline_run.end_time - pipeline_run.start_time).total_seconds())
             session.commit()
 
             # Mark task as completed
             task_queue.mark_completed(task_id)
             
-            logger.info(f"Successfully completed task-specific pipeline for task {task_id}, generated {len(products_with_links)} products")
+            logger.info(f"Task {task_id} completed successfully. Generated {len(products_with_links)} products.")
             return products_with_links
-            
+
         except Exception as e:
-            error_msg = f"Error in task-specific pipeline for task {task_id}: {str(e)}"
-            logger.error(error_msg)
+            logger.error(f"Error in task pipeline for task {task_id}: {str(e)}")
             
             # Mark task as failed
-            if 'task_queue' in locals():
-                task_queue.mark_completed(task_id, error_message=error_msg)
+            try:
+                task_queue = TaskQueue(session)
+                task_queue.mark_completed(task_id, error_message=str(e))
+            except Exception as mark_error:
+                logger.error(f"Error marking task {task_id} as failed: {str(mark_error)}")
             
-            # Log error to database
-            self.log_error(error_msg, error_type="TASK_PIPELINE_ERROR", component="PIPELINE")
+            # Log error to database if we have a pipeline run
+            if hasattr(self, 'pipeline_run_id') and self.pipeline_run_id:
+                try:
+                    error_log = ErrorLog(
+                        pipeline_run_id=self.pipeline_run_id,
+                        error_message=str(e),
+                        error_type="PIPELINE_ERROR",
+                        component="TASK_PIPELINE",
+                        stack_trace=str(e),
+                        context_data={"task_id": task_id}
+                    )
+                    session.add(error_log)
+                    session.commit()
+                except Exception as log_error:
+                    logger.error(f"Error logging error to database: {str(log_error)}")
             
             return None
         finally:

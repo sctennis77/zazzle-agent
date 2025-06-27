@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Donation, Sponsor, SponsorTier, SubredditFundraisingGoal, PipelineTask
 from app.models import DonationRequest, DonationStatus
-from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 
 logger = logging.getLogger(__name__)
@@ -49,7 +48,7 @@ class StripeService:
             
             # Prepare metadata for the payment intent
             metadata = {
-                "donation_type": "one_time",
+                "donation_type": donation_request.donation_type,
                 "is_anonymous": str(donation_request.is_anonymous),
             }
             
@@ -61,6 +60,12 @@ class StripeService:
             
             if donation_request.reddit_username:
                 metadata["reddit_username"] = donation_request.reddit_username[:100]  # Limit username length
+            
+            if donation_request.post_id:
+                metadata["post_id"] = donation_request.post_id[:32]  # Limit post ID length
+            
+            if donation_request.commission_message:
+                metadata["commission_message"] = donation_request.commission_message[:500]  # Limit message length
             
             # Create payment intent
             payment_intent = stripe.PaymentIntent.create(
@@ -132,9 +137,19 @@ class StripeService:
             Donation: The created donation record
         """
         try:
+            # Check if donation already exists for this payment intent
+            existing_donation = db.query(Donation).filter_by(
+                stripe_payment_intent_id=payment_intent_data["payment_intent_id"]
+            ).first()
+            
+            if existing_donation:
+                logger.info(f"Donation already exists for payment intent {payment_intent_data['payment_intent_id']} (ID: {existing_donation.id})")
+                return existing_donation
+            
             # Get or create subreddit entity
             subreddit_id = None
             if donation_request.subreddit:
+                from app.subreddit_service import get_subreddit_service
                 subreddit_service = get_subreddit_service()
                 subreddit = subreddit_service.get_or_create_subreddit(donation_request.subreddit, db)
                 subreddit_id = subreddit.id
@@ -163,6 +178,9 @@ class StripeService:
                 is_anonymous=donation_request.is_anonymous,
                 stripe_metadata=payment_intent_data.get("metadata", {}),
                 subreddit_fundraising_goal_id=fundraising_goal_id,
+                donation_type=donation_request.donation_type,
+                post_id=donation_request.post_id,
+                commission_message=donation_request.commission_message,
             )
             
             db.add(donation)
@@ -303,6 +321,7 @@ class StripeService:
     def create_sponsor_task(self, db: Session, sponsor: Sponsor, donation: Donation) -> Optional[PipelineTask]:
         """
         Create a pipeline task for a sponsor when their donation succeeds.
+        Only creates tasks for commission donations.
         
         Args:
             db: Database session
@@ -310,9 +329,14 @@ class StripeService:
             donation: The donation record
             
         Returns:
-            PipelineTask: The created task or None if creation failed
+            PipelineTask: The created task or None if creation failed or not a commission
         """
         try:
+            # Only create pipeline tasks for commission donations
+            if donation.donation_type != "commission":
+                logger.info(f"Skipping task creation for {donation.donation_type} donation {donation.id}")
+                return None
+            
             from app.task_queue import TaskQueue
             
             task_queue = TaskQueue(db)
@@ -320,28 +344,51 @@ class StripeService:
             # Determine subreddit for the task
             subreddit_id = donation.subreddit_id
             if not subreddit_id:
-                # Use "all" subreddit if no specific subreddit
-                subreddit_service = get_subreddit_service()
-                all_subreddit = subreddit_service.get_or_create_subreddit("all", db)
-                subreddit_id = all_subreddit.id
+                logger.error(f"No subreddit_id found for commission donation {donation.id}")
+                return None
+            
+            # Determine task type and context based on donation type and tier
+            task_type = "SUBREDDIT_POST"
+            context_data = {
+                "donation_id": donation.id,
+                "donation_amount": float(donation.amount_usd),
+                "sponsor_tier": sponsor.tier.name if sponsor.tier else "unknown",
+                "customer_name": donation.customer_name,
+                "is_anonymous": donation.is_anonymous,
+                "donation_type": donation.donation_type,
+                "commission_message": donation.commission_message,
+            }
+            
+            # Handle commissioning logic
+            tier_name = sponsor.tier.name.lower() if sponsor.tier else ""
+            
+            if donation.post_id:
+                # Specific post commission (any tier can specify a post)
+                task_type = "SPECIFIC_POST"
+                context_data.update({
+                    "commission_type": "specific_post",
+                    "post_id": donation.post_id,
+                })
+                logger.info(f"Creating specific post commission task for {tier_name} tier - post {donation.post_id}")
+            else:
+                # Random post commission (default behavior)
+                task_type = "SUBREDDIT_POST"
+                context_data.update({
+                    "commission_type": "random_post",
+                })
+                logger.info(f"Creating random post commission task for {tier_name} tier")
             
             # Create task with sponsor priority (higher priority for sponsors)
             task = task_queue.add_task(
-                task_type="SUBREDDIT_POST",
+                task_type=task_type,
                 subreddit_id=subreddit_id,
                 sponsor_id=sponsor.id,
                 priority=10,  # Higher priority for sponsor tasks
-                context_data={
-                    "donation_id": donation.id,
-                    "donation_amount": float(donation.amount_usd),
-                    "sponsor_tier": sponsor.tier.name if sponsor.tier else "unknown",
-                    "customer_name": donation.customer_name,
-                    "is_anonymous": donation.is_anonymous
-                }
+                context_data=context_data
             )
             
-            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "all"
-            logger.info(f"Created sponsor task {task.id} for sponsor {sponsor.id} "
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
+            logger.info(f"Created commission task {task.id} for sponsor {sponsor.id} "
                       f"in r/{subreddit_name} with priority {task.priority}")
             return task
             
