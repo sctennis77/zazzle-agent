@@ -396,3 +396,62 @@ This codebase now supports two independent implementations for finding trending 
 ---
 
 For more details, see the docstrings in `app/agents/reddit_agent.py` and `app/pipeline.py`.
+
+## Creating a Donation via API for an Existing Post
+
+To create a donation (support or commission) for an existing Reddit post, use the following API endpoint:
+
+```
+POST /api/donations/create-checkout-session
+```
+
+### Request Body Example (Support Donation)
+```json
+{
+  "amount_usd": "5.00",
+  "subreddit": "hiking",
+  "donation_type": "support",
+  "post_id": "<REDDIT_POST_ID>",
+  "customer_email": "your@email.com",
+  "customer_name": "Your Name",
+  "reddit_username": "your_reddit_username",
+  "is_anonymous": false,
+  "message": "Test support"
+}
+```
+
+### Request Body Example (Commission Donation)
+```json
+{
+  "amount_usd": "25.00",
+  "subreddit": "hiking",
+  "donation_type": "commission",
+  "post_id": "<REDDIT_POST_ID>",
+  "customer_email": "your@email.com",
+  "customer_name": "Your Name",
+  "reddit_username": "your_reddit_username",
+  "is_anonymous": false,
+  "commission_message": "Create a beautiful product from an amazing hiking post!"
+}
+```
+
+- `donation_type` must be either `support` or `commission`.
+- For support donations, `message` is used. For commission donations, use `commission_message`.
+- `post_id` is required for both types when donating to an existing post.
+
+### Response
+A successful request returns a Stripe Checkout session URL for payment.
+
+---
+
+## Progress Update (2025-06-27)
+
+**Today's UI improvements:**
+- The Product Detail modal now always displays a "Commissioned by" section at the top, showing commission donor info and message.
+- A "Sponsored by" section appears beneath if there are any support donations, listing all sponsors and their messages.
+- Fallback logic for fake sponsors has been removed for clarity and accuracy.
+- The UI is now more consistent and visually clear for both commission and support donations.
+
+**Screenshot:**
+
+![Product Detail Modal with Commissioned and Sponsored Sections](frontend/docs/assets/progress_2025_06_27.png)
