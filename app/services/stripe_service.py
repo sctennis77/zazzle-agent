@@ -420,6 +420,16 @@ class StripeService:
                 logger.info(f"Skipping task creation for {donation.donation_type} donation {donation.id}")
                 return None
             
+            # Check if a task already exists for this sponsor/donation to prevent duplicates
+            existing_task = db.query(PipelineTask).filter_by(
+                sponsor_id=sponsor.id,
+                status="pending"
+            ).first()
+            
+            if existing_task:
+                logger.info(f"Task already exists for sponsor {sponsor.id} (task {existing_task.id}), skipping duplicate creation")
+                return existing_task
+            
             from app.task_queue import TaskQueue
             
             task_queue = TaskQueue(db)

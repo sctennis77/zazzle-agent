@@ -434,6 +434,18 @@ async def handle_checkout_session_completed(session):
         # Get database session
         db = SessionLocal()
         try:
+            # Check if this checkout session has already been processed
+            payment_intent_id = session.payment_intent
+            if payment_intent_id:
+                existing_donation = db.query(Donation).filter_by(
+                    stripe_payment_intent_id=payment_intent_id,
+                    status=DonationStatus.SUCCEEDED.value
+                ).first()
+                
+                if existing_donation:
+                    logger.info(f"Checkout session {session.id} already processed for donation {existing_donation.id}, skipping")
+                    return
+            
             # Extract donation data from session metadata
             metadata = session.metadata
             payment_intent_id = session.payment_intent
@@ -489,6 +501,16 @@ async def handle_payment_intent_succeeded(payment_intent):
         # Get database session
         db = SessionLocal()
         try:
+            # Check if this payment intent has already been processed
+            existing_donation = db.query(Donation).filter_by(
+                stripe_payment_intent_id=payment_intent.id,
+                status=DonationStatus.SUCCEEDED.value
+            ).first()
+            
+            if existing_donation:
+                logger.info(f"Payment intent {payment_intent.id} already processed for donation {existing_donation.id}, skipping")
+                return
+            
             # Extract metadata
             metadata = payment_intent.metadata
             
@@ -1196,8 +1218,13 @@ async def get_product_donations(
         if not pipeline_task:
             return {"commission": None, "support": []}
 
-        # Get commission info (as before)
+        # Get the associated reddit post
+        reddit_post = db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run_id).first()
+        
+        # Get commission info (check both sponsor-based and direct commission donations)
         commission_info = None
+        
+        # First check for sponsor-based commission
         if pipeline_task.sponsor_id:
             sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
             if sponsor:
@@ -1212,9 +1239,34 @@ async def get_product_donations(
                     "commission_message": pipeline_task.context_data.get("commission_message") if pipeline_task.context_data else None,
                     "commission_type": pipeline_task.context_data.get("commission_type") if pipeline_task.context_data else None,
                 }
+        
+        # If no sponsor-based commission, check for direct commission donations
+        if not commission_info and reddit_post:
+            direct_commission = (
+                db.query(Donation)
+                .filter_by(
+                    post_id=reddit_post.post_id, 
+                    donation_type="commission",
+                    status=DonationStatus.SUCCEEDED.value
+                )
+                .order_by(Donation.created_at.desc())
+                .first()
+            )
+            
+            if direct_commission:
+                # Parse metadata for commission details
+                metadata = direct_commission.metadata or {}
+                commission_info = {
+                    "reddit_username": direct_commission.reddit_username if not direct_commission.is_anonymous else "Anonymous",
+                    "tier_name": "Direct Commission",
+                    "tier_min_amount": float(direct_commission.amount_usd),
+                    "donation_amount": float(direct_commission.amount_usd),
+                    "is_anonymous": direct_commission.is_anonymous,
+                    "commission_message": metadata.get("commission_message") or direct_commission.commission_message,
+                    "commission_type": metadata.get("commission_type") or "direct",
+                }
 
-        # Get the associated reddit post
-        reddit_post = db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run_id).first()
+        # Get support donations
         support_donations = []
         if reddit_post:
             # Find all support/sponsor donations for this post
