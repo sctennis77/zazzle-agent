@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Modal } from './Modal';
@@ -175,6 +175,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [customAmount, setCustomAmount] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [showMessage, setShowMessage] = useState(false);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const presetAmounts = [10, 25, 50, 100, 250];
 
   // Reset form when modal opens
@@ -194,57 +195,122 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setError('');
       setSuccess(false);
       setClientSecret(null);
+      setPaymentIntentId(null);
       setShowMessage(false);
     }
   }, [isOpen]);
 
-  // Create payment intent when form data changes
+  // Create initial PaymentIntent when modal opens
   useEffect(() => {
-    const createPaymentIntent = async () => {
-      if (!isOpen || !amount || !subreddit) return;
+    if (isOpen && !clientSecret) {
+      createPaymentIntent();
+    }
+  }, [isOpen]);
 
-      // For specific post commissions, post_id is required
-      if (commissionType === 'specific' && !postId) {
-        setError('Post ID or URL is required for specific post commissions');
-        setClientSecret(null);
-        return;
+  // Function to create new PaymentIntent
+  const createPaymentIntent = async () => {
+    if (!isOpen || !amount || parseFloat(amount) < 5) {
+      return null;
+    }
+
+    // For specific post commissions, post_id is required
+    if (commissionType === 'specific' && !postId) {
+      setError('Post ID or URL is required for specific post commissions');
+      return null;
+    }
+
+    setError(''); // Clear any previous errors
+
+    try {
+      const commissionRequest: CommissionRequest = {
+        amount_usd: amount,
+        subreddit,
+        donation_type: 'commission',
+        post_id: commissionType === 'specific' ? postId : undefined,
+        commission_message: commissionMessage,
+        customer_email: customerEmail || undefined,
+        customer_name: customerName || undefined,
+        reddit_username: redditUsername.trim() || undefined,
+        is_anonymous: isAnonymous,
+      };
+
+      const response = await fetch('/api/donations/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commissionRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create payment intent');
       }
 
-      try {
-        const commissionRequest: CommissionRequest = {
-          amount_usd: amount,
-          subreddit,
-          donation_type: 'commission',
-          post_id: commissionType === 'specific' ? postId : undefined,
-          commission_message: commissionMessage,
-          customer_email: customerEmail || undefined,
-          customer_name: customerName || undefined,
-          reddit_username: redditUsername.trim() || undefined,
-          is_anonymous: isAnonymous,
-        };
+      const { client_secret, payment_intent_id } = await response.json();
+      setClientSecret(client_secret);
+      setPaymentIntentId(payment_intent_id);
+      setError(''); // Clear any previous errors
+      return payment_intent_id;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to create payment intent');
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      return null;
+    }
+  };
 
-        const response = await fetch('/api/donations/create-payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(commissionRequest),
-        });
+  // Function to update existing PaymentIntent
+  const updatePaymentIntent = async () => {
+    if (!paymentIntentId || !amount || parseFloat(amount) < 5) {
+      return null;
+    }
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to create payment intent');
-        }
+    setError(''); // Clear any previous errors
 
-        const { client_secret } = await response.json();
-        setClientSecret(client_secret);
-        setError(''); // Clear any previous errors
-      } catch (error) {
-        setError(error instanceof Error ? error.message : 'Failed to create payment intent');
-        setClientSecret(null);
+    try {
+      const commissionRequest: CommissionRequest = {
+        amount_usd: amount,
+        subreddit,
+        donation_type: 'commission',
+        post_id: commissionType === 'specific' ? postId : undefined,
+        commission_message: commissionMessage,
+        customer_email: customerEmail || undefined,
+        customer_name: customerName || undefined,
+        reddit_username: redditUsername.trim() || undefined,
+        is_anonymous: isAnonymous,
+      };
+
+      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(commissionRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update payment intent');
       }
-    };
 
-    createPaymentIntent();
-  }, [isOpen, amount, customerName, customerEmail, redditUsername, isAnonymous, commissionMessage, subreddit, postId, commissionType]);
+      const { client_secret } = await response.json();
+      setClientSecret(client_secret);
+      setError(''); // Clear any previous errors
+      return client_secret;
+    } catch (error) {
+      // Silently handle update errors to avoid disrupting user experience
+      console.error('Failed to update payment intent:', error);
+      return null;
+    }
+  };
+
+  // Debounced update effect
+  useEffect(() => {
+    if (!paymentIntentId || !isOpen) return;
+
+    const timeoutId = setTimeout(() => {
+      updatePaymentIntent();
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, commissionMessage, subreddit, postId, commissionType]);
 
   const handleSuccess = () => {
     setSuccess(true);
