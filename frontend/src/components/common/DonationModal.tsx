@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, ExpressCheckoutElement, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Modal } from './Modal';
@@ -156,15 +156,13 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
   const [showMessage, setShowMessage] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const presetAmounts = [5, 10, 25, 50, 100];
+  const isMounted = useRef(false);
 
-  // Create PaymentIntent when modal opens
   useEffect(() => {
-    if (isOpen) {
-      createPaymentIntent();
-    }
+    isMounted.current = isOpen;
+    return () => { isMounted.current = false; };
   }, [isOpen]);
 
-  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setAmount('10');
@@ -180,6 +178,11 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
       setClientSecret(null); // Clear any existing client secret
       setPaymentIntentId(null);
       setShowMessage(false);
+      // Immediately create a new PaymentIntent
+      (async () => {
+        const result = await createPaymentIntent();
+        if (!isMounted.current) return;
+      })();
     }
   }, [isOpen]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Modal } from './Modal';
@@ -177,8 +177,13 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [showMessage, setShowMessage] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const presetAmounts = [10, 25, 50, 100, 250];
+  const isMounted = useRef(false);
 
-  // Reset form when modal opens
+  useEffect(() => {
+    isMounted.current = isOpen;
+    return () => { isMounted.current = false; };
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       setAmount('25');
@@ -197,13 +202,11 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setClientSecret(null);
       setPaymentIntentId(null);
       setShowMessage(false);
-    }
-  }, [isOpen]);
-
-  // Create initial PaymentIntent when modal opens
-  useEffect(() => {
-    if (isOpen && !clientSecret) {
-      createPaymentIntent();
+      // Immediately create a new PaymentIntent
+      (async () => {
+        const result = await createPaymentIntent();
+        if (!isMounted.current) return;
+      })();
     }
   }, [isOpen]);
 
