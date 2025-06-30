@@ -508,36 +508,41 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
         )}
 
         {/* Payment Options */}
-        <div className="border-t pt-6">
-          {clientSecret ? (
-            <Elements 
-              stripe={stripePromise}
-              options={{
-                clientSecret: clientSecret,
-                appearance: {
-                  theme: 'stripe',
-                  variables: {
-                    colorPrimary: '#ec4899', // pink-600 for donation
-                  },
-                },
-              }}
-            >
-              <DonationForm
-                amount={amount}
-                message={message}
-                customerEmail={customerEmail}
-                customerName={customerName}
-                redditUsername={redditUsername}
-                isAnonymous={isAnonymous}
-                subreddit={subreddit}
-                postId={postId}
-                onSuccess={handleSuccess}
-                onError={handleError}
-              />
-            </Elements>
+        <div className="border-t pt-6 min-h-[340px] relative">
+          {!clientSecret ? (
+            <div className="animate-pulse flex flex-col gap-4 items-center justify-center min-h-[300px]">
+              <div className="bg-gray-200 rounded-lg h-12 w-3/4 mb-2" />
+              <div className="bg-gray-200 rounded-lg h-12 w-3/4 mb-2" />
+              <div className="bg-gray-200 rounded-lg h-10 w-1/2 mb-2" />
+              <div className="bg-gray-200 rounded-lg h-12 w-full" />
+            </div>
           ) : (
-            <div className="text-center text-sm text-gray-600 py-4">
-              Please fill in all required fields to continue
+            <div className="transition-opacity duration-500 opacity-100" style={{ opacity: clientSecret ? 1 : 0 }}>
+              <Elements 
+                stripe={stripePromise}
+                options={{
+                  clientSecret: clientSecret,
+                  appearance: {
+                    theme: 'stripe',
+                    variables: {
+                      colorPrimary: '#ec4899', // pink-600 for donation
+                    },
+                  },
+                }}
+              >
+                <DonationForm
+                  amount={amount}
+                  message={message}
+                  customerEmail={customerEmail}
+                  customerName={customerName}
+                  redditUsername={redditUsername}
+                  isAnonymous={isAnonymous}
+                  subreddit={subreddit}
+                  postId={postId}
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                />
+              </Elements>
             </div>
           )}
         </div>
