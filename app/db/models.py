@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric, Boolean
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, backref
 
 from app.models import (
     InteractionActionStatus,

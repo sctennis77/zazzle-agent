@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import stripe
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request, Form
+from fastapi import Depends, FastAPI, HTTPException, Request, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -318,6 +318,20 @@ async def create_checkout_session(
         amount_cents = int(float(donation_request.amount_usd) * 100)
         
         # Create checkout session with Express Checkout support
+        metadata = {
+            'donation_type': donation_request.donation_type,
+            'subreddit': donation_request.subreddit,
+            'post_id': donation_request.post_id or '',
+            'commission_message': donation_request.commission_message or '',
+            'message': donation_request.message or '',
+            'customer_name': donation_request.customer_name or '',
+            'reddit_username': donation_request.reddit_username or '',
+            'is_anonymous': str(donation_request.is_anonymous),
+        }
+        
+        # DEBUG: Log the metadata being set
+        logger.info(f"Setting metadata for {donation_request.donation_type} donation: {metadata}")
+        
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card', 'link'],
             line_items=[{
@@ -335,36 +349,19 @@ async def create_checkout_session(
             success_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/success?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/cancel',
             customer_email=donation_request.customer_email,
-            metadata={
-                'donation_type': donation_request.donation_type,
-                'subreddit': donation_request.subreddit,
-                'post_id': donation_request.post_id or '',
-                'commission_message': donation_request.commission_message or '',
-                'message': donation_request.message or '',
-                'customer_name': donation_request.customer_name or '',
-                'reddit_username': donation_request.reddit_username or '',
-                'is_anonymous': str(donation_request.is_anonymous),
-            },
+            metadata=metadata,
             payment_intent_data={
-                'metadata': {
-                    'donation_type': donation_request.donation_type,
-                    'subreddit': donation_request.subreddit,
-                    'post_id': donation_request.post_id or '',
-                    'commission_message': donation_request.commission_message or '',
-                    'message': donation_request.message or '',
-                    'customer_name': donation_request.customer_name or '',
-                    'reddit_username': donation_request.reddit_username or '',
-                    'is_anonymous': str(donation_request.is_anonymous),
-                }
+                'metadata': metadata
             }
         )
         
+        # DEBUG: Log the created session metadata
+        logger.info(f"Created checkout session {checkout_session.id} with metadata: {checkout_session.metadata}")
         logger.info(f"Created checkout session {checkout_session.id} for donation")
-        
-        return CheckoutSessionResponse(
-            session_id=checkout_session.id,
-            url=checkout_session.url
-        )
+        return {
+            "session_id": checkout_session.id,
+            "url": checkout_session.url,
+        }
         
     except Exception as e:
         logger.error(f"Error creating checkout session: {str(e)}")
@@ -433,6 +430,10 @@ async def handle_checkout_session_completed(session):
             metadata = session.metadata
             payment_intent_id = session.payment_intent
             
+            # DEBUG: Log the metadata to see what we're getting
+            logger.info(f"Session metadata: {metadata}")
+            logger.info(f"Payment intent ID: {payment_intent_id}")
+            
             # Create donation request from metadata
             donation_request = DonationRequest(
                 amount_usd=Decimal(session.amount_total / 100),
@@ -477,8 +478,40 @@ async def handle_payment_intent_succeeded(payment_intent):
         # Get database session
         db = SessionLocal()
         try:
+            # Extract donation data from payment intent metadata
+            metadata = payment_intent.metadata
+            
+            # DEBUG: Log the metadata to see what we're getting
+            logger.info(f"Payment intent metadata: {metadata}")
+            
+            # Create donation request from metadata
+            donation_request = DonationRequest(
+                amount_usd=Decimal(payment_intent.amount / 100),
+                customer_email=payment_intent.receipt_email,
+                customer_name=metadata.get('customer_name'),
+                message=metadata.get('message'),
+                subreddit=metadata.get('subreddit'),
+                reddit_username=metadata.get('reddit_username'),
+                is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
+                donation_type=metadata.get('donation_type'),
+                post_id=metadata.get('post_id') if metadata.get('post_id') else None,
+                commission_message=metadata.get('commission_message'),
+            )
+            
+            # Save donation to database
             stripe_service = StripeService()
+            donation = stripe_service.save_donation_to_db(db, {
+                'payment_intent_id': payment_intent.id,
+                'amount_cents': payment_intent.amount,
+                'amount_usd': str(donation_request.amount_usd),
+                'metadata': metadata
+            }, donation_request)
+            
+            # Update donation status to succeeded
             stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
+            
+            logger.info(f"Successfully processed payment intent {payment_intent.id} for donation {donation.id}")
+            
         finally:
             db.close()
             
@@ -1078,7 +1111,7 @@ async def get_post_sponsors(
         db: Database session
         
     Returns:
-        List[SponsorSchema]: List of sponsors for the post
+        List: Sponsors with related data for the post
     """
     try:
         # Find donations for this post
@@ -1091,7 +1124,32 @@ async def get_post_sponsors(
         sponsors = []
         for donation in donations:
             if donation.sponsor:
-                sponsors.append(donation.sponsor)
+                for sponsor in donation.sponsor:
+                    sponsors.append({
+                        "id": sponsor.id,
+                        "donation": {
+                            "id": donation.id,
+                            "amount_usd": float(donation.amount_usd),
+                            "customer_name": donation.customer_name,
+                            "customer_email": donation.customer_email,
+                            "message": donation.message,
+                            "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
+                            "reddit_username": donation.reddit_username,
+                            "is_anonymous": donation.is_anonymous,
+                            "status": donation.status,
+                            "created_at": donation.created_at.isoformat(),
+                            "donation_type": donation.donation_type,
+                        },
+                        "tier": {
+                            "id": sponsor.tier.id,
+                            "name": sponsor.tier.name,
+                            "min_amount": float(sponsor.tier.min_amount),
+                            "benefits": sponsor.tier.benefits,
+                        },
+                        "subreddit": sponsor.subreddit.subreddit_name if sponsor.subreddit else None,
+                        "status": sponsor.status,
+                        "created_at": sponsor.created_at.isoformat(),
+                    })
         
         return sponsors
         
@@ -1103,66 +1161,131 @@ async def get_post_sponsors(
 @app.get("/api/products/{pipeline_run_id}/donations")
 async def get_product_donations(
     pipeline_run_id: int,
+    type: str = Query("all", pattern="^(all|commission|support)$"),
     db: Session = Depends(get_db)
 ):
     """
-    Get donation information for a specific product (pipeline run).
-    
+    Get donation information for a specific product (pipeline run), including commission and support donations.
     Args:
         pipeline_run_id: Pipeline run ID
+        type: Filter for 'commission', 'support', or 'all' (default: all)
         db: Database session
-        
     Returns:
-        Dict: Donation information including sponsor and commission details
+        Dict: Donation information
     """
     try:
         # Get the pipeline task for this run
         pipeline_task = db.query(PipelineTask).filter_by(pipeline_run_id=pipeline_run_id).first()
-        
         if not pipeline_task:
-            return {"sponsor_info": None, "commission_info": None}
-        
-        result = {"sponsor_info": None, "commission_info": None}
-        
-        # Get sponsor information if available
+            return {"commission": None, "support": []}
+
+        # Get commission info (as before)
+        commission_info = None
         if pipeline_task.sponsor_id:
             sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
             if sponsor:
                 donation = sponsor.donation
                 tier = sponsor.tier
-                result["sponsor_info"] = {
+                commission_info = {
                     "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
                     "tier_name": tier.name,
                     "tier_min_amount": float(tier.min_amount),
                     "donation_amount": float(donation.amount_usd),
-                    "is_anonymous": donation.is_anonymous
+                    "is_anonymous": donation.is_anonymous,
+                    "commission_message": pipeline_task.context_data.get("commission_message") if pipeline_task.context_data else None,
+                    "commission_type": pipeline_task.context_data.get("commission_type") if pipeline_task.context_data else None,
                 }
-        
-        # Get commission information if available
-        if pipeline_task.context_data:
-            context_data = pipeline_task.context_data
-            if context_data.get("commission_message") or context_data.get("commission_type"):
-                # Get the donation from the sponsor if available
-                donation = None
-                if pipeline_task.sponsor_id:
-                    sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
-                    if sponsor:
-                        donation = sponsor.donation
-                
-                result["commission_info"] = {
-                    "commission_message": context_data.get("commission_message"),
-                    "commission_type": context_data.get("commission_type"),
-                    "reddit_username": donation.reddit_username if donation and not donation.is_anonymous else "Anonymous",
-                    "donation_amount": float(donation.amount_usd) if donation else None,
-                    "is_anonymous": donation.is_anonymous if donation else False
-                }
-        
-        return result
-        
+
+        # Get the associated reddit post
+        reddit_post = db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run_id).first()
+        support_donations = []
+        if reddit_post:
+            # Find all support/sponsor donations for this post
+            donations = (
+                db.query(Donation)
+                .filter_by(post_id=reddit_post.post_id, status=DonationStatus.SUCCEEDED.value)
+                .all()
+            )
+            for donation in donations:
+                if donation.sponsor:
+                    for sponsor in donation.sponsor:
+                        support_donations.append({
+                            "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                            "tier_name": sponsor.tier.name,
+                            "tier_min_amount": float(sponsor.tier.min_amount),
+                            "donation_amount": float(donation.amount_usd),
+                            "is_anonymous": donation.is_anonymous,
+                            "message": donation.message,
+                            "created_at": donation.created_at.isoformat(),
+                            "tier_id": sponsor.tier.id,
+                            "sponsor_id": sponsor.id,
+                            "donation_id": donation.id,
+                        })
+
+        # Filter by type param
+        if type == "commission":
+            return {"commission": commission_info}
+        elif type == "support":
+            return {"support": support_donations}
+        else:
+            return {"commission": commission_info, "support": support_donations}
+
     except Exception as e:
         logger.error(f"Error getting donations for pipeline run {pipeline_run_id}: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/donations/create-payment-intent")
+async def create_payment_intent(
+    donation_request: DonationRequest,
+    db: Session = Depends(get_db)
+):
+    """Create a payment intent for Express Checkout Element."""
+    try:
+        # Validate donation request
+        if not donation_request.amount_usd or float(donation_request.amount_usd) < 0.50:
+            raise HTTPException(status_code=400, detail="Amount must be at least $0.50")
+        
+        # Customer name is optional - Express Checkout methods (Apple Pay, Google Pay, PayPal) 
+        # can work without it, and Stripe will handle validation based on payment method
+        
+        # Convert amount to cents for Stripe
+        amount_cents = int(float(donation_request.amount_usd) * 100)
+        
+        # Create metadata
+        metadata = {
+            'donation_type': donation_request.donation_type,
+            'subreddit': donation_request.subreddit,
+            'post_id': donation_request.post_id or '',
+            'commission_message': donation_request.commission_message or '',
+            'message': donation_request.message or '',
+            'customer_name': donation_request.customer_name or '',
+            'reddit_username': donation_request.reddit_username or '',
+            'is_anonymous': str(donation_request.is_anonymous),
+        }
+        
+        # Create payment intent
+        payment_intent = stripe.PaymentIntent.create(
+            amount=amount_cents,
+            currency='usd',
+            metadata=metadata,
+            automatic_payment_methods={
+                'enabled': True,
+            },
+            description=f'{donation_request.donation_type.title()} Donation to r/{donation_request.subreddit}',
+        )
+        
+        logger.info(f"Created payment intent {payment_intent.id} for donation")
+        
+        return {
+            "client_secret": payment_intent.client_secret,
+            "payment_intent_id": payment_intent.id,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating payment intent: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment intent: {str(e)}")
 
 
 if __name__ == "__main__":

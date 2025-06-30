@@ -24,6 +24,20 @@ const getTierDisplay = (tierName: string) => {
   }
 };
 
+// Interface for support donation data
+interface SupportDonation {
+  reddit_username: string;
+  tier_name: string;
+  tier_min_amount: number;
+  donation_amount: number;
+  is_anonymous: boolean;
+  message?: string;
+  created_at: string;
+  tier_id: number;
+  sponsor_id: number;
+  donation_id: number;
+}
+
 export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onClose }) => {
   if (!product) return null;
 
@@ -31,6 +45,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const [showFullPost, setShowFullPost] = useState(false);
   const [showDonation, setShowDonation] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
+  const [supportDonations, setSupportDonations] = useState<SupportDonation[]>([]);
   const [loadingDonation, setLoadingDonation] = useState(false);
   const postContent = product.reddit_post.content || '';
   const previewLength = 200;
@@ -46,8 +61,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
           const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
           if (response.ok) {
             const data = await response.json();
-            if (data.commission_info) {
-              setCommissionInfo(data.commission_info);
+            if (data.commission) {
+              setCommissionInfo(data.commission);
+            }
+            if (data.support) {
+              setSupportDonations(data.support);
             }
           }
         } catch (error) {
@@ -117,7 +135,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             </div>
             {/* Details Section */}
             <div className="space-y-6">
-              {/* Commission Information */}
+              {/* Commission Information - always show */}
               {commissionInfo && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-900">Commissioned by</h4>
@@ -150,46 +168,55 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </div>
                 </div>
               )}
-              {/* Fallback to Sponsor Information */}
-              {!commissionInfo && product.product_info.sponsor_info && (
+              {/* Sponsor Donations */}
+              {supportDonations.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-900">Sponsored by</h4>
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-                    <div className="flex items-center gap-3">
-                      {(() => {
-                        const tierDisplay = getTierDisplay(product.product_info.sponsor_info.tier_name);
-                        const IconComponent = tierDisplay.icon;
-                        return (
-                          <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
-                            <IconComponent size={20} className={tierDisplay.color} />
+                  <div className="space-y-3">
+                    {supportDonations.map((donation, index) => (
+                      <div key={donation.donation_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const tierDisplay = getTierDisplay(donation.tier_name);
+                            const IconComponent = tierDisplay.icon;
+                            return (
+                              <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
+                                <IconComponent size={20} className={tierDisplay.color} />
+                              </div>
+                            );
+                          })()}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-900">
+                                {donation.reddit_username}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${(() => {
+                                const tier = donation.tier_name.toLowerCase();
+                                if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
+                                  return 'bg-yellow-100 text-yellow-800';
+                                } else if (tier.includes('silver')) {
+                                  return 'bg-gray-100 text-gray-800';
+                                } else if (tier.includes('bronze')) {
+                                  return 'bg-orange-100 text-orange-800';
+                                } else {
+                                  return 'bg-pink-100 text-pink-800';
+                                }
+                              })()}`}>
+                                {donation.tier_name}
+                              </span>
+                            </div>
+                            {donation.message && (
+                              <p className="text-sm text-gray-600 mt-1 italic">
+                                "{donation.message}"
+                              </p>
+                            )}
+                            <p className="text-sm text-gray-600 mt-1">
+                              Donated ${donation.donation_amount.toFixed(2)}
+                            </p>
                           </div>
-                        );
-                      })()}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">
-                            {product.product_info.sponsor_info.reddit_username}
-                          </span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${(() => {
-                            const tier = product.product_info.sponsor_info.tier_name.toLowerCase();
-                            if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
-                              return 'bg-yellow-100 text-yellow-800';
-                            } else if (tier.includes('silver')) {
-                              return 'bg-gray-100 text-gray-800';
-                            } else if (tier.includes('bronze')) {
-                              return 'bg-orange-100 text-orange-800';
-                            } else {
-                              return 'bg-pink-100 text-pink-800';
-                            }
-                          })()}`}>
-                            {product.product_info.sponsor_info.tier_name}
-                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Donated ${product.product_info.sponsor_info.donation_amount.toFixed(2)}
-                        </p>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -292,6 +319,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         onClose={() => setShowDonation(false)}
         subreddit={product.reddit_post.subreddit}
         postId={product.reddit_post.post_id}
+        supportOnly={true}
       />
     </>
   );
