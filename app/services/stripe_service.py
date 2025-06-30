@@ -44,7 +44,7 @@ class StripeService:
         """
         try:
             # Convert USD amount to cents for Stripe
-            amount_cents = int(donation_request.amount_usd * 100)
+            amount_cents = int(float(donation_request.amount_usd) * 100)
             
             # Prepare metadata for the payment intent
             metadata = {
@@ -122,6 +122,89 @@ class StripeService:
             raise
         except Exception as e:
             logger.error(f"Unexpected error retrieving payment intent {payment_intent_id}: {str(e)}")
+            raise
+
+    def update_payment_intent(self, payment_intent_id: str, donation_request: DonationRequest) -> Dict:
+        """
+        Update a Stripe payment intent with new metadata and amount.
+        
+        Args:
+            payment_intent_id: The Stripe payment intent ID to update
+            donation_request: The donation request containing updated info
+            
+        Returns:
+            Dict containing updated payment intent data
+            
+        Raises:
+            stripe.error.StripeError: If Stripe API call fails
+        """
+        try:
+            # First, retrieve the payment intent to check if it exists and can be updated
+            try:
+                existing_payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                logger.info(f"Found existing payment intent {payment_intent_id} with status: {existing_payment_intent.status}")
+            except stripe.error.InvalidRequestError as e:
+                logger.error(f"Payment intent {payment_intent_id} not found: {str(e)}")
+                raise Exception(f"Payment intent {payment_intent_id} not found")
+            
+            # Check if payment intent can be modified
+            if existing_payment_intent.status in ['succeeded', 'canceled', 'processing']:
+                logger.warning(f"Payment intent {payment_intent_id} cannot be modified in status: {existing_payment_intent.status}")
+                # Return the existing payment intent data instead of trying to modify
+                return {
+                    "client_secret": existing_payment_intent.client_secret,
+                    "payment_intent_id": existing_payment_intent.id,
+                    "amount_cents": existing_payment_intent.amount,
+                    "amount_usd": str(existing_payment_intent.amount / 100),
+                }
+            
+            # Convert USD amount to cents for Stripe
+            amount_cents = int(float(donation_request.amount_usd) * 100)
+            
+            # Prepare metadata for the payment intent
+            metadata = {
+                "donation_type": donation_request.donation_type,
+                "is_anonymous": str(donation_request.is_anonymous),
+            }
+            
+            if donation_request.message:
+                metadata["message"] = donation_request.message[:500]  # Limit message length
+            
+            if donation_request.subreddit:
+                metadata["subreddit"] = donation_request.subreddit[:100]  # Limit subreddit length
+            
+            if donation_request.reddit_username:
+                metadata["reddit_username"] = donation_request.reddit_username[:100]  # Limit username length
+            
+            if donation_request.post_id:
+                metadata["post_id"] = donation_request.post_id[:32]  # Limit post ID length
+            
+            if donation_request.commission_message:
+                metadata["commission_message"] = donation_request.commission_message[:500]  # Limit message length
+            
+            # Update payment intent
+            payment_intent = stripe.PaymentIntent.modify(
+                payment_intent_id,
+                amount=amount_cents,
+                metadata=metadata,
+                receipt_email=donation_request.customer_email,
+                description=f"Donation to Zazzle Agent - ${donation_request.amount_usd}",
+            )
+            
+            logger.info(f"Updated payment intent {payment_intent.id} for ${donation_request.amount_usd}")
+            
+            return {
+                "client_secret": payment_intent.client_secret,
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": amount_cents,
+                "amount_usd": donation_request.amount_usd,
+            }
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error updating payment intent {payment_intent_id}: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error updating payment intent {payment_intent_id}: {str(e)}")
             raise
 
     def save_donation_to_db(self, db: Session, payment_intent_data: Dict, donation_request: DonationRequest) -> Donation:

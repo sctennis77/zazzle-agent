@@ -139,6 +139,16 @@ const CommissionForm: React.FC<{
       
       {/* Payment Element for card payments */}
       <PaymentElement />
+
+      {/* Always-visible Pay button for card payments */}
+      <button
+        className="w-full mt-2 py-2 px-4 bg-purple-600 text-white rounded disabled:opacity-50"
+        onClick={handleConfirm}
+        disabled={!stripe || !elements || isProcessing}
+        type="button"
+      >
+        {isProcessing ? "Processing..." : "Pay"}
+      </button>
       
       {isProcessing && (
         <div className="text-center text-sm text-gray-600">
@@ -156,6 +166,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [customerName, setCustomerName] = useState('');
   const [redditUsername, setRedditUsername] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [previousRedditUsername, setPreviousRedditUsername] = useState('');
   const [subreddit, setSubreddit] = useState('golf');
   const [postId, setPostId] = useState('');
   const [commissionType, setCommissionType] = useState<'random' | 'specific'>('random');
@@ -175,6 +186,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setCustomerEmail('');
       setCustomerName('');
       setRedditUsername('');
+      setPreviousRedditUsername('');
       setIsAnonymous(false);
       setSubreddit('golf');
       setPostId('');
@@ -207,7 +219,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
           commission_message: commissionMessage,
           customer_email: customerEmail || undefined,
           customer_name: customerName || undefined,
-          reddit_username: redditUsername || undefined,
+          reddit_username: redditUsername.trim() || undefined,
           is_anonymous: isAnonymous,
         };
 
@@ -404,7 +416,20 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
               <label className="text-xs text-gray-600 mb-1">Anonymous</label>
               <button
                 type="button"
-                onClick={() => setIsAnonymous((v) => !v)}
+                onClick={() => {
+                  const newAnonymousState = !isAnonymous;
+                  setIsAnonymous(newAnonymousState);
+                  
+                  // Handle reddit username when toggling anonymous
+                  if (newAnonymousState) {
+                    // Switching to anonymous - save current username and clear it
+                    setPreviousRedditUsername(redditUsername);
+                    setRedditUsername('');
+                  } else {
+                    // Switching from anonymous - restore previous username if any
+                    setRedditUsername(previousRedditUsername);
+                  }
+                }}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-purple-500' : 'bg-gray-300'}`}
                 aria-pressed={isAnonymous}
                 aria-label="Toggle anonymous commission"

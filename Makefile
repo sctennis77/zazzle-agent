@@ -402,9 +402,43 @@ test-interaction-agent:
 	@echo "Testing Reddit interaction agent..."
 	$(POETRY) run python test_interaction_agent.py
 
+test-reddit-utils:
+	@echo "🧪 Testing Reddit utility functions..."
+	$(POETRY) run python test_post_id_extraction.py
+
 test-commission-flow:
 	@echo "🚀 Running comprehensive commission workflow test..."
-	@./scripts/test_commission_workflow.sh
+	@if [ -n "$(POST_ID)" ]; then \
+		echo "Commissioning specific post: $(POST_ID)"; \
+		./scripts/test_commission_workflow.sh --post-id "$(POST_ID)"; \
+	elif [ -n "$(POST_URL)" ]; then \
+		echo "Commissioning specific post from URL: $(POST_URL)"; \
+		./scripts/test_commission_workflow.sh --post-url "$(POST_URL)"; \
+	else \
+		echo "Commissioning random post from subreddit: $(SUBREDDIT)"; \
+		./scripts/test_commission_workflow.sh --subreddit "$(SUBREDDIT)"; \
+	fi
+
+test-commission-specific:
+	@echo "🎯 Testing specific post commission workflow..."
+	@if [ -z "$(POST_ID)" ] && [ -z "$(POST_URL)" ]; then \
+		echo "❌ Error: Please specify POST_ID or POST_URL"; \
+		echo ""; \
+		echo "Usage examples:"; \
+		echo "  make test-commission-specific POST_ID=abc123"; \
+		echo "  make test-commission-specific POST_URL=\"https://reddit.com/r/golf/comments/abc123/...\""; \
+		echo "  make test-commission-specific POST_ID=abc123 SUBREDDIT=golf AMOUNT=50"; \
+		exit 1; \
+	fi
+	@./scripts/test_commission_workflow.sh \
+		$(if $(POST_ID),--post-id "$(POST_ID)",) \
+		$(if $(POST_URL),--post-url "$(POST_URL)",) \
+		$(if $(SUBREDDIT),--subreddit "$(SUBREDDIT)",) \
+		$(if $(AMOUNT),--amount "$(AMOUNT)",) \
+		$(if $(CUSTOMER_NAME),--customer-name "$(CUSTOMER_NAME)",) \
+		$(if $(REDDIT_USERNAME),--reddit-username "$(REDDIT_USERNAME)",) \
+		$(if $(COMMISSION_MESSAGE),--commission-message "$(COMMISSION_MESSAGE)",) \
+		$(if $(ANONYMOUS),--anonymous,)
 
 create-test-db:
 	@echo "Creating test database with sample data..."
@@ -787,6 +821,10 @@ add-subreddit-task:
 	fi
 	@echo "Adding subreddit task to queue..."
 	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); task = queue.add_subreddit_task('$(SUBREDDIT)'); print(f'Added subreddit task {task.id} for r/$(SUBREDDIT)'); session.close()"
+
+cleanup-services:
+	@echo "🧹 Cleaning up all services..."
+	@./scripts/test_commission_workflow.sh --cleanup
 
 %::
 	@: 

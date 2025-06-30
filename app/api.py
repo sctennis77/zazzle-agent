@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import traceback
@@ -28,6 +29,7 @@ from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
+from app.utils.reddit_utils import extract_post_id
 
 # Setup logging
 setup_logging()
@@ -295,9 +297,15 @@ async def create_checkout_session(
     try:
         logger.info(f"Creating checkout session for {donation_request.donation_type} donation: ${donation_request.amount_usd}")
         
+        # Extract and validate post_id if provided
+        post_id = None
+        if donation_request.post_id:
+            post_id = extract_post_id(donation_request.post_id)
+            logger.info(f"Extracted post ID: {post_id} from input: {donation_request.post_id}")
+        
         # --- NEW: Check post_id existence for support donations ---
         if donation_request.donation_type == "support":
-            if not donation_request.post_id:
+            if not post_id:
                 raise HTTPException(status_code=422, detail="post_id is required for support donations")
             # Check if post_id exists in a completed pipeline run
             from app.db.models import PipelineRun, RedditPost
@@ -306,12 +314,12 @@ async def create_checkout_session(
                 .join(RedditPost, PipelineRun.id == RedditPost.pipeline_run_id)
                 .filter(
                     PipelineRun.status == "completed",
-                    RedditPost.post_id == donation_request.post_id
+                    RedditPost.post_id == post_id
                 )
                 .first()
             )
             if not pipeline_run:
-                raise HTTPException(status_code=422, detail=f"No completed pipeline run found for post_id '{donation_request.post_id}'")
+                raise HTTPException(status_code=422, detail=f"No completed pipeline run found for post_id '{post_id}'")
         # --- END NEW ---
 
         # Convert amount to cents for Stripe
@@ -321,7 +329,7 @@ async def create_checkout_session(
         metadata = {
             'donation_type': donation_request.donation_type,
             'subreddit': donation_request.subreddit,
-            'post_id': donation_request.post_id or '',
+            'post_id': post_id or '',
             'commission_message': donation_request.commission_message or '',
             'message': donation_request.message or '',
             'customer_name': donation_request.customer_name or '',
@@ -460,6 +468,9 @@ async def handle_checkout_session_completed(session):
             # Update donation status to succeeded
             stripe_service.update_donation_status(db, payment_intent_id, DonationStatus.SUCCEEDED)
             
+            # Process subreddit tiers if applicable
+            stripe_service.process_subreddit_tiers(db, donation)
+            
             logger.info(f"Successfully processed checkout session {session.id} for donation {donation.id}")
             
         finally:
@@ -478,11 +489,10 @@ async def handle_payment_intent_succeeded(payment_intent):
         # Get database session
         db = SessionLocal()
         try:
-            # Extract donation data from payment intent metadata
+            # Extract metadata
             metadata = payment_intent.metadata
             
-            # DEBUG: Log the metadata to see what we're getting
-            logger.info(f"Payment intent metadata: {metadata}")
+            logger.info(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
             
             # Create donation request from metadata
             donation_request = DonationRequest(
@@ -498,19 +508,26 @@ async def handle_payment_intent_succeeded(payment_intent):
                 commission_message=metadata.get('commission_message'),
             )
             
-            # Save donation to database
-            stripe_service = StripeService()
+            # Debug logging for extracted donation request
+            logger.info(f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
+            
+            # Process the donation
             donation = stripe_service.save_donation_to_db(db, {
-                'payment_intent_id': payment_intent.id,
-                'amount_cents': payment_intent.amount,
-                'amount_usd': str(donation_request.amount_usd),
-                'metadata': metadata
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": payment_intent.amount,
+                "amount_usd": Decimal(payment_intent.amount / 100),
+                "currency": payment_intent.currency,
+                "status": payment_intent.status,
+                "metadata": payment_intent.metadata,
+                "receipt_email": getattr(payment_intent, "receipt_email", None),
+                "created": payment_intent.created,
             }, donation_request)
             
             # Update donation status to succeeded
             stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
             
-            logger.info(f"Successfully processed payment intent {payment_intent.id} for donation {donation.id}")
+            # Process subreddit tiers if applicable
+            stripe_service.process_subreddit_tiers(db, donation)
             
         finally:
             db.close()
@@ -1237,55 +1254,69 @@ async def get_product_donations(
 
 
 @app.post("/api/donations/create-payment-intent")
-async def create_payment_intent(
-    donation_request: DonationRequest,
-    db: Session = Depends(get_db)
-):
-    """Create a payment intent for Express Checkout Element."""
+async def create_payment_intent(donation_request: DonationRequest):
+    """Create a Stripe payment intent for a donation."""
     try:
-        # Validate donation request
-        if not donation_request.amount_usd or float(donation_request.amount_usd) < 0.50:
-            raise HTTPException(status_code=400, detail="Amount must be at least $0.50")
+        # Debug logging
+        logger.info(f"Received donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
         
-        # Customer name is optional - Express Checkout methods (Apple Pay, Google Pay, PayPal) 
-        # can work without it, and Stripe will handle validation based on payment method
-        
-        # Convert amount to cents for Stripe
-        amount_cents = int(float(donation_request.amount_usd) * 100)
-        
-        # Create metadata
-        metadata = {
-            'donation_type': donation_request.donation_type,
-            'subreddit': donation_request.subreddit,
-            'post_id': donation_request.post_id or '',
-            'commission_message': donation_request.commission_message or '',
-            'message': donation_request.message or '',
-            'customer_name': donation_request.customer_name or '',
-            'reddit_username': donation_request.reddit_username or '',
-            'is_anonymous': str(donation_request.is_anonymous),
-        }
+        # Extract post ID from subreddit if provided
+        post_id = None
+        if donation_request.post_id:
+            post_id = extract_post_id(donation_request.post_id)
+            logger.info(f"Extracted post ID: {post_id} from input: {donation_request.post_id}")
+            donation_request.post_id = post_id
         
         # Create payment intent
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount_cents,
-            currency='usd',
-            metadata=metadata,
-            automatic_payment_methods={
-                'enabled': True,
-            },
-            description=f'{donation_request.donation_type.title()} Donation to r/{donation_request.subreddit}',
-        )
+        result = stripe_service.create_payment_intent(donation_request)
         
-        logger.info(f"Created payment intent {payment_intent.id} for donation")
+        logger.info(f"Created payment intent {result['payment_intent_id']} for donation")
         
         return {
-            "client_secret": payment_intent.client_secret,
-            "payment_intent_id": payment_intent.id,
+            "client_secret": result["client_secret"],
+            "payment_intent_id": result["payment_intent_id"]
         }
-        
     except Exception as e:
-        logger.error(f"Error creating payment intent: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create payment intent: {str(e)}")
+        logger.error(f"Error creating payment intent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/donations/payment-intent/{payment_intent_id}/update")
+async def update_payment_intent(payment_intent_id: str, donation_request: DonationRequest):
+    """Update a Stripe payment intent with new metadata and amount."""
+    try:
+        # Debug logging
+        logger.info(f"Updating payment intent {payment_intent_id} with reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
+        
+        # Extract post ID from subreddit if provided
+        post_id = None
+        if donation_request.post_id:
+            post_id = extract_post_id(donation_request.post_id)
+            logger.info(f"Extracted post ID: {post_id} from input: {donation_request.post_id}")
+        
+        # Update the donation request with the extracted post_id
+        donation_request.post_id = post_id
+        
+        # Update payment intent
+        result = stripe_service.update_payment_intent(payment_intent_id, donation_request)
+        
+        logger.info(f"Updated payment intent {payment_intent_id} for donation")
+        
+        return {
+            "client_secret": result["client_secret"],
+            "payment_intent_id": result["payment_intent_id"]
+        }
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Error updating payment intent {payment_intent_id}: {error_message}")
+        
+        # Return a more specific error response instead of 404
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=f"Payment intent {payment_intent_id} not found")
+        elif "cannot be modified" in error_message.lower():
+            raise HTTPException(status_code=400, detail=f"Payment intent {payment_intent_id} cannot be modified")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to update payment intent: {error_message}")
 
 
 if __name__ == "__main__":

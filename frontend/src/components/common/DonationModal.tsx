@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, ExpressCheckoutElement, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Modal } from './Modal';
 
 // Initialize Stripe
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -27,8 +27,8 @@ interface DonationRequest {
   is_anonymous: boolean;
 }
 
-// Component that uses the Express Checkout Element
-const DonationForm: React.FC<{
+// Component for Express Checkout (Apple Pay, Google Pay, PayPal)
+const ExpressCheckoutForm: React.FC<{
   amount: string;
   message: string;
   customerEmail: string;
@@ -39,6 +39,7 @@ const DonationForm: React.FC<{
   postId?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
+  createPaymentIntent: () => Promise<string | null>;
 }> = ({ 
   amount, 
   message, 
@@ -49,7 +50,96 @@ const DonationForm: React.FC<{
   subreddit, 
   postId, 
   onSuccess, 
-  onError 
+  onError,
+  createPaymentIntent
+}) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleConfirm = async (event: any) => {
+    console.log('Express Checkout confirm event:', event);
+    
+    if (!stripe || !elements) {
+      console.error('Stripe or Elements not available');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/payment-success`,
+        },
+      });
+
+      if (error) {
+        console.error('Payment confirmation error:', error);
+        onError(error.message || 'Payment failed');
+      } else {
+        onSuccess();
+      }
+    } catch (error) {
+      console.error('Express Checkout error:', error);
+      onError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Express Checkout Element for click-to-pay methods */}
+      <ExpressCheckoutElement
+        options={{
+          buttonType: {
+            applePay: 'donate',
+            googlePay: 'donate',
+            paypal: 'pay',
+          },
+        }}
+        onConfirm={handleConfirm}
+        onReady={(event) => {
+          console.log('Express Checkout ready:', event);
+        }}
+      />
+      
+      {isProcessing && (
+        <div className="text-center text-sm text-gray-600">
+          Processing payment...
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Component for Payment Element (cards and other payment methods)
+const PaymentElementForm: React.FC<{
+  amount: string;
+  message: string;
+  customerEmail: string;
+  customerName: string;
+  redditUsername: string;
+  isAnonymous: boolean;
+  subreddit: string;
+  postId?: string;
+  onSuccess: () => void;
+  onError: (error: string) => void;
+  createPaymentIntent: () => Promise<string | null>;
+}> = ({ 
+  amount, 
+  message, 
+  customerEmail, 
+  customerName, 
+  redditUsername, 
+  isAnonymous, 
+  subreddit, 
+  postId, 
+  onSuccess, 
+  onError,
+  createPaymentIntent
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -57,18 +147,16 @@ const DonationForm: React.FC<{
 
   const handleConfirm = async () => {
     if (!stripe || !elements) {
-      onError('Payment not ready');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Confirm the payment with the Express Checkout Element
       const { error } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/donation/success`,
+          return_url: `${window.location.origin}/payment-success`,
         },
       });
 
@@ -86,41 +174,36 @@ const DonationForm: React.FC<{
 
   return (
     <div className="space-y-4">
-      {/* Express Checkout Element for click-to-pay methods */}
-      <ExpressCheckoutElement
+      {/* Payment Element for cards and other payment methods */}
+      <PaymentElement 
         options={{
-          buttonType: {
-            applePay: 'donate',
-            googlePay: 'donate',
-            paypal: 'pay',
-          },
-          buttonHeight: 48,
-          buttonTheme: {
-            applePay: 'black',
-            googlePay: 'black',
-            paypal: 'gold',
-          },
           layout: {
-            maxColumns: 2,
-            maxRows: 3,
-            overflow: 'auto',
+            type: 'tabs',
+            defaultCollapsed: false,
+          },
+          wallets: {
+            applePay: 'never',
+            googlePay: 'never',
           },
         }}
-        onConfirm={handleConfirm}
       />
       
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="bg-white px-2 text-gray-500">Or pay with card</span>
-        </div>
-      </div>
-      
-      {/* Payment Element for card payments */}
-      <PaymentElement />
+      {/* Pay button for Payment Element */}
+      <button
+        className="w-full mt-2 py-2 px-4 bg-pink-600 text-white rounded disabled:opacity-50"
+        onClick={handleConfirm}
+        disabled={
+          !stripe || 
+          !elements || 
+          isProcessing || 
+          !customerEmail || 
+          !customerName || 
+          (!isAnonymous && !redditUsername.trim())
+        }
+        type="button"
+      >
+        {isProcessing ? "Processing..." : "Pay"}
+      </button>
       
       {isProcessing && (
         <div className="text-center text-sm text-gray-600">
@@ -137,13 +220,24 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [redditUsername, setRedditUsername] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(true); // Default to anonymous
+  const [previousRedditUsername, setPreviousRedditUsername] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [showMessage, setShowMessage] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'express' | 'card' | null>(null);
+  const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(false);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const presetAmounts = [5, 10, 25, 50, 100];
+
+  // Create PaymentIntent when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      createPaymentIntent();
+    }
+  }, [isOpen]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -154,64 +248,184 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
       setCustomerEmail('');
       setCustomerName('');
       setRedditUsername('');
-      setIsAnonymous(false);
+      setPreviousRedditUsername('');
+      setIsAnonymous(true); // Default to anonymous
       setError('');
       setSuccess(false);
-      setClientSecret(null);
-      setShowMessage(false);
+      setPaymentMethod(null);
+      setClientSecret(null); // Clear any existing client secret
+      setPaymentIntentId(null);
+      setIsCreatingPaymentIntent(false);
     }
   }, [isOpen]);
 
-  // Create payment intent when form data changes
+  // Debounced update for Reddit username changes
   useEffect(() => {
-    const createPaymentIntent = async () => {
-      if (!isOpen || !amount) return;
+    if (!clientSecret || !paymentIntentId) return;
+    
+    const timeoutId = setTimeout(() => {
+      updatePaymentIntent();
+    }, 500); // 500ms debounce
 
-      // For support donations, post_id is required
-      if (!postId) {
-        setError('Post ID is required for support donations');
-        setClientSecret(null);
-        return;
+    return () => clearTimeout(timeoutId);
+  }, [redditUsername, isAnonymous]);
+
+  // Debounced update for message changes
+  useEffect(() => {
+    if (!clientSecret || !paymentIntentId) return;
+    
+    const timeoutId = setTimeout(() => {
+      updatePaymentIntent();
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [message]);
+
+  const createPaymentIntent = async () => {
+    if (!amount || parseFloat(amount) < 0.50) {
+      setError('Amount must be at least $0.50');
+      return null;
+    }
+
+    setIsCreatingPaymentIntent(true);
+    setError(''); // Clear any previous errors
+
+    try {
+      const donationRequest: DonationRequest = {
+        amount_usd: amount,
+        subreddit,
+        donation_type: 'support',
+        post_id: postId,
+        message: message,
+        customer_email: customerEmail || undefined,
+        customer_name: customerName || undefined,
+        reddit_username: redditUsername.trim() || undefined,
+        is_anonymous: isAnonymous,
+      };
+
+      // Debug logging
+      console.log('Creating payment intent with:', {
+        redditUsername: redditUsername,
+        redditUsernameTrimmed: redditUsername.trim(),
+        redditUsernameFinal: redditUsername.trim() || undefined,
+        isAnonymous: isAnonymous
+      });
+
+      const response = await fetch('/api/donations/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(donationRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create payment intent');
       }
 
-      // Name is only required for card payments, not for Express Checkout methods
-      // We'll let Stripe handle the validation based on the payment method chosen
+      const { client_secret, payment_intent_id } = await response.json();
+      setClientSecret(client_secret);
+      setPaymentIntentId(payment_intent_id);
+      return client_secret;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to create payment intent');
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      return null;
+    } finally {
+      setIsCreatingPaymentIntent(false);
+    }
+  };
 
-      try {
-        const donationRequest: DonationRequest = {
-          amount_usd: amount,
-          subreddit,
-          donation_type: 'support',
-          post_id: postId,
-          message: message,
-          customer_email: customerEmail || undefined,
-          customer_name: customerName || undefined, // Make optional
-          reddit_username: redditUsername || undefined,
-          is_anonymous: isAnonymous,
-        };
+  // Function to fetch current PaymentIntent state from backend
+  const fetchPaymentIntentState = async () => {
+    if (!paymentIntentId) return;
 
-        const response = await fetch('/api/donations/create-payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(donationRequest),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to create payment intent');
+    try {
+      const response = await fetch(`/api/donations/${paymentIntentId}`);
+      if (response.ok) {
+        const donationData = await response.json();
+        console.log('Fetched current PaymentIntent state:', donationData);
+        
+        // Update frontend state with the current backend state
+        if (donationData.reddit_username !== undefined) {
+          setRedditUsername(donationData.reddit_username || '');
         }
-
-        const { client_secret } = await response.json();
-        setClientSecret(client_secret);
-        setError(''); // Clear any previous errors
-      } catch (error) {
-        setError(error instanceof Error ? error.message : 'Failed to create payment intent');
-        setClientSecret(null);
+        if (donationData.is_anonymous !== undefined) {
+          setIsAnonymous(donationData.is_anonymous);
+        }
+        if (donationData.message !== undefined) {
+          setMessage(donationData.message || '');
+        }
+        if (donationData.amount_usd !== undefined) {
+          const amountStr = donationData.amount_usd.toString();
+          setAmount(amountStr);
+          // Update custom amount if it's not a preset
+          if (!presetAmounts.includes(parseFloat(amountStr))) {
+            setCustomAmount(amountStr);
+          }
+        }
       }
-    };
+    } catch (error) {
+      console.warn('Failed to fetch PaymentIntent state:', error);
+    }
+  };
 
-    createPaymentIntent();
-  }, [isOpen, amount, customerName, customerEmail, redditUsername, isAnonymous, message, subreddit, postId]);
+  // Function to update existing PaymentIntent
+  const updatePaymentIntent = async () => {
+    if (!paymentIntentId || !amount || parseFloat(amount) < 0.50) {
+      return null;
+    }
+
+    setError(''); // Clear any previous errors
+
+    try {
+      const donationRequest: DonationRequest = {
+        amount_usd: amount,
+        subreddit,
+        donation_type: 'support',
+        post_id: postId,
+        message: message,
+        customer_email: customerEmail || undefined,
+        customer_name: customerName || undefined,
+        reddit_username: redditUsername.trim() || undefined,
+        is_anonymous: isAnonymous,
+      };
+
+      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(donationRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        // Log the error but don't show it to the user since updates are not critical
+        console.warn('Payment intent update failed:', errorData.detail);
+        return null;
+      }
+
+      const result = await response.json();
+      console.log('Payment intent updated successfully:', result);
+      
+      // Update the frontend state with the latest data from the backend
+      if (result.client_secret) {
+        setClientSecret(result.client_secret);
+      }
+      if (result.payment_intent_id) {
+        setPaymentIntentId(result.payment_intent_id);
+      }
+      
+      return result;
+    } catch (error) {
+      // Log the error but don't show it to the user since updates are not critical
+      console.warn('Failed to update payment intent:', error);
+      return null;
+    }
+  };
 
   const handleSuccess = () => {
     setSuccess(true);
@@ -248,7 +462,13 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
               <button
                 key={preset}
                 type="button"
-                onClick={() => { setAmount(preset.toString()); setCustomAmount(''); }}
+                onClick={() => { 
+                  setAmount(preset.toString()); 
+                  setCustomAmount(''); 
+                  if (paymentIntentId) {
+                    updatePaymentIntent();
+                  }
+                }}
                 className={`px-2 py-1 border rounded-lg text-xs font-medium transition-colors h-9 ${amount === preset.toString() ? 'bg-pink-600 text-white border-pink-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
               >
                 ${preset}
@@ -262,7 +482,13 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                 min="0.50"
                 step="0.01"
                 value={customAmount}
-                onChange={e => { setCustomAmount(e.target.value); setAmount(e.target.value); }}
+                onChange={e => { 
+                  setCustomAmount(e.target.value); 
+                  setAmount(e.target.value); 
+                  if (paymentIntentId) {
+                    updatePaymentIntent();
+                  }
+                }}
                 className="w-full border border-gray-300 rounded-lg pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent h-9"
                 placeholder="Custom"
               />
@@ -270,49 +496,48 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
           </div>
         </div>
 
-        {/* Customer Information */}
+        {/* Customer Information - Only for Reddit Username */}
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <input
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="your@email.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Name (optional)</label>
-            <input
-              type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Your Name"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Required for card payments, optional for Apple Pay/Google Pay/PayPal
-            </p>
-          </div>
           {/* Reddit Username and Anonymous Toggle */}
           <div className="flex items-center gap-3 mb-2">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reddit Username</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reddit Username
+                {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
+              </label>
               <input
                 type="text"
                 value={redditUsername}
-                onChange={(e) => setRedditUsername(e.target.value)}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                placeholder="u/username"
+                onChange={(e) => {
+                  setRedditUsername(e.target.value);
+                }}
                 disabled={isAnonymous}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAnonymous ? 'bg-gray-100 text-gray-500' : ''}`}
+                placeholder={isAnonymous ? "Anonymous donation" : "Enter your Reddit username"}
               />
+              {!isAnonymous && !redditUsername.trim() && (
+                <p className="text-red-500 text-xs mt-1">Reddit username is required when not anonymous</p>
+              )}
             </div>
             <div className="flex flex-col items-center justify-end h-full">
               <label className="text-xs text-gray-600 mb-1">Anonymous</label>
               <button
                 type="button"
-                onClick={() => setIsAnonymous((v) => !v)}
+                onClick={() => {
+                  const newAnonymousState = !isAnonymous;
+                  setIsAnonymous(newAnonymousState);
+                  
+                  // Handle reddit username when toggling anonymous
+                  if (newAnonymousState) {
+                    // Switching to anonymous - save current username and clear it
+                    setPreviousRedditUsername(redditUsername);
+                    setRedditUsername('');
+                  } else {
+                    // Switching from anonymous - restore previous username if any
+                    setRedditUsername(previousRedditUsername);
+                  }
+                  // The debounced useEffect will handle the update
+                }}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-pink-500' : 'bg-gray-300'}`}
                 aria-pressed={isAnonymous}
                 aria-label="Toggle anonymous donation"
@@ -348,7 +573,9 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
               <label className="block text-sm font-medium text-gray-700 mb-2 mt-2">Support Message</label>
               <textarea
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={3}
                 placeholder="Leave a message of support..."
@@ -364,37 +591,116 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
           </div>
         )}
 
-        {/* Express Checkout Element */}
+        {/* Payment Options */}
         <div className="border-t pt-6">
-          {clientSecret ? (
-            <Elements 
-              stripe={stripePromise}
-              options={{
-                clientSecret: clientSecret,
-                appearance: {
-                  theme: 'stripe',
-                  variables: {
-                    colorPrimary: '#ec4899',
-                  },
-                },
-              }}
-            >
-              <DonationForm
-                amount={amount}
-                message={message}
-                customerEmail={customerEmail}
-                customerName={customerName}
-                redditUsername={redditUsername}
-                isAnonymous={isAnonymous}
-                subreddit={subreddit}
-                postId={postId}
-                onSuccess={handleSuccess}
-                onError={handleError}
-              />
-            </Elements>
+          {!clientSecret ? (
+            // Show loading while creating payment intent
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600 mx-auto"></div>
+              <p className="text-sm text-gray-600 mt-2">Setting up payment options...</p>
+            </div>
           ) : (
-            <div className="text-center text-sm text-gray-600 py-4">
-              Please fill in all required fields to continue
+            // Show Express Checkout + Payment Element combination
+            <div className="space-y-6">
+              {/* Express Checkout Section */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Payment</h3>
+                <p className="text-xs text-gray-600 mb-3">
+                  Pay instantly with Apple Pay, Google Pay, PayPal, or Link
+                </p>
+                <Elements 
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: clientSecret
+                  }}
+                >
+                  <ExpressCheckoutForm
+                    amount={amount}
+                    message={message}
+                    customerEmail={customerEmail}
+                    customerName={customerName}
+                    redditUsername={redditUsername}
+                    isAnonymous={isAnonymous}
+                    subreddit={subreddit}
+                    postId={postId}
+                    onSuccess={handleSuccess}
+                    onError={handleError}
+                    createPaymentIntent={createPaymentIntent}
+                  />
+                </Elements>
+              </div>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-white px-2 text-gray-500">Or pay with card</span>
+                </div>
+              </div>
+
+              {/* Payment Element Section */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Card Payment</h3>
+                
+                {/* Email and Name fields for card payment */}
+                <div className="space-y-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Name
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Your Name"
+                    />
+                  </div>
+                </div>
+                
+                <Elements 
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: clientSecret,
+                    appearance: {
+                      theme: 'stripe',
+                      variables: {
+                        colorPrimary: '#ec4899',
+                      },
+                    },
+                  }}
+                >
+                  <PaymentElementForm
+                    amount={amount}
+                    message={message}
+                    customerEmail={customerEmail}
+                    customerName={customerName}
+                    redditUsername={redditUsername}
+                    isAnonymous={isAnonymous}
+                    subreddit={subreddit}
+                    postId={postId}
+                    onSuccess={handleSuccess}
+                    onError={handleError}
+                    createPaymentIntent={createPaymentIntent}
+                  />
+                </Elements>
+              </div>
             </div>
           )}
         </div>
