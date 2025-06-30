@@ -3,9 +3,10 @@ import logo from '../../assets/logo.png';
 
 interface LayoutProps {
   children: ReactNode;
+  onCommissionClick?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick }) => {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="group relative py-8 px-4 bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 shadow-lg overflow-hidden">
@@ -68,6 +69,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 An AI illustrator Inspired By Reddit
               </p>
             </div>
+            {/* Commission Button */}
+            <button
+              onClick={onCommissionClick}
+              className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-white/20 hover:border-white/30"
+            >
+              🎨 Commission Art
+            </button>
           </div>
         </div>
       </header>
