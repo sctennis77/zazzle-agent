@@ -26,6 +26,19 @@ interface CommissionRequest {
   is_anonymous: boolean;
 }
 
+// Validation result interface
+interface ValidationResult {
+  valid: boolean;
+  subreddit?: string;
+  subreddit_id?: number;
+  post_id?: string;
+  post_title?: string;
+  post_content?: string;
+  post_url?: string;
+  commission_type: string;
+  error?: string;
+}
+
 // Available subreddits for commission
 const AVAILABLE_SUBREDDITS = [
   // Nature & Outdoors
@@ -199,42 +212,32 @@ const CommissionForm: React.FC<{
         }}
       />
 
-      {/* Always-visible Pay button for card payments */}
+      {/* Submit button for card payments */}
       <button
-        className="w-full mt-2 py-2 px-4 bg-purple-600 text-white rounded disabled:opacity-50"
         onClick={handleConfirm}
-        disabled={!stripe || !elements || isProcessing || !elementsReady || !isRedditUsernameValid}
-        type="button"
+        disabled={!stripe || !elements || isProcessing || !isRedditUsernameValid}
+        className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
+          !stripe || !elements || isProcessing || !isRedditUsernameValid
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : 'bg-purple-600 text-white hover:bg-purple-700'
+        }`}
       >
-        {!elementsReady ? "Loading payment methods..." : isProcessing ? "Processing..." : "Pay"}
+        {isProcessing ? 'Processing...' : 'Pay with Card'}
       </button>
-      
-      {!elementsReady && (
-        <div className="text-center text-sm text-gray-600">
-          Initializing payment methods...
-        </div>
-      )}
-      
-      {isProcessing && (
-        <div className="text-center text-sm text-gray-600">
-          Processing payment...
-        </div>
-      )}
 
-      {!isRedditUsernameValid && (
-        <div className="text-red-600 text-sm bg-red-50 p-2 rounded mt-2">
-          Reddit username is required unless you select Anonymous.
-        </div>
+      {/* Validation messages */}
+      {!isRedditUsernameValid && !_isAnonymous && (
+        <p className="text-sm text-red-600">Reddit username is required when not anonymous</p>
       )}
     </div>
   );
 };
 
 const iconMap = {
-  FaCrown,
-  FaStar,
-  FaGem,
-  FaHeart,
+  crown: FaCrown,
+  star: FaStar,
+  gem: FaGem,
+  heart: FaHeart,
 };
 
 const COMMISSION_TYPES = {
@@ -257,15 +260,21 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [redditUsername, setRedditUsername] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [previousRedditUsername, setPreviousRedditUsername] = useState('');
-  const [subreddit, setSubreddit] = useState('golf');
+  const [subreddit, setSubreddit] = useState('');
   const [postId, setPostId] = useState('');
-  const [commissionType, setCommissionType] = useState(COMMISSION_TYPES.SUBREDDIT);
+  const [commissionType, setCommissionType] = useState(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [showMessage, setShowMessage] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  
+  // Validation state
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  
   const isMounted = useRef(false);
 
   // Use dynamic tiers from API
@@ -283,13 +292,6 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setCustomAmount('');
     }
   }, [isOpen, commissionType, tiers.length]);
-
-  // Create payment intent when modal is open and amount is set
-  useEffect(() => {
-    if (isOpen && amount && parseFloat(amount) >= (allowedTiers[0]?.min_amount || 1)) {
-      createPaymentIntent();
-    }
-  }, [isOpen, amount, commissionType, tiers.length]);
 
   // Find the current tier based on amount
   const currentTier = allowedTiers
@@ -317,54 +319,151 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setRedditUsername('');
       setPreviousRedditUsername('');
       setIsAnonymous(false);
-      setSubreddit('golf');
+      setSubreddit(''); // Unselected subreddit
       setPostId('');
-      setCommissionType(COMMISSION_TYPES.SUBREDDIT);
+      setCommissionType(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
       setError('');
       setSuccess(false);
       setShowMessage(false);
-      // Don't reset clientSecret and paymentIntentId here - let createPaymentIntent handle it
-      (async () => {
-        const paymentIntentId = await createPaymentIntent();
-        if (!isMounted.current) return;
-      })();
-    } else {
+      setValidationResult(null);
+      setValidationError('');
       setClientSecret(null);
       setPaymentIntentId(null);
     }
   }, [isOpen]);
 
+  // Handle commission type changes
+  const handleCommissionTypeChange = (type: string) => {
+    setCommissionType(type);
+    setValidationResult(null);
+    setValidationError('');
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setError('');
+    if (type === COMMISSION_TYPES.RANDOM) {
+      // Immediately validate for random_random
+      validateCommission(type, '', '');
+    } else if (type === COMMISSION_TYPES.SUBREDDIT) {
+      setSubreddit(''); // Reset subreddit
+    } else if (type === COMMISSION_TYPES.SPECIFIC) {
+      setPostId('');
+      setSubreddit('');
+    }
+  };
+
+  // Validation function (now takes explicit args)
+  const validateCommission = async (
+    type = commissionType,
+    sub = subreddit,
+    post = postId
+  ) => {
+    if (type === COMMISSION_TYPES.SUBREDDIT && !sub) return;
+    if (type === COMMISSION_TYPES.SPECIFIC && !post) return;
+    setIsValidating(true);
+    setValidationError('');
+    setValidationResult(null);
+    try {
+      const validationRequest = {
+        commission_type: type === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 
+                        type === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
+        subreddit: type === COMMISSION_TYPES.RANDOM ? undefined : sub,
+        post_id: type === COMMISSION_TYPES.SPECIFIC ? 
+                (() => {
+                  const extracted = extractPostIdFromUrl(post);
+                  return extracted || (post && !post.includes('reddit.com') ? post : undefined);
+                })() : undefined,
+      };
+      const response = await fetch('/api/commissions/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validationRequest),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Validation failed');
+      }
+      const result: ValidationResult = await response.json();
+      if (!isMounted.current) return;
+      if (result.valid) {
+        setValidationResult(result);
+        setValidationError('');
+        createPaymentIntent(result);
+      } else {
+        setValidationResult(null);
+        setValidationError(result.error || 'Validation failed');
+        setClientSecret(null);
+        setPaymentIntentId(null);
+      }
+    } catch (error) {
+      if (!isMounted.current) return;
+      setValidationError(error instanceof Error ? error.message : 'Validation failed');
+      setValidationResult(null);
+      setClientSecret(null);
+      setPaymentIntentId(null);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // Subreddit select handler
+  const handleSubredditSelect = (value: string) => {
+    setSubreddit(value);
+    setValidationResult(null);
+    setValidationError('');
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    if (value) {
+      setTimeout(() => validateCommission(COMMISSION_TYPES.SUBREDDIT, value, ''), 100);
+    }
+  };
+
+  // Post ID input handler
+  const handlePostIdInput = (value: string) => {
+    setPostId(value);
+    // If it's a Reddit URL, extract subreddit and post ID
+    const subredditFromUrl = extractSubredditFromUrl(value);
+    if (subredditFromUrl) {
+      setSubreddit(subredditFromUrl);
+    } else {
+      setSubreddit('');
+    }
+    setValidationResult(null);
+    setValidationError('');
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    if (value) {
+      setTimeout(() => validateCommission(COMMISSION_TYPES.SPECIFIC, subredditFromUrl || subreddit, value), 500);
+    }
+  };
+
   // Function to create new PaymentIntent
-  const createPaymentIntent = async () => {
+  const createPaymentIntent = async (validationData?: ValidationResult) => {
     if (!isOpen || !amount || parseFloat(amount) < minAmount) {
       console.log('Skipping payment intent creation:', { isOpen, amount, minAmount });
       return null;
     }
 
-    // For specific post commissions, post_id is required
-    if (commissionType === COMMISSION_TYPES.SPECIFIC && !postId) {
-      setError('Post ID or URL is required for specific post commissions');
-      return null;
-    }
+    // Use validation data if available, otherwise use form data
+    const validatedSubreddit = validationData?.subreddit || subreddit;
+    const validatedPostId = validationData?.post_id || postId;
 
     setError(''); // Clear any previous errors
 
     try {
-      console.log('Creating payment intent for commission:', { amount, subreddit, commissionType });
+      console.log('Creating payment intent for commission:', { 
+        amount, 
+        validatedSubreddit, 
+        commissionType,
+        validatedPostId 
+      });
       
       const commissionRequest: CommissionRequest = {
         amount_usd: amount,
-        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : subreddit,
+        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : validatedSubreddit,
         donation_type: 'commission',
-        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC
-          ? (() => {
-              const extracted = extractPostIdFromUrl(postId);
-              const candidate = extracted || (postId && !postId.includes('reddit.com') ? postId : undefined);
-              if (candidate && candidate.startsWith('pi_')) return undefined;
-              return candidate;
-            })()
-          : undefined,
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 
+                        commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? validatedPostId : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -410,19 +509,17 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     setError(''); // Clear any previous errors
 
     try {
+      // Use validation data if available, otherwise use form data
+      const validatedSubreddit = validationResult?.subreddit || subreddit;
+      const validatedPostId = validationResult?.post_id || postId;
+
       const commissionRequest: CommissionRequest = {
         amount_usd: amount,
-        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : subreddit,
+        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : validatedSubreddit,
         donation_type: 'commission',
-        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC
-          ? (() => {
-              const extracted = extractPostIdFromUrl(postId);
-              const candidate = extracted || (postId && !postId.includes('reddit.com') ? postId : undefined);
-              if (candidate && candidate.startsWith('pi_')) return undefined;
-              return candidate;
-            })()
-          : undefined,
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 
+                        commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? validatedPostId : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -467,7 +564,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, commissionMessage, subreddit, postId, commissionType]);
+  }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, commissionMessage]);
 
   const handleSuccess = () => {
     setSuccess(true);
@@ -510,42 +607,28 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             <div className="text-xs text-gray-500">Minimum: ${minAmount.toFixed(2)}</div>
           </div>
         </div>
+        
         {/* Commission Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Commission Type</label>
           <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
-              onClick={() => {
-                setCommissionType(COMMISSION_TYPES.RANDOM);
-                setSubreddit("");
-                setAmount("1"); // Set to bronze minimum
-                setError("");
-                if (paymentIntentId) updatePaymentIntent();
-              }}
+              onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.RANDOM)}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.RANDOM ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Random">🎲</span> Random<br />Random subreddit & post
             </button>
             <button
               type="button"
-              onClick={() => {
-                setCommissionType(COMMISSION_TYPES.SUBREDDIT);
-                setPostId("");
-                setError("");
-                if (paymentIntentId) updatePaymentIntent();
-              }}
+              onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.SUBREDDIT)}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Random Post">🎲</span> Random Post<br />From selected subreddit
             </button>
             <button
               type="button"
-              onClick={() => {
-                setCommissionType(COMMISSION_TYPES.SPECIFIC);
-                setError("");
-                if (paymentIntentId) updatePaymentIntent();
-              }}
+              onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.SPECIFIC)}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Specific Post">🎯</span> Specific Post<br />Choose exact post
@@ -559,12 +642,10 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
             <select
               value={subreddit}
-              onChange={(e) => {
-                setSubreddit(e.target.value);
-                if (paymentIntentId) updatePaymentIntent();
-              }}
+              onChange={(e) => handleSubredditSelect(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
+              <option value="">Select a subreddit...</option>
               {AVAILABLE_SUBREDDITS.map((sub) => (
                 <option key={sub} value={sub}>r/{sub}</option>
               ))}
@@ -579,19 +660,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             <input
               type="text"
               value={postId}
-              onChange={(e) => {
-                const value = e.target.value;
-                setPostId(value);
-                // If it's a Reddit URL, extract subreddit and post ID
-                const subredditFromUrl = extractSubredditFromUrl(value);
-                const postIdFromUrl = extractPostIdFromUrl(value);
-                if (subredditFromUrl) {
-                  setSubreddit(subredditFromUrl);
-                } else {
-                  setSubreddit('');
-                }
-                if (paymentIntentId) updatePaymentIntent();
-              }}
+              onChange={(e) => handlePostIdInput(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="e.g., 1llckgq or https://reddit.com/r/golf/comments/1llckgq/..."
             />
@@ -617,6 +686,30 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
                 </>
               );
             })()}
+          </div>
+        )}
+
+        {/* Validation Status */}
+        {isValidating && (
+          <div className="flex items-center gap-2 text-blue-600 text-sm">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            Validating commission...
+          </div>
+        )}
+
+        {validationError && (
+          <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
+            {validationError}
+          </div>
+        )}
+
+        {validationResult && validationResult.valid && (
+          <div className="text-green-600 text-sm bg-green-50 p-3 rounded-md">
+            <div className="font-semibold mb-1">✅ Commission Validated</div>
+            <div>Subreddit: r/{validationResult.subreddit}</div>
+            {validationResult.post_id && (
+              <div>Post: {validationResult.post_title || validationResult.post_id}</div>
+            )}
           </div>
         )}
 
@@ -666,80 +759,50 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             <div className="text-xs text-red-500 mt-1">Minimum for {currentTier?.display_name} is ${minAmount.toFixed(2)}</div>
           )}
         </div>
-
-        {/* Customer Information */}
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <input
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="your@email.com"
-              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
-              title="Please enter a valid email address"
-            />
-            {customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) && (
-              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Name (optional)</label>
+        {/* Reddit Username and Anonymous Toggle */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reddit Username
+              {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
+            </label>
             <input
               type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Your Name"
+              value={redditUsername}
+              onChange={(e) => setRedditUsername(e.target.value)}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+              placeholder="u/username"
+              disabled={isAnonymous}
+              required={!isAnonymous}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Required for card payments, optional for Apple Pay/Google Pay/PayPal
-            </p>
+            {!isAnonymous && !redditUsername.trim() && (
+              <p className="text-xs text-red-500 mt-1">Reddit username is required unless you select Anonymous.</p>
+            )}
           </div>
-          {/* Reddit Username and Anonymous Toggle */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reddit Username</label>
-              <input
-                type="text"
-                value={redditUsername}
-                onChange={(e) => setRedditUsername(e.target.value)}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                placeholder="u/username"
-                disabled={isAnonymous}
+          <div className="flex flex-col items-center justify-end h-full">
+            <label className="text-xs text-gray-600 mb-1">Anonymous</label>
+            <button
+              type="button"
+              onClick={() => {
+                const newAnonymousState = !isAnonymous;
+                setIsAnonymous(newAnonymousState);
+                if (newAnonymousState) {
+                  setPreviousRedditUsername(redditUsername);
+                  setRedditUsername('');
+                } else {
+                  setRedditUsername(previousRedditUsername);
+                }
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-purple-500' : 'bg-gray-300'}`}
+              aria-pressed={isAnonymous}
+              aria-label="Toggle anonymous commission"
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
               />
-            </div>
-            <div className="flex flex-col items-center justify-end h-full">
-              <label className="text-xs text-gray-600 mb-1">Anonymous</label>
-              <button
-                type="button"
-                onClick={() => {
-                  const newAnonymousState = !isAnonymous;
-                  setIsAnonymous(newAnonymousState);
-                  
-                  // Handle reddit username when toggling anonymous
-                  if (newAnonymousState) {
-                    // Switching to anonymous - save current username and clear it
-                    setPreviousRedditUsername(redditUsername);
-                    setRedditUsername('');
-                  } else {
-                    // Switching from anonymous - restore previous username if any
-                    setRedditUsername(previousRedditUsername);
-                  }
-                }}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-purple-500' : 'bg-gray-300'}`}
-                aria-pressed={isAnonymous}
-                aria-label="Toggle anonymous commission"
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
-                />
-              </button>
-            </div>
+            </button>
           </div>
         </div>
-
         {/* Commission Message */}
         <div>
           {!showMessage && (
@@ -774,24 +837,40 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             </>
           )}
         </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
-            {error}
+        {/* Customer Information */}
+        <div className="space-y-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <input
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="your@email.com"
+              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+              title="Please enter a valid email address"
+            />
+            {customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) && (
+              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+            )}
           </div>
-        )}
-
-        {/* Express Checkout Element */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Name (optional)</label>
+            <input
+              type="text"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Your Name"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Required for card payments, optional for Apple Pay/Google Pay/PayPal
+            </p>
+          </div>
+        </div>
+        {/* Payment Area UX */}
         <div className="border-t pt-6 min-h-[340px] relative">
-          {!clientSecret ? (
-            <div className="animate-pulse flex flex-col gap-4 items-center justify-center min-h-[300px]">
-              <div className="bg-gray-200 rounded-lg h-12 w-3/4 mb-2" />
-              <div className="bg-gray-200 rounded-lg h-12 w-3/4 mb-2" />
-              <div className="bg-gray-200 rounded-lg h-10 w-1/2 mb-2" />
-              <div className="bg-gray-200 rounded-lg h-12 w-full" />
-            </div>
-          ) : (
+          {validationResult && validationResult.valid && clientSecret ? (
             <div className="transition-opacity duration-500 opacity-100" style={{ opacity: clientSecret ? 1 : 0 }}>
               <Elements 
                 stripe={stripePromise}
@@ -815,16 +894,25 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
                   customerName={customerName}
                   redditUsername={redditUsername}
                   isAnonymous={isAnonymous}
-                  subreddit={subreddit}
-                  postId={postId}
+                  subreddit={validationResult?.subreddit || subreddit}
+                  postId={validationResult?.post_id || postId}
                   onSuccess={handleSuccess}
                   onError={handleError}
                 />
               </Elements>
             </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[200px] text-gray-500">
+              <span className="mb-2 text-lg">🖌️</span>
+              <span>
+                {commissionType === COMMISSION_TYPES.SUBREDDIT && !subreddit && 'Please select a subreddit to continue.'}
+                {commissionType === COMMISSION_TYPES.SPECIFIC && !postId && 'Please enter a post ID or URL to continue.'}
+                {commissionType === COMMISSION_TYPES.RANDOM && 'Generating a random commission...'}
+                {(isValidating || validationError) && ''}
+              </span>
+            </div>
           )}
         </div>
-
         {/* Cancel Button */}
         <div className="flex justify-end">
           <button
