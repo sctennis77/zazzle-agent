@@ -1352,12 +1352,7 @@ async def update_payment_intent(payment_intent_id: str, donation_request: Donati
             raise HTTPException(status_code=500, detail=f"Failed to update payment intent: {error_message}")
 
 
-class CommissionValidationRequest(BaseModel):
-    """Request model for commission validation."""
-    commission_type: str  # random_random, random_subreddit, specific_post
-    subreddit: Optional[str] = None  # For random_subreddit
-    post_id: Optional[str] = None    # For specific_post
-    post_url: Optional[str] = None   # Alternative for specific_post
+from app.models import CommissionValidationRequest
 
 
 @app.post("/api/commissions/validate")
@@ -1385,7 +1380,7 @@ async def validate_commission(validation_request: CommissionValidationRequest):
             commission_type=validation_request.commission_type,
             subreddit=validation_request.subreddit,
             post_id=validation_request.post_id,
-            post_url=validation_request.post_url
+            post_url=None  # Not supported in current model
         )
         
         logger.info(f"Commission validation result: valid={result.valid}")

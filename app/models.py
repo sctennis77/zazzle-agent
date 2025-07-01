@@ -928,3 +928,45 @@ class CheckoutSessionResponse(BaseModel):
     """Response model for Stripe Checkout session creation."""
     session_id: str
     url: str
+
+
+class CommissionValidationRequest(BaseModel):
+    """Request model for validating commission parameters."""
+    commission_type: str = Field(..., description="Type of commission: 'random_subreddit', 'specific_post', or 'random_random'")
+    subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit name (required for random_subreddit and specific_post)")
+    post_id: Optional[str] = Field(None, max_length=32, description="Reddit post ID (required for specific_post)")
+
+    @field_validator('commission_type')
+    @classmethod
+    def validate_commission_type(cls, v):
+        """Validate commission type."""
+        valid_types = ['random_subreddit', 'specific_post', 'random_random']
+        if v not in valid_types:
+            raise ValueError(f'commission_type must be one of: {valid_types}')
+        return v
+
+    @model_validator(mode='after')
+    def validate_required_fields(self):
+        """Validate required fields based on commission type."""
+        if self.commission_type in ['random_subreddit', 'specific_post']:
+            if not self.subreddit:
+                raise ValueError(f'subreddit is required for {self.commission_type} commission type')
+        
+        if self.commission_type == 'specific_post':
+            if not self.post_id:
+                raise ValueError('post_id is required for specific_post commission type')
+        
+        return self
+
+
+class CommissionValidationResponse(BaseModel):
+    """Response model for commission validation."""
+    valid: bool = Field(..., description="Whether the commission parameters are valid")
+    subreddit: Optional[str] = Field(None, description="Validated subreddit name")
+    subreddit_id: Optional[int] = Field(None, description="Database ID of the subreddit")
+    post_id: Optional[str] = Field(None, description="Validated post ID")
+    post_title: Optional[str] = Field(None, description="Title of the post")
+    post_content: Optional[str] = Field(None, description="Content of the post")
+    post_url: Optional[str] = Field(None, description="URL of the post")
+    commission_type: str = Field(..., description="Type of commission that was validated")
+    error: Optional[str] = Field(None, description="Error message if validation failed")
