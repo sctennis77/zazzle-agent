@@ -141,6 +141,9 @@ const CommissionForm: React.FC<{
     }
   };
 
+  const isRedditUsernameRequired = !_isAnonymous;
+  const isRedditUsernameValid = _isAnonymous || (_redditUsername && _redditUsername.trim().length > 0);
+
   return (
     <div className="space-y-4">
       {/* Express Checkout Element for click-to-pay methods */}
@@ -200,7 +203,7 @@ const CommissionForm: React.FC<{
       <button
         className="w-full mt-2 py-2 px-4 bg-purple-600 text-white rounded disabled:opacity-50"
         onClick={handleConfirm}
-        disabled={!stripe || !elements || isProcessing || !elementsReady}
+        disabled={!stripe || !elements || isProcessing || !elementsReady || !isRedditUsernameValid}
         type="button"
       >
         {!elementsReady ? "Loading payment methods..." : isProcessing ? "Processing..." : "Pay"}
@@ -215,6 +218,12 @@ const CommissionForm: React.FC<{
       {isProcessing && (
         <div className="text-center text-sm text-gray-600">
           Processing payment...
+        </div>
+      )}
+
+      {!isRedditUsernameValid && (
+        <div className="text-red-600 text-sm bg-red-50 p-2 rounded mt-2">
+          Reddit username is required unless you select Anonymous.
         </div>
       )}
     </div>
@@ -346,7 +355,14 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         subreddit,
         donation_type: 'commission',
         commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? postId : undefined,
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC
+          ? (() => {
+              const extracted = extractPostIdFromUrl(postId);
+              const candidate = extracted || (postId && !postId.includes('reddit.com') ? postId : undefined);
+              if (candidate && candidate.startsWith('pi_')) return undefined;
+              return candidate;
+            })()
+          : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -397,7 +413,14 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         subreddit,
         donation_type: 'commission',
         commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? postId : undefined,
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC
+          ? (() => {
+              const extracted = extractPostIdFromUrl(postId);
+              const candidate = extracted || (postId && !postId.includes('reddit.com') ? postId : undefined);
+              if (candidate && candidate.startsWith('pi_')) return undefined;
+              return candidate;
+            })()
+          : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
