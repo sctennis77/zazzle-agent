@@ -41,9 +41,10 @@ def db_to_product_idea(
 def reddit_context_to_db(
     reddit_context: RedditContext, pipeline_run_id: int, db
 ) -> ORMRedditPost:
-    # Look up the Subreddit ORM instance by name
-    from app.db.models import Subreddit
-    subreddit_obj = db.query(Subreddit).filter_by(subreddit_name=reddit_context.subreddit).first()
+    # Use SubredditService to get or create the Subreddit ORM instance by name
+    from app.subreddit_service import get_subreddit_service
+    subreddit_service = get_subreddit_service()
+    subreddit_obj = subreddit_service.get_or_create_subreddit(reddit_context.subreddit, db)
     subreddit_id = subreddit_obj.id if subreddit_obj else None
     return ORMRedditPost(
         pipeline_run_id=pipeline_run_id,

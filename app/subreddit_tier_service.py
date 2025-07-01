@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Donation, SubredditTier, SubredditFundraisingGoal, Sponsor
+from app.db.models import Donation, SubredditFundraisingGoal
 from app.subreddit_service import get_subreddit_service
 from app.task_queue import TaskQueue
 from app.utils.logging_config import get_logger
@@ -61,106 +61,44 @@ class SubredditTierService:
         unique_donations = {d.id: d for d in donations}.values()
         return sum(d.amount_usd for d in unique_donations) if unique_donations else Decimal('0')
 
-    def get_subreddit_tiers(self, subreddit_name: str) -> List[SubredditTier]:
+    def get_subreddit_tiers(self, subreddit_name: str) -> List[Dict[str, Any]]:
         """
-        Get all tiers for a subreddit.
+        Get all tiers for a subreddit (placeholder - subreddit tiers removed).
         
         Args:
             subreddit_name: Subreddit name
             
         Returns:
-            List[SubredditTier]: List of subreddit tiers
+            List[Dict]: Empty list (subreddit tiers no longer supported)
         """
-        # Get or create subreddit entity
-        subreddit_service = get_subreddit_service()
-        subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
-        
-        return (
-            self.session.query(SubredditTier)
-            .filter(SubredditTier.subreddit_id == subreddit.id)
-            .order_by(SubredditTier.tier_level)
-            .all()
-        )
+        return []
 
-    def create_subreddit_tiers(self, subreddit_name: str, tier_levels: List[Dict[str, Any]]) -> List[SubredditTier]:
+    def create_subreddit_tiers(self, subreddit_name: str, tier_levels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Create subreddit tiers for a subreddit.
+        Create subreddit tiers for a subreddit (placeholder - subreddit tiers removed).
         
         Args:
             subreddit_name: Subreddit name
             tier_levels: List of tier configurations with min_total_donation
             
         Returns:
-            List[SubredditTier]: Created subreddit tiers
+            List[Dict]: Empty list (subreddit tiers no longer supported)
         """
-        try:
-            # Get or create subreddit entity
-            subreddit_service = get_subreddit_service()
-            subreddit = subreddit_service.get_or_create_subreddit(subreddit_name, self.session)
-            
-            tiers = []
-            for tier_config in tier_levels:
-                tier = SubredditTier(
-                    subreddit_id=subreddit.id,
-                    tier_level=tier_config["level"],
-                    min_total_donation=tier_config["min_total_donation"],
-                    status="pending"
-                )
-                self.session.add(tier)
-                tiers.append(tier)
-            
-            self.session.commit()
-            logger.info(f"Created {len(tiers)} tiers for subreddit {subreddit_name}")
-            return tiers
-            
-        except Exception as e:
-            self.session.rollback()
-            logger.error(f"Error creating subreddit tiers: {str(e)}")
-            raise
+        logger.warning(f"Subreddit tiers no longer supported - ignoring request for {subreddit_name}")
+        return []
 
-    def check_and_update_tiers(self, subreddit_name: str) -> List[SubredditTier]:
+    def check_and_update_tiers(self, subreddit_name: str) -> List[Dict[str, Any]]:
         """
-        Check if any subreddit tiers have been reached and update them.
+        Check if any subreddit tiers have been reached and update them (placeholder - subreddit tiers removed).
         
         Args:
             subreddit_name: Subreddit name
             
         Returns:
-            List[SubredditTier]: List of newly completed tiers
+            List[Dict]: Empty list (subreddit tiers no longer supported)
         """
-        try:
-            total_donations = self.get_subreddit_total_donations(subreddit_name)
-            tiers = self.get_subreddit_tiers(subreddit_name)
-            
-            completed_tiers = []
-            for tier in tiers:
-                if (tier.status == "pending" and 
-                    total_donations >= tier.min_total_donation):
-                    
-                    # Mark tier as active
-                    tier.status = "active"
-                    tier.completed_at = datetime.now(timezone.utc)
-                    
-                    # Add task to queue for this tier
-                    self.task_queue.add_subreddit_task(
-                        subreddit_name=subreddit_name,
-                        priority=5  # Medium priority for tier posts
-                    )
-                    
-                    completed_tiers.append(tier)
-                    logger.info(f"Subreddit {subreddit_name} reached tier {tier.tier_level} "
-                              f"(${tier.min_total_donation}) - total: ${total_donations}")
-            
-            if completed_tiers:
-                self.session.commit()
-                logger.info(f"Updated {len(completed_tiers)} tiers for subreddit {subreddit_name}")
-            
-            return completed_tiers
-            
-        except Exception as e:
-            self.session.rollback()
-            logger.error(f"Error checking subreddit tiers: {str(e)}")
-            raise
+        logger.warning(f"Subreddit tiers no longer supported - ignoring request for {subreddit_name}")
+        return []
 
     def get_fundraising_goals(self, subreddit_name: Optional[str] = None) -> List[SubredditFundraisingGoal]:
         """
@@ -335,12 +273,10 @@ class SubredditTierService:
                 .count()
             )
             
-            # Get active sponsors
-            active_sponsors = (
-                self.session.query(Sponsor)
-                .join(Donation)
+            # Count active donations (sponsors no longer exist)
+            active_donations = (
+                self.session.query(Donation)
                 .filter(Donation.subreddit_id == subreddit.id)
-                .filter(Sponsor.status == "active")
                 .filter(Donation.status == "succeeded")
                 .count()
             )
@@ -349,16 +285,8 @@ class SubredditTierService:
                 "subreddit": subreddit_name,
                 "total_donations": float(total_donations),
                 "donor_count": donor_count,
-                "active_sponsors": active_sponsors,
-                "tiers": [
-                    {
-                        "level": tier.tier_level,
-                        "min_total_donation": float(tier.min_total_donation),
-                        "status": tier.status,
-                        "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
-                    }
-                    for tier in tiers
-                ],
+                "active_donations": active_donations,
+                "tiers": [],  # Subreddit tiers no longer supported
                 "goals": [
                     {
                         "goal_amount": float(goal.goal_amount),
@@ -397,15 +325,7 @@ class SubredditTierService:
             return {
                 "subreddit": subreddit_name,
                 "total_donations": float(total_donations),
-                "tiers": [
-                    {
-                        "level": tier.tier_level,
-                        "min_total_donation": float(tier.min_total_donation),
-                        "status": tier.status,
-                        "completed_at": tier.completed_at.isoformat() if tier.completed_at else None
-                    }
-                    for tier in tiers
-                ],
+                "tiers": [],  # Subreddit tiers no longer supported
                 "goals": [
                     {
                         "goal_amount": float(goal.goal_amount),

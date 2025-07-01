@@ -547,21 +547,7 @@ class Pipeline:
             logger.info(f"Starting task-specific pipeline for task {task_id} (type: {task.type})")
             
             # Configure Reddit agent based on task type and context
-            if task.type == "SPECIFIC_POST" and task.context_data and task.context_data.get("post_id"):
-                # Handle specific post commission
-                post_id = task.context_data["post_id"]
-                self.reddit_agent.subreddit_name = task.subreddit.subreddit_name if task.subreddit else None
-                logger.info(f"Using specific post {post_id} from subreddit {self.reddit_agent.subreddit_name}")
-                
-                # Set commission message if available
-                if task.context_data.get("commission_message"):
-                    self.reddit_agent.commission_message = task.context_data["commission_message"]
-                    logger.info(f"Commission message: {task.context_data['commission_message']}")
-                
-                # Get product info for specific post
-                products = await self.reddit_agent.get_product_info_for_specific_post(post_id)
-                
-            elif task.type == "SUBREDDIT_POST":
+            if task.type == "SUBREDDIT_POST":
                 # Handle subreddit post (random or commission)
                 self.reddit_agent.subreddit_name = task.subreddit.subreddit_name if task.subreddit else None
                 
@@ -570,8 +556,18 @@ class Pipeline:
                     self.reddit_agent.commission_message = task.context_data["commission_message"]
                     logger.info(f"Commission message: {task.context_data['commission_message']}")
                 
-                logger.info(f"Using subreddit {self.reddit_agent.subreddit_name} for subreddit post")
-                products = await self.reddit_agent.get_product_info_for_task()
+                # Check if this is a specific post commission
+                if task.context_data and task.context_data.get("commission_type") == "specific_post" and task.context_data.get("post_id"):
+                    # Handle specific post commission
+                    post_id = task.context_data["post_id"]
+                    logger.info(f"Using specific post {post_id} from subreddit {self.reddit_agent.subreddit_name}")
+                    
+                    # Get product info for specific post
+                    products = await self.reddit_agent.get_product_info_for_specific_post(post_id)
+                else:
+                    # Handle random subreddit post or random_subreddit commission
+                    logger.info(f"Using subreddit {self.reddit_agent.subreddit_name} for subreddit post")
+                    products = await self.reddit_agent.get_product_info_for_task()
                 
             else:
                 # Default to random subreddit

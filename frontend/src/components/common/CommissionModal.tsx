@@ -17,6 +17,7 @@ interface CommissionRequest {
   amount_usd: string;
   subreddit: string;
   donation_type: 'commission';
+  commission_type: 'random_subreddit' | 'specific_post';
   post_id?: string;
   commission_message?: string;
   customer_email?: string;
@@ -168,13 +169,18 @@ const iconMap = {
   FaHeart,
 };
 
+const COMMISSION_TYPES = {
+  SUBREDDIT: 'subreddit',
+  SPECIFIC: 'specific',
+};
+
 const COMMISSION_MINIMUMS = {
-  random: 'silver', // $5
-  specific: 'gold', // $10
+  [COMMISSION_TYPES.SUBREDDIT]: 'silver', // $5
+  [COMMISSION_TYPES.SPECIFIC]: 'gold',   // $10
 };
 
 const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) => {
-  const [amount, setAmount] = useState('25');
+  const [amount, setAmount] = useState('');
   const [commissionMessage, setCommissionMessage] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -183,7 +189,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [previousRedditUsername, setPreviousRedditUsername] = useState('');
   const [subreddit, setSubreddit] = useState('golf');
   const [postId, setPostId] = useState('');
-  const [commissionType, setCommissionType] = useState<'random' | 'specific'>('random');
+  const [commissionType, setCommissionType] = useState(COMMISSION_TYPES.SUBREDDIT);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
@@ -227,7 +233,6 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
 
   useEffect(() => {
     if (isOpen) {
-      setAmount('25');
       setCustomAmount('');
       setCommissionMessage('');
       setCustomerEmail('');
@@ -237,28 +242,31 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setIsAnonymous(false);
       setSubreddit('golf');
       setPostId('');
-      setCommissionType('random');
+      setCommissionType(COMMISSION_TYPES.SUBREDDIT);
       setError('');
       setSuccess(false);
-      setClientSecret(null);
-      setPaymentIntentId(null);
       setShowMessage(false);
+      // Don't reset clientSecret and paymentIntentId here - let createPaymentIntent handle it
       // Immediately create a new PaymentIntent
       (async () => {
         await createPaymentIntent();
         if (!isMounted.current) return;
       })();
+    } else {
+      // Only reset when closing
+      setClientSecret(null);
+      setPaymentIntentId(null);
     }
   }, [isOpen]);
 
   // Function to create new PaymentIntent
   const createPaymentIntent = async () => {
-    if (!isOpen || !amount || parseFloat(amount) < 5) {
+    if (!isOpen || !amount || parseFloat(amount) < minAmount) {
       return null;
     }
 
     // For specific post commissions, post_id is required
-    if (commissionType === 'specific' && !postId) {
+    if (commissionType === COMMISSION_TYPES.SPECIFIC && !postId) {
       setError('Post ID or URL is required for specific post commissions');
       return null;
     }
@@ -270,7 +278,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         amount_usd: amount,
         subreddit,
         donation_type: 'commission',
-        post_id: commissionType === 'specific' ? postId : undefined,
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? postId : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -304,7 +313,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
 
   // Function to update existing PaymentIntent
   const updatePaymentIntent = async () => {
-    if (!paymentIntentId || !amount || parseFloat(amount) < 5) {
+    if (!paymentIntentId || !amount || parseFloat(amount) < minAmount) {
       return null;
     }
 
@@ -315,7 +324,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         amount_usd: amount,
         subreddit,
         donation_type: 'commission',
-        post_id: commissionType === 'specific' ? postId : undefined,
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
+        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? postId : undefined,
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -364,8 +374,6 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     setError(errorMessage);
   };
 
-
-
   if (success) {
     // Redirect to gallery view after a short delay
     setTimeout(() => {
@@ -405,16 +413,23 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => { setCommissionType('random'); setPostId(''); }}
-              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === 'random' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              onClick={() => { 
+                setCommissionType(COMMISSION_TYPES.SUBREDDIT); 
+                setPostId(''); 
+                if (paymentIntentId) updatePaymentIntent();
+              }}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               🎲 Random Post
               <div className="text-xs mt-1 opacity-75">From selected subreddit</div>
             </button>
             <button
               type="button"
-              onClick={() => setCommissionType('specific')}
-              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === 'specific' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              onClick={() => {
+                setCommissionType(COMMISSION_TYPES.SPECIFIC);
+                if (paymentIntentId) updatePaymentIntent();
+              }}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               🎯 Specific Post
               <div className="text-xs mt-1 opacity-75">Choose exact post</div>
@@ -427,7 +442,10 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
           <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
           <select
             value={subreddit}
-            onChange={(e) => setSubreddit(e.target.value)}
+            onChange={(e) => {
+              setSubreddit(e.target.value);
+              if (paymentIntentId) updatePaymentIntent();
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             {AVAILABLE_SUBREDDITS.map((sub) => (
@@ -510,7 +528,12 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
               onChange={(e) => setCustomerEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="your@email.com"
+              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+              title="Please enter a valid email address"
             />
+            {customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) && (
+              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Name (optional)</label>
@@ -632,6 +655,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
                     },
                   },
                 }}
+                key={`${clientSecret}-${paymentIntentId}`}
               >
                 <CommissionForm
                   amount={amount}

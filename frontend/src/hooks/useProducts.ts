@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import type { GeneratedProduct } from '../types/productTypes';
 
-const API_URL = 'http://localhost:8000/api/generated_products';
+const API_URL = '/api/generated_products';
 
 export const useProducts = () => {
   const [products, setProducts] = useState<GeneratedProduct[]>([]);

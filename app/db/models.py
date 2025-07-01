@@ -7,6 +7,7 @@ from app.models import (
     InteractionActionStatus,
     InteractionActionType,
     InteractionTargetType,
+    DonationTier,
 )
 
 Base = declarative_base()
@@ -32,8 +33,6 @@ class Subreddit(Base):
 
     # Relationships
     donations = relationship("Donation", back_populates="subreddit")
-    sponsors = relationship("Sponsor", back_populates="subreddit")
-    subreddit_tiers = relationship("SubredditTier", back_populates="subreddit")
     fundraising_goals = relationship("SubredditFundraisingGoal", back_populates="subreddit")
     pipeline_tasks = relationship("PipelineTask", back_populates="subreddit")
     reddit_posts = relationship("RedditPost", back_populates="subreddit")
@@ -92,6 +91,7 @@ class Donation(Base):
     amount_usd = Column(Numeric(10, 2), nullable=False)  # Amount in USD
     currency = Column(String(3), default="usd", nullable=False)
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending, succeeded, failed, canceled
+    tier = Column(String(32), nullable=False, index=True)  # bronze, silver, gold, platinum, emerald, topaz, ruby, sapphire
     customer_email = Column(String(255), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
     message = Column(Text, nullable=True)  # Optional message from donor
@@ -102,7 +102,8 @@ class Donation(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
     is_anonymous = Column(Boolean, default=False, nullable=False)
     subreddit_fundraising_goal_id = Column(Integer, ForeignKey("subreddit_fundraising_goals.id"), nullable=True, index=True)  # Associated fundraising goal
-    donation_type = Column(String(32), default="sponsor", nullable=False, index=True)  # "commission" or "sponsor"
+    donation_type = Column(String(32), default="support", nullable=False, index=True)  # "commission" or "support"
+    commission_type = Column(String(32), nullable=True, index=True)  # "specific_post" or "random_subreddit"
     post_id = Column(String(32), nullable=True, index=True)  # Reddit post ID for commissioning specific posts
     commission_message = Column(Text, nullable=True)  # Optional message to display with commission badge
 
@@ -111,46 +112,7 @@ class Donation(Base):
     subreddit_fundraising_goal = relationship("SubredditFundraisingGoal", back_populates="donations")
 
 
-class SponsorTier(Base):
-    """Individual donor levels (Bronze, Silver, Gold, etc.)"""
-    __tablename__ = "sponsor_tiers"
-    id = Column(Integer, primary_key=True)
-    name = Column(String(64), nullable=False, unique=True, index=True)  # e.g., "Bronze", "Silver", "Gold"
-    min_amount = Column(Numeric(10, 2), nullable=False, index=True)  # Minimum donation amount for this tier
-    benefits = Column(Text, nullable=True)  # Description of benefits
-    description = Column(Text, nullable=True)  # General description
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
-    sponsors = relationship("Sponsor", back_populates="tier")
-
-
-class Sponsor(Base):
-    """Individual sponsors linked to donations"""
-    __tablename__ = "sponsors"
-    id = Column(Integer, primary_key=True)
-    donation_id = Column(Integer, ForeignKey("donations.id", ondelete="CASCADE"), nullable=False, index=True)
-    tier_id = Column(Integer, ForeignKey("sponsor_tiers.id"), nullable=False, index=True)
-    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=True, index=True)  # Subreddit they want to support
-    status = Column(String(32), default="active", nullable=False, index=True)  # active, inactive
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-
-    donation = relationship("Donation", backref="sponsor")
-    tier = relationship("SponsorTier", back_populates="sponsors")
-    subreddit = relationship("Subreddit", back_populates="sponsors")
-
-
-class SubredditTier(Base):
-    """Community fundraising levels for subreddits"""
-    __tablename__ = "subreddit_tiers"
-    id = Column(Integer, primary_key=True)
-    subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=False, index=True)
-    tier_level = Column(Integer, nullable=False, index=True)  # 1, 2, 3, etc.
-    min_total_donation = Column(Numeric(10, 2), nullable=False, index=True)  # Total community donation needed
-    status = Column(String(32), default="pending", nullable=False, index=True)  # pending, active, completed
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-    completed_at = Column(DateTime, nullable=True, index=True)
-
-    subreddit = relationship("Subreddit", back_populates="subreddit_tiers")
 
 
 class SubredditFundraisingGoal(Base):
@@ -175,7 +137,7 @@ class PipelineTask(Base):
     id = Column(Integer, primary_key=True)
     type = Column(String(32), nullable=False, index=True)  # SUBREDDIT_POST
     subreddit_id = Column(Integer, ForeignKey("subreddits.id"), nullable=False, index=True)  # Target subreddit
-    sponsor_id = Column(Integer, ForeignKey("sponsors.id"), nullable=True, index=True)  # Associated sponsor
+    donation_id = Column(Integer, ForeignKey("donations.id"), nullable=True, index=True)  # Associated donation
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending, in_progress, completed, failed
     priority = Column(Integer, default=0, nullable=False, index=True)  # Higher number = higher priority
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
@@ -186,7 +148,7 @@ class PipelineTask(Base):
     pipeline_run_id = Column(Integer, ForeignKey("pipeline_runs.id"), nullable=True, index=True)  # Associated pipeline run
 
     subreddit = relationship("Subreddit", back_populates="pipeline_tasks")
-    sponsor = relationship("Sponsor", backref="tasks")
+    donation = relationship("Donation", backref="tasks")
     pipeline_run = relationship("PipelineRun", backref="tasks")
 
 

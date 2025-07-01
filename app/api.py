@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SponsorTier, Sponsor, SubredditTier, SubredditFundraisingGoal, PipelineTask
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus,
@@ -107,20 +107,20 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     continue
                 logger.info(f"Found reddit post: {reddit_post.post_id}")
 
-                # Fetch sponsor information if available
-                sponsor_info = None
+                # Fetch donation information if available
+                donation_info = None
                 pipeline_task = db.query(PipelineTask).filter_by(pipeline_run_id=run.id).first()
-                if pipeline_task and pipeline_task.sponsor_id:
-                    sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
-                    if sponsor:
-                        donation = sponsor.donation
-                        tier = sponsor.tier
-                        sponsor_info = {
+                if pipeline_task and pipeline_task.donation_id:
+                    donation = db.query(Donation).filter_by(id=pipeline_task.donation_id).first()
+                    if donation:
+                        donation_info = {
                             "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
-                            "tier_name": tier.name,
-                            "tier_min_amount": float(tier.min_amount),
+                            "tier_name": donation.tier,
+                            "tier_min_amount": float(donation.amount_usd),  # Use actual donation amount
                             "donation_amount": float(donation.amount_usd),
-                            "is_anonymous": donation.is_anonymous
+                            "is_anonymous": donation.is_anonymous,
+                            "donation_type": donation.donation_type,
+                            "commission_type": donation.commission_type
                         }
                 
                 # Get subreddit name for reddit context
@@ -152,9 +152,9 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                 usage_data = db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
                 usage_schema = PipelineRunUsageSchema.model_validate(usage_data) if usage_data else None
 
-                # Add sponsor info to the schema if available
-                if sponsor_info:
-                    product_schema.sponsor_info = sponsor_info
+                # Add donation info to the schema if available
+                if donation_info:
+                    product_schema.donation_info = donation_info
 
                 products.append(
                     GeneratedProductSchema(
@@ -528,6 +528,7 @@ async def handle_payment_intent_succeeded(payment_intent):
                 donation_type=metadata.get('donation_type'),
                 post_id=metadata.get('post_id') if metadata.get('post_id') else None,
                 commission_message=metadata.get('commission_message'),
+                commission_type=metadata.get('commission_type'),
             )
             
             # Debug logging for extracted donation request
@@ -668,87 +669,76 @@ async def get_donation_by_payment_intent(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/api/sponsor-tiers")
-async def get_sponsor_tiers(db: Session = Depends(get_db)):
+@app.get("/api/donation-tiers")
+async def get_donation_tiers():
     """
-    Get all sponsor tiers.
+    Get all donation tiers with their amounts.
     
-    Args:
-        db: Database session
-        
     Returns:
-        List: Sponsor tiers
+        List: Donation tiers
     """
     try:
-        tiers = db.query(SponsorTier).order_by(SponsorTier.min_amount.asc()).all()
+        from app.models import TIER_AMOUNTS, DonationTier
         
-        return [
-            {
-                "id": tier.id,
-                "name": tier.name,
-                "min_amount": float(tier.min_amount),
-                "benefits": tier.benefits,
-                "description": tier.description,
-            }
-            for tier in tiers
-        ]
+        tiers = []
+        for tier in DonationTier:
+            tiers.append({
+                "name": tier.value,
+                "min_amount": float(TIER_AMOUNTS[tier]),
+                "display_name": tier.value.title(),
+            })
         
+        # Sort by amount
+        tiers.sort(key=lambda x: x["min_amount"])
+        
+        return tiers
     except Exception as e:
-        logger.error(f"Error getting sponsor tiers: {str(e)}")
+        logger.error(f"Error getting donation tiers: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/api/sponsors")
-async def get_sponsors(db: Session = Depends(get_db)):
+@app.get("/api/donations")
+async def get_donations(db: Session = Depends(get_db)):
     """
-    Get all sponsors with their donation and tier information.
+    Get all donations with their tier information.
     
     Args:
         db: Database session
         
     Returns:
-        List: Sponsors with related data
+        List: Donations with related data
     """
     try:
-        sponsors = (
-            db.query(Sponsor)
-            .join(Donation)
-            .join(SponsorTier)
-            .order_by(Sponsor.created_at.desc())
+        donations = (
+            db.query(Donation)
+            .order_by(Donation.created_at.desc())
             .all()
         )
         
         return [
             {
-                "id": sponsor.id,
-                "donation": {
-                    "id": sponsor.donation.id,
-                    "amount_usd": float(sponsor.donation.amount_usd),
-                    "customer_name": sponsor.donation.customer_name,
-                    "customer_email": sponsor.donation.customer_email,
-                    "message": sponsor.donation.message,
-                    "subreddit": sponsor.donation.subreddit.subreddit_name if sponsor.donation.subreddit else None,
-                    "reddit_username": sponsor.donation.reddit_username,
-                    "is_anonymous": sponsor.donation.is_anonymous,
-                    "status": sponsor.donation.status,
-                    "created_at": sponsor.donation.created_at.isoformat(),
-                },
-                "tier": {
-                    "id": sponsor.tier.id,
-                    "name": sponsor.tier.name,
-                    "min_amount": float(sponsor.tier.min_amount),
-                    "benefits": sponsor.tier.benefits,
-                },
-                "subreddit": sponsor.subreddit.subreddit_name if sponsor.subreddit else None,
-                "status": sponsor.status,
-                "created_at": sponsor.created_at.isoformat(),
+                "id": donation.id,
+                "amount_usd": float(donation.amount_usd),
+                "customer_name": donation.customer_name,
+                "customer_email": donation.customer_email,
+                "message": donation.message,
+                "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
+                "reddit_username": donation.reddit_username,
+                "is_anonymous": donation.is_anonymous,
+                "status": donation.status,
+                "tier": donation.tier,
+                "donation_type": donation.donation_type,
+                "commission_type": donation.commission_type,
+                "post_id": donation.post_id,
+                "commission_message": donation.commission_message,
+                "created_at": donation.created_at.isoformat(),
             }
-            for sponsor in sponsors
+            for donation in donations
         ]
         
     except Exception as e:
-        logger.error(f"Error getting sponsors: {str(e)}")
+        logger.error(f"Error getting donations: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -855,7 +845,7 @@ async def get_tasks(db: Session = Depends(get_db)):
                 "id": task.id,
                 "type": task.type,
                 "subreddit": task.subreddit.subreddit_name,
-                "sponsor_id": task.sponsor_id,
+                "donation_id": task.donation_id,
                 "status": task.status,
                 "priority": task.priority,
                 "created_at": task.created_at.isoformat(),
@@ -900,7 +890,7 @@ async def add_task(
     task_type: str,
     subreddit: str,
     priority: int = 0,
-    sponsor_id: Optional[int] = None,
+    donation_id: Optional[int] = None,
     scheduled_for: Optional[datetime] = None,
     db: Session = Depends(get_db),
 ):
@@ -911,7 +901,7 @@ async def add_task(
         task_type: Type of task (SUBREDDIT_POST)
         subreddit: Target subreddit (use "all" for front page)
         priority: Task priority (higher number = higher priority)
-        sponsor_id: Associated sponsor ID
+        donation_id: Associated donation ID
         scheduled_for: When to execute the task
         
     Returns:
@@ -937,7 +927,7 @@ async def add_task(
         task = task_queue.add_task_by_name(
             task_type=task_type,
             subreddit_name=subreddit,
-            sponsor_id=sponsor_id,
+            donation_id=donation_id,
             priority=priority,
             scheduled_for=scheduled_for,
         )
@@ -1137,20 +1127,20 @@ async def check_subreddit_tiers(subreddit: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/api/posts/{post_id}/sponsors")
-async def get_post_sponsors(
+@app.get("/api/posts/{post_id}/donations")
+async def get_post_donations(
     post_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Get all sponsors for a specific post.
+    Get all donations for a specific post.
     
     Args:
         post_id: Reddit post ID
         db: Database session
         
     Returns:
-        List: Sponsors with related data for the post
+        List: Donations with related data for the post
     """
     try:
         # Find donations for this post
@@ -1160,40 +1150,28 @@ async def get_post_sponsors(
             .all()
         )
         
-        sponsors = []
-        for donation in donations:
-            if donation.sponsor:
-                for sponsor in donation.sponsor:
-                    sponsors.append({
-                        "id": sponsor.id,
-                        "donation": {
-                            "id": donation.id,
-                            "amount_usd": float(donation.amount_usd),
-                            "customer_name": donation.customer_name,
-                            "customer_email": donation.customer_email,
-                            "message": donation.message,
-                            "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
-                            "reddit_username": donation.reddit_username,
-                            "is_anonymous": donation.is_anonymous,
-                            "status": donation.status,
-                            "created_at": donation.created_at.isoformat(),
-                            "donation_type": donation.donation_type,
-                        },
-                        "tier": {
-                            "id": sponsor.tier.id,
-                            "name": sponsor.tier.name,
-                            "min_amount": float(sponsor.tier.min_amount),
-                            "benefits": sponsor.tier.benefits,
-                        },
-                        "subreddit": sponsor.subreddit.subreddit_name if sponsor.subreddit else None,
-                        "status": sponsor.status,
-                        "created_at": sponsor.created_at.isoformat(),
-                    })
-        
-        return sponsors
+        return [
+            {
+                "id": donation.id,
+                "amount_usd": float(donation.amount_usd),
+                "customer_name": donation.customer_name,
+                "customer_email": donation.customer_email,
+                "message": donation.message,
+                "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
+                "reddit_username": donation.reddit_username,
+                "is_anonymous": donation.is_anonymous,
+                "status": donation.status,
+                "tier": donation.tier,
+                "donation_type": donation.donation_type,
+                "commission_type": donation.commission_type,
+                "commission_message": donation.commission_message,
+                "created_at": donation.created_at.isoformat(),
+            }
+            for donation in donations
+        ]
         
     except Exception as e:
-        logger.error(f"Error getting sponsors for post {post_id}: {str(e)}")
+        logger.error(f"Error getting donations for post {post_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1221,75 +1199,46 @@ async def get_product_donations(
         # Get the associated reddit post
         reddit_post = db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run_id).first()
         
-        # Get commission info (check both sponsor-based and direct commission donations)
+        # Get commission info from donation
         commission_info = None
         
-        # First check for sponsor-based commission
-        if pipeline_task.sponsor_id:
-            sponsor = db.query(Sponsor).filter_by(id=pipeline_task.sponsor_id).first()
-            if sponsor:
-                donation = sponsor.donation
-                tier = sponsor.tier
+        if pipeline_task.donation_id:
+            donation = db.query(Donation).filter_by(id=pipeline_task.donation_id).first()
+            if donation and donation.donation_type == "commission":
                 commission_info = {
                     "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
-                    "tier_name": tier.name,
-                    "tier_min_amount": float(tier.min_amount),
+                    "tier_name": donation.tier,
+                    "tier_min_amount": float(donation.amount_usd),
                     "donation_amount": float(donation.amount_usd),
                     "is_anonymous": donation.is_anonymous,
-                    "commission_message": pipeline_task.context_data.get("commission_message") if pipeline_task.context_data else None,
-                    "commission_type": pipeline_task.context_data.get("commission_type") if pipeline_task.context_data else None,
-                }
-        
-        # If no sponsor-based commission, check for direct commission donations
-        if not commission_info and reddit_post:
-            direct_commission = (
-                db.query(Donation)
-                .filter_by(
-                    post_id=reddit_post.post_id, 
-                    donation_type="commission",
-                    status=DonationStatus.SUCCEEDED.value
-                )
-                .order_by(Donation.created_at.desc())
-                .first()
-            )
-            
-            if direct_commission:
-                # Parse metadata for commission details
-                metadata = direct_commission.metadata or {}
-                commission_info = {
-                    "reddit_username": direct_commission.reddit_username if not direct_commission.is_anonymous else "Anonymous",
-                    "tier_name": "Direct Commission",
-                    "tier_min_amount": float(direct_commission.amount_usd),
-                    "donation_amount": float(direct_commission.amount_usd),
-                    "is_anonymous": direct_commission.is_anonymous,
-                    "commission_message": metadata.get("commission_message") or direct_commission.commission_message,
-                    "commission_type": metadata.get("commission_type") or "direct",
+                    "commission_message": donation.commission_message,
+                    "commission_type": donation.commission_type,
                 }
 
         # Get support donations
         support_donations = []
         if reddit_post:
-            # Find all support/sponsor donations for this post
+            # Find all support donations for this post
             donations = (
                 db.query(Donation)
-                .filter_by(post_id=reddit_post.post_id, status=DonationStatus.SUCCEEDED.value)
+                .filter_by(
+                    post_id=reddit_post.post_id, 
+                    donation_type="support",
+                    status=DonationStatus.SUCCEEDED.value
+                )
                 .all()
             )
             for donation in donations:
-                if donation.sponsor:
-                    for sponsor in donation.sponsor:
-                        support_donations.append({
-                            "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
-                            "tier_name": sponsor.tier.name,
-                            "tier_min_amount": float(sponsor.tier.min_amount),
-                            "donation_amount": float(donation.amount_usd),
-                            "is_anonymous": donation.is_anonymous,
-                            "message": donation.message,
-                            "created_at": donation.created_at.isoformat(),
-                            "tier_id": sponsor.tier.id,
-                            "sponsor_id": sponsor.id,
-                            "donation_id": donation.id,
-                        })
+                support_donations.append({
+                    "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                    "tier_name": donation.tier,
+                    "tier_min_amount": float(donation.amount_usd),
+                    "donation_amount": float(donation.amount_usd),
+                    "is_anonymous": donation.is_anonymous,
+                    "message": donation.message,
+                    "created_at": donation.created_at.isoformat(),
+                    "donation_id": donation.id,
+                })
 
         # Filter by type param
         if type == "commission":

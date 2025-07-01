@@ -30,6 +30,93 @@ from app.utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+# Tier System Constants
+class DonationTier(str, Enum):
+    """Donation tiers based on amount, using earth metals."""
+    BRONZE = "bronze"      # $1
+    SILVER = "silver"      # $5
+    GOLD = "gold"          # $10
+    PLATINUM = "platinum"  # $25
+    EMERALD = "emerald"    # $50
+    TOPAZ = "topaz"        # $75
+    RUBY = "ruby"          # $100
+    SAPPHIRE = "sapphire"  # $250
+
+
+# Tier amount mappings
+TIER_AMOUNTS = {
+    DonationTier.BRONZE: Decimal("1.00"),
+    DonationTier.SILVER: Decimal("5.00"),
+    DonationTier.GOLD: Decimal("10.00"),
+    DonationTier.PLATINUM: Decimal("25.00"),
+    DonationTier.EMERALD: Decimal("50.00"),
+    DonationTier.TOPAZ: Decimal("75.00"),
+    DonationTier.RUBY: Decimal("100.00"),
+    DonationTier.SAPPHIRE: Decimal("250.00"),
+}
+
+# Commission type minimum tier requirements
+COMMISSION_MINIMUM_TIERS = {
+    "specific_post": DonationTier.GOLD,      # $10 minimum
+    "random_subreddit": DonationTier.SILVER,  # $5 minimum
+    "random_random": DonationTier.BRONZE,     # $1 minimum (for future implementation)
+}
+
+
+def get_tier_from_amount(amount: Decimal) -> DonationTier:
+    """
+    Determine the donation tier based on the amount.
+    
+    Args:
+        amount: Donation amount in USD
+        
+    Returns:
+        DonationTier: The appropriate tier for the amount
+    """
+    # Sort tiers by amount in descending order to find the highest applicable tier
+    sorted_tiers = sorted(TIER_AMOUNTS.items(), key=lambda x: x[1], reverse=True)
+    
+    for tier, tier_amount in sorted_tiers:
+        if amount >= tier_amount:
+            return tier
+    
+    # If amount is less than Bronze minimum, return Bronze
+    return DonationTier.BRONZE
+
+
+def get_minimum_amount_for_tier(tier: DonationTier) -> Decimal:
+    """
+    Get the minimum amount required for a specific tier.
+    
+    Args:
+        tier: The donation tier
+        
+    Returns:
+        Decimal: Minimum amount required for the tier
+    """
+    return TIER_AMOUNTS.get(tier, Decimal("1.00"))
+
+
+def validate_commission_tier(amount: Decimal, commission_type: str) -> bool:
+    """
+    Validate that the donation amount meets the minimum tier requirement for the commission type.
+    
+    Args:
+        amount: Donation amount in USD
+        commission_type: Type of commission being requested
+        
+    Returns:
+        bool: True if amount meets minimum tier requirement
+    """
+    if commission_type not in COMMISSION_MINIMUM_TIERS:
+        return False
+    
+    required_tier = COMMISSION_MINIMUM_TIERS[commission_type]
+    required_amount = get_minimum_amount_for_tier(required_tier)
+    
+    return amount >= required_amount
+
+
 # Pydantic schemas for API responses
 class RedditPostSchema(BaseModel):
     id: int
@@ -129,7 +216,7 @@ class ProductInfoSchema(BaseModel):
     available_actions: Optional[Dict[str, int]] = (
         None  # Maps action_type to remaining count
     )
-    sponsor_info: Optional[Dict[str, Any]] = None  # Sponsor information if available
+    donation_info: Optional[Dict[str, Any]] = None  # Donation information if available
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -606,7 +693,7 @@ class ProductInfo:
             product_type=self.product_type,
             design_description=self.design_instructions.get("description"),
             available_actions=self.design_instructions.get("available_actions"),
-            sponsor_info=self.design_instructions.get("sponsor_info"),
+            donation_info=self.design_instructions.get("donation_info"),
         )
 
 
@@ -706,6 +793,7 @@ class DonationRequest(BaseModel):
     donation_type: str = Field(..., description="Type of donation: 'commission' or 'support'")
     post_id: Optional[str] = Field(None, max_length=100, description="Reddit post ID (required for support donations, optional for commission)")
     commission_message: Optional[str] = Field(None, max_length=1000, description="Optional commission message (for commission donations)")
+    commission_type: Optional[str] = Field(None, description="Type of commission: 'specific_post' or 'random_subreddit'")
 
     @field_validator('donation_type')
     @classmethod
@@ -713,6 +801,14 @@ class DonationRequest(BaseModel):
         """Validate donation type."""
         if v not in ["commission", "support"]:
             raise ValueError("donation_type must be 'commission' or 'support'")
+        return v
+    
+    @field_validator('commission_type')
+    @classmethod
+    def validate_commission_type(cls, v):
+        """Validate commission type."""
+        if v is not None and v not in ["specific_post", "random_subreddit"]:
+            raise ValueError("commission_type must be 'specific_post' or 'random_subreddit'")
         return v
     
     @model_validator(mode='after')
@@ -723,13 +819,34 @@ class DonationRequest(BaseModel):
                 raise ValueError("post_id is required for support donations")
         return self
     
-    @field_validator('reddit_username')
-    @classmethod
-    def validate_anonymous_donation(cls, v, info):
-        """Set is_anonymous to True if reddit_username is blank."""
-        if not v:
-            info.data['is_anonymous'] = True
-        return v
+    @model_validator(mode='after')
+    def validate_commission_requirements(self):
+        """Validate commission type and tier requirements."""
+        if self.donation_type == "commission":
+            if not self.commission_type:
+                raise ValueError("commission_type is required for commission donations")
+            
+            # Validate tier requirements
+            if not validate_commission_tier(self.amount_usd, self.commission_type):
+                required_tier = COMMISSION_MINIMUM_TIERS[self.commission_type]
+                required_amount = get_minimum_amount_for_tier(required_tier)
+                raise ValueError(f"Commission type '{self.commission_type}' requires minimum {required_tier.value} tier (${required_amount})")
+            
+            # Validate post_id for specific_post commissions
+            if self.commission_type == "specific_post":
+                if not self.post_id or self.post_id.strip() == "":
+                    raise ValueError("post_id is required for specific_post commissions")
+        
+        return self
+    
+    # Removed automatic is_anonymous validation - let frontend control this
+    # @field_validator('reddit_username')
+    # @classmethod
+    # def validate_anonymous_donation(cls, v, info):
+    #     """Set is_anonymous to True if reddit_username is blank."""
+    #     if not v:
+    #         info.data['is_anonymous'] = True
+    #     return v
 
 
 class CommissionRequest(BaseModel):
@@ -769,12 +886,17 @@ class DonationSchema(BaseModel):
     amount_usd: Decimal
     currency: str
     status: DonationStatus
+    tier: DonationTier
     customer_email: Optional[str]
     customer_name: Optional[str]
     message: Optional[str]
     subreddit: Optional[str]
     reddit_username: Optional[str]
     is_anonymous: bool
+    donation_type: str
+    commission_type: Optional[str]
+    post_id: Optional[str]
+    commission_message: Optional[str]
     created_at: datetime
     updated_at: datetime
 

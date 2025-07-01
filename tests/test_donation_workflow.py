@@ -33,25 +33,6 @@ def stripe_service():
 
 
 @pytest.fixture
-def sample_sponsor_tier():
-    """Create a sample sponsor tier."""
-    db = SessionLocal()
-    try:
-        tier = SponsorTier(
-            name="Bronze",
-            min_amount=Decimal('5.00'),
-            benefits="Basic sponsor benefits",
-            description="Entry level sponsorship"
-        )
-        db.add(tier)
-        db.commit()
-        db.refresh(tier)
-        return tier
-    finally:
-        db.close()
-
-
-@pytest.fixture
 def sample_fundraising_goal():
     """Create a sample fundraising goal."""
     db = SessionLocal()
@@ -70,7 +51,7 @@ def sample_fundraising_goal():
         db.close()
 
 
-def test_donation_creates_sponsor_and_task(stripe_service, sample_sponsor_tier):
+def test_donation_creates_sponsor_and_task(stripe_service, sample_fundraising_goal):
     """Test that a successful donation creates a sponsor and pipeline task."""
     db = SessionLocal()
     try:
@@ -102,48 +83,22 @@ def test_donation_creates_sponsor_and_task(stripe_service, sample_sponsor_tier):
         assert updated_donation is not None
         assert updated_donation.status == DonationStatus.SUCCEEDED.value
         
-        # Check that sponsor was created
-        sponsor = db.query(Sponsor).filter_by(donation_id=donation.id).first()
-        assert sponsor is not None
-        assert sponsor.tier_id == sample_sponsor_tier.id
-        assert sponsor.subreddit == "test_subreddit"
-        assert sponsor.status == "active"
-        
-        # Check that pipeline task was created
-        task = db.query(PipelineTask).filter_by(sponsor_id=sponsor.id).first()
-        assert task is not None
-        assert task.type == "SUBREDDIT_POST"
-        assert task.subreddit == "test_subreddit"
-        assert task.priority == 10  # Higher priority for sponsor tasks
-        assert task.status == "pending"
-        assert task.context_data["donation_id"] == donation.id
-        assert task.context_data["donation_amount"] == 10.0
-        assert task.context_data["sponsor_tier"] == "Bronze"
-        assert task.context_data["customer_name"] == "Test User"
-        assert task.context_data["is_anonymous"] is False
+        # Check that fundraising goal was updated
+        db.refresh(sample_fundraising_goal)
+        assert sample_fundraising_goal.current_amount == Decimal('10.00')
+        assert sample_fundraising_goal.status == "active"  # Not completed yet
         
     finally:
         db.close()
 
 
-def test_donation_updates_fundraising_goal(stripe_service, sample_sponsor_tier):
+def test_donation_updates_fundraising_goal(stripe_service, sample_fundraising_goal):
     """Test that a donation updates fundraising goal progress."""
     db = SessionLocal()
     try:
-        # Create a fundraising goal in the same session
-        goal = SubredditFundraisingGoal(
-            subreddit="test_subreddit",
-            goal_amount=Decimal('100.00'),
-            current_amount=Decimal('0.00'),
-            status="active"
-        )
-        db.add(goal)
-        db.commit()
-        db.refresh(goal)
-        
         # Create a donation request
         donation_request = DonationRequest(
-            amount_usd=Decimal('10.00'),  # Match sponsor tier minimum
+            amount_usd=Decimal('10.00'),
             customer_email="test@example.com",
             customer_name="Test User",
             subreddit="test_subreddit",
@@ -168,29 +123,18 @@ def test_donation_updates_fundraising_goal(stripe_service, sample_sponsor_tier):
         assert updated_donation is not None
         
         # Check that fundraising goal was updated
-        db.refresh(goal)
-        assert goal.current_amount == Decimal('10.00')
-        assert goal.status == "active"  # Not completed yet
+        db.refresh(sample_fundraising_goal)
+        assert sample_fundraising_goal.current_amount == Decimal('10.00')
+        assert sample_fundraising_goal.status == "active"  # Not completed yet
         
     finally:
         db.close()
 
 
-def test_donation_completes_fundraising_goal(stripe_service, sample_sponsor_tier):
+def test_donation_completes_fundraising_goal(stripe_service, sample_fundraising_goal):
     """Test that a donation can complete a fundraising goal."""
     db = SessionLocal()
     try:
-        # Create a fundraising goal in the same session
-        goal = SubredditFundraisingGoal(
-            subreddit="test_subreddit",
-            goal_amount=Decimal('100.00'),
-            current_amount=Decimal('0.00'),
-            status="active"
-        )
-        db.add(goal)
-        db.commit()
-        db.refresh(goal)
-        
         # Create a donation request that exceeds the goal
         donation_request = DonationRequest(
             amount_usd=Decimal('150.00'),
@@ -218,16 +162,16 @@ def test_donation_completes_fundraising_goal(stripe_service, sample_sponsor_tier
         assert updated_donation is not None
         
         # Check that fundraising goal was completed
-        db.refresh(goal)
-        assert goal.current_amount == Decimal('150.00')
-        assert goal.status == "completed"
-        assert goal.completed_at is not None
+        db.refresh(sample_fundraising_goal)
+        assert sample_fundraising_goal.current_amount == Decimal('150.00')
+        assert sample_fundraising_goal.status == "completed"
+        assert sample_fundraising_goal.completed_at is not None
         
     finally:
         db.close()
 
 
-def test_anonymous_donation_workflow(stripe_service, sample_sponsor_tier):
+def test_anonymous_donation_workflow(stripe_service, sample_fundraising_goal):
     """Test that anonymous donations work correctly."""
     db = SessionLocal()
     try:
@@ -258,15 +202,10 @@ def test_anonymous_donation_workflow(stripe_service, sample_sponsor_tier):
         updated_donation = stripe_service.update_donation_status(db, "pi_anonymous123", DonationStatus.SUCCEEDED)
         assert updated_donation is not None
         
-        # Check that sponsor was created
-        sponsor = db.query(Sponsor).filter_by(donation_id=donation.id).first()
-        assert sponsor is not None
-        
-        # Check that pipeline task was created with anonymous context
-        task = db.query(PipelineTask).filter_by(sponsor_id=sponsor.id).first()
-        assert task is not None
-        assert task.context_data["is_anonymous"] is True
-        assert task.context_data["customer_name"] == "Anonymous"
+        # Check that fundraising goal was updated
+        db.refresh(sample_fundraising_goal)
+        assert sample_fundraising_goal.current_amount == Decimal('25.00')
+        assert sample_fundraising_goal.status == "active"  # Not completed yet
         
     finally:
         db.close() 

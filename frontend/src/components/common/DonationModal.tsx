@@ -40,7 +40,6 @@ const DonationForm: React.FC<{
   postId?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
-  updatePaymentIntent: (validateForPayment?: boolean) => Promise<void>;
 }> = ({ 
   amount: _amount, 
   message: _message, 
@@ -51,8 +50,7 @@ const DonationForm: React.FC<{
   subreddit: _subreddit, 
   postId: _postId, 
   onSuccess, 
-  onError,
-  updatePaymentIntent
+  onError
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -67,15 +65,6 @@ const DonationForm: React.FC<{
     setIsProcessing(true);
 
     try {
-      // Update payment intent first to ensure latest values are used, with validation
-      const result = await updatePaymentIntent(true);
-      
-      // If updatePaymentIntent returned null due to validation error, stop here
-      if (result === null) {
-        setIsProcessing(false);
-        return;
-      }
-      
       // Confirm the payment with the Express Checkout Element
       const { error } = await stripe.confirmPayment({
         elements,
@@ -212,9 +201,12 @@ const DonationModal: React.FC<DonationModalProps> = ({
       setIsAnonymous(false); // Default to not anonymous, like commission form
       setError('');
       setSuccess(false);
-      setPaymentIntentId(null);
       setShowMessage(false);
-      // Don't create payment intent immediately - wait for amount to be set by tiers useEffect
+      // Don't reset clientSecret and paymentIntentId here - let createPaymentIntent handle it
+    } else {
+      // Only reset when closing
+      setClientSecret(null);
+      setPaymentIntentId(null);
     }
   }, [isOpen]);
 
@@ -287,14 +279,8 @@ const DonationModal: React.FC<DonationModalProps> = ({
     }
   };
 
-  const updatePaymentIntent = async (validateForPayment = false) => {
+  const updatePaymentIntent = async () => {
     if (!paymentIntentId || !amount || parseFloat(amount) < 0.50) {
-      return null;
-    }
-
-    // Only validate Reddit username when called for payment confirmation
-    if (validateForPayment && !isAnonymous && !redditUsername.trim()) {
-      setError('Reddit username is required when not anonymous');
       return null;
     }
 
@@ -588,13 +574,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2 mt-2">Support Message</label>
               <textarea
                 value={message}
-                onChange={(e) => {
-                  setMessage(e.target.value);
-                  // Update payment intent when message changes
-                  if (paymentIntentId) {
-                    setTimeout(() => updatePaymentIntent(), 100);
-                  }
-                }}
+                onChange={(e) => setMessage(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                 rows={3}
                 placeholder="Leave a message of support..."
@@ -635,20 +615,20 @@ const DonationModal: React.FC<DonationModalProps> = ({
                     },
                   },
                 }}
+                key={`${clientSecret}-${paymentIntentId}`}
               >
-                <DonationForm
-                  amount={amount}
-                  message={message}
-                  customerEmail={customerEmail}
-                  customerName={customerName}
-                  redditUsername={redditUsername}
-                  isAnonymous={isAnonymous}
-                  subreddit={subreddit}
-                  postId={postId}
-                  onSuccess={handleSuccess}
-                  onError={handleError}
-                  updatePaymentIntent={updatePaymentIntent}
-                />
+                        <DonationForm
+          amount={amount}
+          message={message}
+          customerEmail={customerEmail}
+          customerName={customerName}
+          redditUsername={redditUsername}
+          isAnonymous={isAnonymous}
+          subreddit={subreddit}
+          postId={postId}
+          onSuccess={handleSuccess}
+          onError={handleError}
+        />
               </Elements>
             </div>
           )}

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import PipelineTask, Sponsor
+from app.db.models import PipelineTask, Donation
 from app.subreddit_service import get_subreddit_service
 from app.utils.logging_config import get_logger
 
@@ -34,7 +34,7 @@ class TaskQueue:
         self,
         task_type: str,
         subreddit_id: int,
-        sponsor_id: Optional[int] = None,
+        donation_id: Optional[int] = None,
         priority: int = 0,
         scheduled_for: Optional[datetime] = None,
         context_data: Optional[Dict[str, Any]] = None,
@@ -45,7 +45,7 @@ class TaskQueue:
         Args:
             task_type: Type of task (SUBREDDIT_POST)
             subreddit_id: Target subreddit ID
-            sponsor_id: Associated sponsor ID
+            donation_id: Associated donation ID
             priority: Task priority (higher number = higher priority)
             scheduled_for: When to execute the task
             context_data: Additional context data
@@ -68,7 +68,7 @@ class TaskQueue:
             task = PipelineTask(
                 type=task_type,
                 subreddit_id=subreddit_id,
-                sponsor_id=sponsor_id,
+                donation_id=donation_id,
                 priority=priority,
                 scheduled_for=scheduled_for,
                 context_data=context_data or {},
@@ -92,7 +92,7 @@ class TaskQueue:
         self,
         task_type: str,
         subreddit_name: str,
-        sponsor_id: Optional[int] = None,
+        donation_id: Optional[int] = None,
         priority: int = 0,
         scheduled_for: Optional[datetime] = None,
         context_data: Optional[Dict[str, Any]] = None,
@@ -103,7 +103,7 @@ class TaskQueue:
         Args:
             task_type: Type of task (SUBREDDIT_POST)
             subreddit_name: Target subreddit name (e.g., "golf", "all")
-            sponsor_id: Associated sponsor ID
+            donation_id: Associated donation ID
             priority: Task priority (higher number = higher priority)
             scheduled_for: When to execute the task
             context_data: Additional context data
@@ -118,7 +118,7 @@ class TaskQueue:
         return self.add_task(
             task_type=task_type,
             subreddit_id=subreddit.id,
-            sponsor_id=sponsor_id,
+            donation_id=donation_id,
             priority=priority,
             scheduled_for=scheduled_for,
             context_data=context_data,
