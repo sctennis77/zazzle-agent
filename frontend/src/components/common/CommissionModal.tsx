@@ -109,16 +109,12 @@ const CommissionForm: React.FC<{
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [elementsReady, setElementsReady] = useState(false);
-
   // Monitor when Elements are ready
   useEffect(() => {
     if (stripe && elements) {
       console.log('Stripe Elements ready:', { stripe: !!stripe, elements: !!elements });
-      setElementsReady(true);
     } else {
       console.log('Stripe Elements not ready:', { stripe: !!stripe, elements: !!elements });
-      setElementsReady(false);
     }
   }, [stripe, elements]);
 
@@ -154,7 +150,6 @@ const CommissionForm: React.FC<{
     }
   };
 
-  const isRedditUsernameRequired = !_isAnonymous;
   const isRedditUsernameValid = _isAnonymous || (_redditUsername && _redditUsername.trim().length > 0);
 
   return (
@@ -264,6 +259,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [postId, setPostId] = useState('');
   const [commissionType, setCommissionType] = useState(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
   const [error, setError] = useState('');
+  // Note: error state is used in error handling logic
   const [success, setSuccess] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -597,6 +593,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Commission Art">
       <div className="space-y-6 p-6">
+        {error && (
+          <p className="text-sm text-red-600 mb-2">{error}</p>
+        )}
         {/* Tier selection and badge */}
         <div className="flex items-center gap-3 mb-2">
           <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>

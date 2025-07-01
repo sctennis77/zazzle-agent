@@ -64,8 +64,9 @@ validate_environment() {
         "REDDIT_CLIENT_SECRET"
         "REDDIT_USER_AGENT"
         "ZAZZLE_AFFILIATE_ID"
-        "IMGUR_CLIENT_ID"
-        "IMGUR_CLIENT_SECRET"
+        "STRIPE_SECRET_KEY"
+        "STRIPE_PUBLISHABLE_KEY"
+        "STRIPE_WEBHOOK_SECRET"
     )
     
     local missing_vars=()
@@ -197,8 +198,8 @@ test_deployment() {
 run_initial_pipeline() {
     log "Running initial pipeline..."
     
-    # Run a single pipeline execution
-    docker-compose exec -T pipeline python app/main.py --mode full
+    # Run a single pipeline execution using task-runner
+    docker-compose exec -T task-runner python -m app.main --mode full
     
     success "Initial pipeline completed"
 }
@@ -216,9 +217,11 @@ show_deployment_info() {
     echo ""
     echo "🔧 Management Commands:"
     echo "  • View logs: docker-compose logs -f"
+    echo "  • View API logs: docker-compose logs -f api"
+    echo "  • View Stripe CLI logs: docker-compose logs -f stripe-cli"
     echo "  • Stop services: docker-compose down"
     echo "  • Restart services: docker-compose restart"
-    echo "  • Run pipeline: docker-compose exec pipeline python app/main.py --mode full"
+    echo "  • Run pipeline: docker-compose exec task-runner python -m app.main --mode full"
     echo ""
     echo "📋 Useful URLs:"
     echo "  • Frontend: http://localhost:5173"
@@ -227,8 +230,14 @@ show_deployment_info() {
     echo ""
     echo "🚀 Next steps:"
     echo "  1. Open http://localhost:5173 in your browser"
-    echo "  2. Run the pipeline to generate your first product"
-    echo "  3. Monitor the logs for any issues"
+    echo "  2. Test the commission system by clicking 'Commission' button"
+    echo "  3. Run the pipeline to generate your first product"
+    echo "  4. Monitor the logs for any issues"
+    echo ""
+    echo "🧪 Commission System Testing:"
+    echo "  • Test three commission types: Sponsor, Random, Specific"
+    echo "  • Verify validation logic works correctly"
+    echo "  • Check Stripe payment processing"
     echo ""
 }
 
