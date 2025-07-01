@@ -19,9 +19,8 @@ interface DonationModalProps {
 interface DonationRequest {
   amount_usd: string;
   subreddit: string;
-  donation_type: 'commission' | 'support';
+  donation_type: 'support';
   post_id?: string;
-  commission_message?: string;
   message?: string;
   customer_email?: string;
   customer_name?: string;
@@ -41,6 +40,7 @@ const DonationForm: React.FC<{
   postId?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
+  updatePaymentIntent: (validateForPayment?: boolean) => Promise<void>;
 }> = ({ 
   amount: _amount, 
   message: _message, 
@@ -51,7 +51,8 @@ const DonationForm: React.FC<{
   subreddit: _subreddit, 
   postId: _postId, 
   onSuccess, 
-  onError 
+  onError,
+  updatePaymentIntent
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -66,6 +67,15 @@ const DonationForm: React.FC<{
     setIsProcessing(true);
 
     try {
+      // Update payment intent first to ensure latest values are used, with validation
+      const result = await updatePaymentIntent(true);
+      
+      // If updatePaymentIntent returned null due to validation error, stop here
+      if (result === null) {
+        setIsProcessing(false);
+        return;
+      }
+      
       // Confirm the payment with the Express Checkout Element
       const { error } = await stripe.confirmPayment({
         elements,
@@ -150,13 +160,19 @@ const iconMap = {
   FaHeart,
 };
 
-const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddit, postId, supportOnly = false }) => {
+const DonationModal: React.FC<DonationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  subreddit, 
+  postId, 
+  supportOnly = false
+}) => {
   const [amount, setAmount] = useState('10');
   const [message, setMessage] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [redditUsername, setRedditUsername] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(true); // Default to anonymous
+  const [isAnonymous, setIsAnonymous] = useState(false); // Default to not anonymous, like commission form
   const [previousRedditUsername, setPreviousRedditUsername] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -182,50 +198,49 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
     return () => { isMounted.current = false; };
   }, [isOpen]);
 
+
+
   useEffect(() => {
     if (isOpen) {
-      setAmount('10');
+      // Don't reset amount here - let the tiers useEffect handle it
       setCustomAmount('');
       setMessage('');
       setCustomerEmail('');
       setCustomerName('');
       setRedditUsername('');
       setPreviousRedditUsername('');
-      setIsAnonymous(true); // Default to anonymous
+      setIsAnonymous(false); // Default to not anonymous, like commission form
       setError('');
       setSuccess(false);
-      setClientSecret(null); // Clear any existing client secret
       setPaymentIntentId(null);
       setShowMessage(false);
-      // Immediately create a new PaymentIntent
-      (async () => {
-        await createPaymentIntent();
-        if (!isMounted.current) return;
-      })();
+      // Don't create payment intent immediately - wait for amount to be set by tiers useEffect
     }
   }, [isOpen]);
 
-  // Debounced update for Reddit username changes
+  // Create payment intent after amount is set by tiers useEffect
   useEffect(() => {
-    if (!clientSecret || !paymentIntentId) return;
-    
+    if (isOpen && amount && tiers.length > 0) {
+      // Small delay to ensure state is properly set
+      const timeoutId = setTimeout(async () => {
+        await createPaymentIntent();
+        if (!isMounted.current) return;
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isOpen, amount, tiers]);
+
+  // Debounced update effect - same as CommissionModal
+  useEffect(() => {
+    if (!paymentIntentId || !isOpen) return;
+
     const timeoutId = setTimeout(() => {
       updatePaymentIntent();
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [redditUsername, isAnonymous]);
-
-  // Debounced update for message changes
-  useEffect(() => {
-    if (!clientSecret || !paymentIntentId) return;
-    
-    const timeoutId = setTimeout(() => {
-      updatePaymentIntent();
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(timeoutId);
-  }, [message]);
+  }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, message, subreddit, postId, isOpen]);
 
   const createPaymentIntent = async () => {
     if (!amount || parseFloat(amount) < 0.50) {
@@ -241,18 +256,16 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
         subreddit,
         donation_type: 'support',
         post_id: postId,
-        message,
+        message: message || undefined,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
-        reddit_username: redditUsername,
+        reddit_username: redditUsername.trim() || undefined,
         is_anonymous: isAnonymous,
       };
 
       const response = await fetch('/api/donations/create-payment-intent', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(donationRequest),
       });
 
@@ -261,35 +274,31 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
         throw new Error(errorData.detail || 'Failed to create payment intent');
       }
 
-      const data = await response.json();
-      setClientSecret(data.client_secret);
-      setPaymentIntentId(data.payment_intent_id);
-      return data.client_secret;
+      const { client_secret, payment_intent_id } = await response.json();
+      setClientSecret(client_secret);
+      setPaymentIntentId(payment_intent_id);
+      setError(''); // Clear any previous errors
+      return payment_intent_id;
     } catch (error) {
-      console.error('Error creating payment intent:', error);
       setError(error instanceof Error ? error.message : 'Failed to create payment intent');
+      setClientSecret(null);
+      setPaymentIntentId(null);
       return null;
     }
   };
 
-  const fetchPaymentIntentState = async () => {
-    if (!paymentIntentId) return;
-
-    try {
-      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'succeeded') {
-          handleSuccess();
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching payment intent state:', error);
+  const updatePaymentIntent = async (validateForPayment = false) => {
+    if (!paymentIntentId || !amount || parseFloat(amount) < 0.50) {
+      return null;
     }
-  };
 
-  const updatePaymentIntent = async () => {
-    if (!paymentIntentId) return;
+    // Only validate Reddit username when called for payment confirmation
+    if (validateForPayment && !isAnonymous && !redditUsername.trim()) {
+      setError('Reddit username is required when not anonymous');
+      return null;
+    }
+
+    setError(''); // Clear any previous errors
 
     try {
       const donationRequest: DonationRequest = {
@@ -297,27 +306,32 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
         subreddit,
         donation_type: 'support',
         post_id: postId,
-        message,
+        message: message || undefined,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
-        reddit_username: redditUsername,
+        reddit_username: redditUsername.trim() || undefined,
         is_anonymous: isAnonymous,
       };
 
-      const response = await fetch(`/api/donations/update-payment-intent/${paymentIntentId}`, {
+      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}/update`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(donationRequest),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Error updating payment intent:', errorData);
+        throw new Error(errorData.detail || 'Failed to update payment intent');
       }
+
+      const { client_secret } = await response.json();
+      setClientSecret(client_secret);
+      setError(''); // Clear any previous errors
+      return client_secret;
     } catch (error) {
-      console.error('Error updating payment intent:', error);
+      // Silently handle update errors to avoid disrupting user experience
+      console.error('Failed to update payment intent:', error);
+      return null;
     }
   };
 
@@ -325,7 +339,18 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
     setSuccess(true);
     // Poll for payment completion
     const pollInterval = setInterval(async () => {
-      await fetchPaymentIntentState();
+      try {
+        const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'succeeded') {
+            // Payment completed, no need to poll anymore
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching payment intent state:', error);
+      }
     }, 2000);
 
     // Stop polling after 30 seconds
@@ -398,10 +423,16 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                 <button
                   key={tier.name}
                   type="button"
-                  onClick={() => {
-                    setAmount(tier.min_amount.toString());
+                  onClick={async () => {
+                    const newAmount = tier.min_amount.toString();
+                    setAmount(newAmount);
                     setCustomAmount('');
-                    if (paymentIntentId) updatePaymentIntent();
+                    
+                    // If we have a payment intent, update it with the new amount
+                    if (paymentIntentId) {
+                      // Pass the new amount directly to avoid state closure issues
+                      setTimeout(() => updatePaymentIntent(), 50);
+                    }
                   }}
                   className={`flex items-center gap-1 px-2 py-1 border rounded-lg text-xs font-medium transition-colors h-9 ${amount === tier.min_amount.toString() ? tDisplay.bgColor + ' ' + tDisplay.color + ' border-pink-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                 >
@@ -420,9 +451,15 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                 step="0.01"
                 value={customAmount}
                 onChange={e => {
-                  setCustomAmount(e.target.value);
-                  setAmount(e.target.value);
-                  if (paymentIntentId) updatePaymentIntent();
+                  const newAmount = e.target.value;
+                  setCustomAmount(newAmount);
+                  setAmount(newAmount);
+                  
+                  // If we have a payment intent, update it with the new amount
+                  if (paymentIntentId) {
+                    // Pass the new amount directly to avoid state closure issues
+                    setTimeout(() => updatePaymentIntent(), 50);
+                  }
                 }}
                 className="w-full border border-gray-300 rounded-lg pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent h-9"
                 placeholder="Custom"
@@ -444,7 +481,12 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
               onChange={(e) => setCustomerEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
               placeholder="your@email.com"
+              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+              title="Please enter a valid email address"
             />
+            {customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) && (
+              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Name (optional)</label>
@@ -475,10 +517,14 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                 value={redditUsername}
                 onChange={(e) => {
                   setRedditUsername(e.target.value);
+                  // Update payment intent when username changes
+                  if (paymentIntentId && !isAnonymous) {
+                    setTimeout(() => updatePaymentIntent(), 100);
+                  }
                 }}
                 disabled={isAnonymous}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAnonymous ? 'bg-gray-100 text-gray-500' : ''}`}
-                placeholder={isAnonymous ? "Anonymous donation" : "Enter your Reddit username"}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                placeholder={isAnonymous ? "Anonymous donation" : "u/username"}
               />
               {!isAnonymous && !redditUsername.trim() && (
                 <p className="text-red-500 text-xs mt-1">Reddit username is required when not anonymous</p>
@@ -501,7 +547,11 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                     // Switching from anonymous - restore previous username if any
                     setRedditUsername(previousRedditUsername);
                   }
-                  // The debounced useEffect will handle the update
+                  
+                  // Immediately update payment intent when toggling anonymous
+                  if (paymentIntentId) {
+                    setTimeout(() => updatePaymentIntent(), 100);
+                  }
                 }}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-pink-500' : 'bg-gray-300'}`}
                 aria-pressed={isAnonymous}
@@ -520,7 +570,7 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
           {!showMessage && (
             <button
               type="button"
-              className="text-xs text-blue-500 underline mb-2"
+              className="text-xs text-pink-500 underline mb-2"
               onClick={() => setShowMessage(true)}
             >
               + Add a support message
@@ -530,7 +580,7 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
             <>
               <button
                 type="button"
-                className="text-xs text-blue-500 underline mb-2"
+                className="text-xs text-pink-500 underline mb-2"
                 onClick={() => setShowMessage(false)}
               >
                 – Hide support message
@@ -540,11 +590,18 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
+                  // Update payment intent when message changes
+                  if (paymentIntentId) {
+                    setTimeout(() => updatePaymentIntent(), 100);
+                  }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                 rows={3}
                 placeholder="Leave a message of support..."
               />
+              <p className="text-xs text-gray-500 mt-1">
+                This message will be displayed alongside your donation for recognition purposes.
+              </p>
             </>
           )}
         </div>
@@ -590,6 +647,7 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose, subreddi
                   postId={postId}
                   onSuccess={handleSuccess}
                   onError={handleError}
+                  updatePaymentIntent={updatePaymentIntent}
                 />
               </Elements>
             </div>
