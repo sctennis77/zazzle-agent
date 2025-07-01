@@ -59,7 +59,7 @@ TIER_AMOUNTS = {
 COMMISSION_MINIMUM_TIERS = {
     "specific_post": DonationTier.GOLD,      # $10 minimum
     "random_subreddit": DonationTier.SILVER,  # $5 minimum
-    "random_random": DonationTier.BRONZE,     # $1 minimum (for future implementation)
+    "random_random": DonationTier.BRONZE,     # $1 minimum
 }
 
 
@@ -787,7 +787,7 @@ class DonationRequest(BaseModel):
     customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
     customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
     message: Optional[str] = Field(None, max_length=1000, description="Optional message from donor")
-    subreddit: str = Field(..., max_length=100, description="Subreddit name (required for all donations)")
+    subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit for the commission. Required for specific_post and random_subreddit, optional for random_random.")
     reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor (if blank, donation is anonymous)")
     is_anonymous: bool = Field(False, description="Whether the donation should be anonymous")
     donation_type: str = Field(..., description="Type of donation: 'commission' or 'support'")
@@ -807,8 +807,8 @@ class DonationRequest(BaseModel):
     @classmethod
     def validate_commission_type(cls, v):
         """Validate commission type."""
-        if v is not None and v not in ["specific_post", "random_subreddit"]:
-            raise ValueError("commission_type must be 'specific_post' or 'random_subreddit'")
+        if v is not None and v not in ["specific_post", "random_subreddit", "random_random"]:
+            raise ValueError("commission_type must be 'specific_post', 'random_subreddit', or 'random_random'")
         return v
     
     @model_validator(mode='after')
@@ -832,9 +832,21 @@ class DonationRequest(BaseModel):
                 required_amount = get_minimum_amount_for_tier(required_tier)
                 raise ValueError(f"Commission type '{self.commission_type}' requires minimum {required_tier.value} tier (${required_amount})")
             
-            # Validate post_id for specific_post commissions
-            if self.commission_type == "specific_post":
-                if not self.post_id or self.post_id.strip() == "":
+            # For random_random, subreddit can be None
+            if self.commission_type == "random_random":
+                if self.subreddit not in (None, ""):
+                    raise ValueError("subreddit should not be provided for random_random commissions")
+                if self.post_id not in (None, ""):
+                    raise ValueError("post_id should not be provided for random_random commissions")
+            elif self.commission_type == "random_subreddit":
+                if not self.subreddit:
+                    raise ValueError("subreddit is required for random_subreddit commissions")
+                if self.post_id not in (None, ""):
+                    raise ValueError("post_id should not be provided for random_subreddit commissions")
+            elif self.commission_type == "specific_post":
+                if not self.subreddit:
+                    raise ValueError("subreddit is required for specific_post commissions")
+                if not self.post_id:
                     raise ValueError("post_id is required for specific_post commissions")
         
         return self

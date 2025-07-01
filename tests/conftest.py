@@ -11,39 +11,44 @@ pytest_plugins = ["pytest_asyncio"]
 
 @pytest.fixture(autouse=True, scope="session")
 def patch_database():
-    """Patch all database-related imports to use in-memory database for tests and run Alembic migrations."""
+    """Patch all database-related imports to use test database and create schema from models."""
     import os
-    from alembic.config import Config
-    from alembic import command
+    from app.db.models import Base
 
     # Set testing environment variable
     os.environ["TESTING"] = "true"
 
-    # Create a test engine and session
-    test_engine = create_engine("sqlite:///:memory:")
+    # Create a test engine using a file-based database to avoid threading issues
+    test_db_path = Path("/tmp/test_zazzle_agent.db")
+    test_engine = create_engine(f"sqlite:///{test_db_path}")
     TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+    # Create all tables from models
+    Base.metadata.create_all(bind=test_engine)
 
     # Patch the app's database engine/session to use the test DB
     with (
-        patch("app.db.database.get_database_url", return_value="sqlite:///:memory:"),
+        patch("app.db.database.get_database_url", return_value=f"sqlite:///{test_db_path}"),
         patch("app.db.database.engine", test_engine),
         patch("app.db.database.SessionLocal", TestSessionLocal),
     ):
-        # Run Alembic migrations against the in-memory test DB
-        alembic_cfg = Config("alembic.ini")
-        alembic_cfg.set_main_option("sqlalchemy.url", "sqlite:///:memory:")
-        command.upgrade(alembic_cfg, "head")
+        # Store the test session for use in other fixtures
+        patch_database.test_session = TestSessionLocal
         yield
+    
+    # Cleanup: remove the test database file
+    if test_db_path.exists():
+        test_db_path.unlink()
 
 
 @pytest.fixture(scope="session")
 def test_data():
     """Create basic test data for donation tests."""
-    from app.db.database import SessionLocal
     from app.db.models import Subreddit, PipelineRun, RedditPost
     from datetime import datetime, timezone
 
-    db = SessionLocal()
+    # Use the same session that was used for migrations
+    db = patch_database.test_session()
     
     # Create a test subreddit
     subreddit = Subreddit(

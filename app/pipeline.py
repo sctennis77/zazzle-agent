@@ -565,8 +565,13 @@ class Pipeline:
                     # Get product info for specific post
                     products = await self.reddit_agent.get_product_info_for_specific_post(post_id)
                 else:
-                    # Handle random subreddit post or random_subreddit commission
-                    logger.info(f"Using subreddit {self.reddit_agent.subreddit_name} for subreddit post")
+                    # Handle random subreddit post, random_subreddit commission, or random_random commission
+                    commission_type = task.context_data.get("commission_type") if task.context_data else None
+                    if commission_type == "random_random":
+                        selected_subreddit = task.context_data.get("selected_subreddit", "unknown")
+                        logger.info(f"Using randomly selected subreddit {self.reddit_agent.subreddit_name} (originally: {selected_subreddit}) for random_random commission")
+                    else:
+                        logger.info(f"Using subreddit {self.reddit_agent.subreddit_name} for subreddit post")
                     products = await self.reddit_agent.get_product_info_for_task()
                 
             else:

@@ -1,8 +1,8 @@
-"""initial schema with subreddit normalization
+"""initial_schema
 
-Revision ID: 32a1a538ffb1
+Revision ID: ff061e4eba69
 Revises: 
-Create Date: 2025-06-26 16:38:47.995598
+Create Date: 2025-07-01 10:34:57.149481
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '32a1a538ffb1'
-down_revision: Union[str, None] = None
+revision: str = 'ff061e4eba69'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,18 +38,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_pipeline_runs_end_time'), 'pipeline_runs', ['end_time'], unique=False)
     op.create_index(op.f('ix_pipeline_runs_start_time'), 'pipeline_runs', ['start_time'], unique=False)
     op.create_index(op.f('ix_pipeline_runs_status'), 'pipeline_runs', ['status'], unique=False)
-    op.create_table('sponsor_tiers',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=64), nullable=False),
-    sa.Column('min_amount', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('benefits', sa.Text(), nullable=True),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_sponsor_tiers_created_at'), 'sponsor_tiers', ['created_at'], unique=False)
-    op.create_index(op.f('ix_sponsor_tiers_min_amount'), 'sponsor_tiers', ['min_amount'], unique=False)
-    op.create_index(op.f('ix_sponsor_tiers_name'), 'sponsor_tiers', ['name'], unique=True)
     op.create_table('subreddits',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('subreddit_name', sa.String(length=100), nullable=False),
@@ -149,23 +137,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_subreddit_fundraising_goals_goal_amount'), 'subreddit_fundraising_goals', ['goal_amount'], unique=False)
     op.create_index(op.f('ix_subreddit_fundraising_goals_status'), 'subreddit_fundraising_goals', ['status'], unique=False)
     op.create_index(op.f('ix_subreddit_fundraising_goals_subreddit_id'), 'subreddit_fundraising_goals', ['subreddit_id'], unique=False)
-    op.create_table('subreddit_tiers',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('subreddit_id', sa.Integer(), nullable=False),
-    sa.Column('tier_level', sa.Integer(), nullable=False),
-    sa.Column('min_total_donation', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('status', sa.String(length=32), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('completed_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['subreddit_id'], ['subreddits.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_subreddit_tiers_completed_at'), 'subreddit_tiers', ['completed_at'], unique=False)
-    op.create_index(op.f('ix_subreddit_tiers_created_at'), 'subreddit_tiers', ['created_at'], unique=False)
-    op.create_index(op.f('ix_subreddit_tiers_min_total_donation'), 'subreddit_tiers', ['min_total_donation'], unique=False)
-    op.create_index(op.f('ix_subreddit_tiers_status'), 'subreddit_tiers', ['status'], unique=False)
-    op.create_index(op.f('ix_subreddit_tiers_subreddit_id'), 'subreddit_tiers', ['subreddit_id'], unique=False)
-    op.create_index(op.f('ix_subreddit_tiers_tier_level'), 'subreddit_tiers', ['tier_level'], unique=False)
     op.create_table('donations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('stripe_payment_intent_id', sa.String(length=255), nullable=False),
@@ -173,6 +144,7 @@ def upgrade() -> None:
     sa.Column('amount_usd', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('currency', sa.String(length=3), nullable=False),
     sa.Column('status', sa.String(length=32), nullable=False),
+    sa.Column('tier', sa.String(length=32), nullable=False),
     sa.Column('customer_email', sa.String(length=255), nullable=True),
     sa.Column('customer_name', sa.String(length=255), nullable=True),
     sa.Column('message', sa.Text(), nullable=True),
@@ -183,17 +155,25 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.Column('is_anonymous', sa.Boolean(), nullable=False),
     sa.Column('subreddit_fundraising_goal_id', sa.Integer(), nullable=True),
+    sa.Column('donation_type', sa.String(length=32), nullable=False),
+    sa.Column('commission_type', sa.String(length=32), nullable=True),
+    sa.Column('post_id', sa.String(length=32), nullable=True),
+    sa.Column('commission_message', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['subreddit_fundraising_goal_id'], ['subreddit_fundraising_goals.id'], ),
     sa.ForeignKeyConstraint(['subreddit_id'], ['subreddits.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_donations_commission_type'), 'donations', ['commission_type'], unique=False)
     op.create_index(op.f('ix_donations_created_at'), 'donations', ['created_at'], unique=False)
     op.create_index(op.f('ix_donations_customer_email'), 'donations', ['customer_email'], unique=False)
+    op.create_index(op.f('ix_donations_donation_type'), 'donations', ['donation_type'], unique=False)
+    op.create_index(op.f('ix_donations_post_id'), 'donations', ['post_id'], unique=False)
     op.create_index(op.f('ix_donations_reddit_username'), 'donations', ['reddit_username'], unique=False)
     op.create_index(op.f('ix_donations_status'), 'donations', ['status'], unique=False)
     op.create_index(op.f('ix_donations_stripe_payment_intent_id'), 'donations', ['stripe_payment_intent_id'], unique=True)
     op.create_index(op.f('ix_donations_subreddit_fundraising_goal_id'), 'donations', ['subreddit_fundraising_goal_id'], unique=False)
     op.create_index(op.f('ix_donations_subreddit_id'), 'donations', ['subreddit_id'], unique=False)
+    op.create_index(op.f('ix_donations_tier'), 'donations', ['tier'], unique=False)
     op.create_index(op.f('ix_donations_updated_at'), 'donations', ['updated_at'], unique=False)
     op.create_table('product_infos',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -201,6 +181,7 @@ def upgrade() -> None:
     sa.Column('reddit_post_id', sa.Integer(), nullable=True),
     sa.Column('theme', sa.String(length=256), nullable=True),
     sa.Column('image_title', sa.String(length=256), nullable=True),
+    sa.Column('image_url', sa.Text(), nullable=True),
     sa.Column('product_url', sa.Text(), nullable=True),
     sa.Column('affiliate_link', sa.Text(), nullable=True),
     sa.Column('template_id', sa.String(length=64), nullable=True),
@@ -245,28 +226,11 @@ def upgrade() -> None:
     op.create_index(op.f('ix_interaction_agent_actions_target_id'), 'interaction_agent_actions', ['target_id'], unique=False)
     op.create_index(op.f('ix_interaction_agent_actions_target_type'), 'interaction_agent_actions', ['target_type'], unique=False)
     op.create_index(op.f('ix_interaction_agent_actions_timestamp'), 'interaction_agent_actions', ['timestamp'], unique=False)
-    op.create_table('sponsors',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('donation_id', sa.Integer(), nullable=False),
-    sa.Column('tier_id', sa.Integer(), nullable=False),
-    sa.Column('subreddit_id', sa.Integer(), nullable=True),
-    sa.Column('status', sa.String(length=32), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['donation_id'], ['donations.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['subreddit_id'], ['subreddits.id'], ),
-    sa.ForeignKeyConstraint(['tier_id'], ['sponsor_tiers.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_sponsors_created_at'), 'sponsors', ['created_at'], unique=False)
-    op.create_index(op.f('ix_sponsors_donation_id'), 'sponsors', ['donation_id'], unique=False)
-    op.create_index(op.f('ix_sponsors_status'), 'sponsors', ['status'], unique=False)
-    op.create_index(op.f('ix_sponsors_subreddit_id'), 'sponsors', ['subreddit_id'], unique=False)
-    op.create_index(op.f('ix_sponsors_tier_id'), 'sponsors', ['tier_id'], unique=False)
     op.create_table('pipeline_tasks',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('type', sa.String(length=32), nullable=False),
     sa.Column('subreddit_id', sa.Integer(), nullable=False),
-    sa.Column('sponsor_id', sa.Integer(), nullable=True),
+    sa.Column('donation_id', sa.Integer(), nullable=True),
     sa.Column('status', sa.String(length=32), nullable=False),
     sa.Column('priority', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -275,17 +239,17 @@ def upgrade() -> None:
     sa.Column('error_message', sa.Text(), nullable=True),
     sa.Column('context_data', sa.JSON(), nullable=True),
     sa.Column('pipeline_run_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['donation_id'], ['donations.id'], ),
     sa.ForeignKeyConstraint(['pipeline_run_id'], ['pipeline_runs.id'], ),
-    sa.ForeignKeyConstraint(['sponsor_id'], ['sponsors.id'], ),
     sa.ForeignKeyConstraint(['subreddit_id'], ['subreddits.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_pipeline_tasks_completed_at'), 'pipeline_tasks', ['completed_at'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_created_at'), 'pipeline_tasks', ['created_at'], unique=False)
+    op.create_index(op.f('ix_pipeline_tasks_donation_id'), 'pipeline_tasks', ['donation_id'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_pipeline_run_id'), 'pipeline_tasks', ['pipeline_run_id'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_priority'), 'pipeline_tasks', ['priority'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_scheduled_for'), 'pipeline_tasks', ['scheduled_for'], unique=False)
-    op.create_index(op.f('ix_pipeline_tasks_sponsor_id'), 'pipeline_tasks', ['sponsor_id'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_status'), 'pipeline_tasks', ['status'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_subreddit_id'), 'pipeline_tasks', ['subreddit_id'], unique=False)
     op.create_index(op.f('ix_pipeline_tasks_type'), 'pipeline_tasks', ['type'], unique=False)
@@ -298,19 +262,13 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_pipeline_tasks_type'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_subreddit_id'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_status'), table_name='pipeline_tasks')
-    op.drop_index(op.f('ix_pipeline_tasks_sponsor_id'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_scheduled_for'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_priority'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_pipeline_run_id'), table_name='pipeline_tasks')
+    op.drop_index(op.f('ix_pipeline_tasks_donation_id'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_created_at'), table_name='pipeline_tasks')
     op.drop_index(op.f('ix_pipeline_tasks_completed_at'), table_name='pipeline_tasks')
     op.drop_table('pipeline_tasks')
-    op.drop_index(op.f('ix_sponsors_tier_id'), table_name='sponsors')
-    op.drop_index(op.f('ix_sponsors_subreddit_id'), table_name='sponsors')
-    op.drop_index(op.f('ix_sponsors_status'), table_name='sponsors')
-    op.drop_index(op.f('ix_sponsors_donation_id'), table_name='sponsors')
-    op.drop_index(op.f('ix_sponsors_created_at'), table_name='sponsors')
-    op.drop_table('sponsors')
     op.drop_index(op.f('ix_interaction_agent_actions_timestamp'), table_name='interaction_agent_actions')
     op.drop_index(op.f('ix_interaction_agent_actions_target_type'), table_name='interaction_agent_actions')
     op.drop_index(op.f('ix_interaction_agent_actions_target_id'), table_name='interaction_agent_actions')
@@ -329,21 +287,18 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_product_infos_image_title'), table_name='product_infos')
     op.drop_table('product_infos')
     op.drop_index(op.f('ix_donations_updated_at'), table_name='donations')
+    op.drop_index(op.f('ix_donations_tier'), table_name='donations')
     op.drop_index(op.f('ix_donations_subreddit_id'), table_name='donations')
     op.drop_index(op.f('ix_donations_subreddit_fundraising_goal_id'), table_name='donations')
     op.drop_index(op.f('ix_donations_stripe_payment_intent_id'), table_name='donations')
     op.drop_index(op.f('ix_donations_status'), table_name='donations')
     op.drop_index(op.f('ix_donations_reddit_username'), table_name='donations')
+    op.drop_index(op.f('ix_donations_post_id'), table_name='donations')
+    op.drop_index(op.f('ix_donations_donation_type'), table_name='donations')
     op.drop_index(op.f('ix_donations_customer_email'), table_name='donations')
     op.drop_index(op.f('ix_donations_created_at'), table_name='donations')
+    op.drop_index(op.f('ix_donations_commission_type'), table_name='donations')
     op.drop_table('donations')
-    op.drop_index(op.f('ix_subreddit_tiers_tier_level'), table_name='subreddit_tiers')
-    op.drop_index(op.f('ix_subreddit_tiers_subreddit_id'), table_name='subreddit_tiers')
-    op.drop_index(op.f('ix_subreddit_tiers_status'), table_name='subreddit_tiers')
-    op.drop_index(op.f('ix_subreddit_tiers_min_total_donation'), table_name='subreddit_tiers')
-    op.drop_index(op.f('ix_subreddit_tiers_created_at'), table_name='subreddit_tiers')
-    op.drop_index(op.f('ix_subreddit_tiers_completed_at'), table_name='subreddit_tiers')
-    op.drop_table('subreddit_tiers')
     op.drop_index(op.f('ix_subreddit_fundraising_goals_subreddit_id'), table_name='subreddit_fundraising_goals')
     op.drop_index(op.f('ix_subreddit_fundraising_goals_status'), table_name='subreddit_fundraising_goals')
     op.drop_index(op.f('ix_subreddit_fundraising_goals_goal_amount'), table_name='subreddit_fundraising_goals')
@@ -376,10 +331,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_subreddits_created_utc'), table_name='subreddits')
     op.drop_index(op.f('ix_subreddits_created_at'), table_name='subreddits')
     op.drop_table('subreddits')
-    op.drop_index(op.f('ix_sponsor_tiers_name'), table_name='sponsor_tiers')
-    op.drop_index(op.f('ix_sponsor_tiers_min_amount'), table_name='sponsor_tiers')
-    op.drop_index(op.f('ix_sponsor_tiers_created_at'), table_name='sponsor_tiers')
-    op.drop_table('sponsor_tiers')
     op.drop_index(op.f('ix_pipeline_runs_status'), table_name='pipeline_runs')
     op.drop_index(op.f('ix_pipeline_runs_start_time'), table_name='pipeline_runs')
     op.drop_index(op.f('ix_pipeline_runs_end_time'), table_name='pipeline_runs')

@@ -17,7 +17,7 @@ interface CommissionRequest {
   amount_usd: string;
   subreddit: string;
   donation_type: 'commission';
-  commission_type: 'random_subreddit' | 'specific_post';
+  commission_type: 'random_subreddit' | 'specific_post' | 'random_random';
   post_id?: string;
   commission_message?: string;
   customer_email?: string;
@@ -240,11 +240,13 @@ const iconMap = {
 const COMMISSION_TYPES = {
   SUBREDDIT: 'subreddit',
   SPECIFIC: 'specific',
+  RANDOM: 'random',
 };
 
 const COMMISSION_MINIMUMS = {
   [COMMISSION_TYPES.SUBREDDIT]: 'silver', // $5
   [COMMISSION_TYPES.SPECIFIC]: 'gold',   // $10
+  [COMMISSION_TYPES.RANDOM]: 'bronze',   // $1
 };
 
 const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) => {
@@ -352,9 +354,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       
       const commissionRequest: CommissionRequest = {
         amount_usd: amount,
-        subreddit,
+        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : subreddit,
         donation_type: 'commission',
-        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
         post_id: commissionType === COMMISSION_TYPES.SPECIFIC
           ? (() => {
               const extracted = extractPostIdFromUrl(postId);
@@ -410,9 +412,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     try {
       const commissionRequest: CommissionRequest = {
         amount_usd: amount,
-        subreddit,
+        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? "" : subreddit,
         donation_type: 'commission',
-        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 'specific_post',
+        commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
         post_id: commissionType === COMMISSION_TYPES.SPECIFIC
           ? (() => {
               const extracted = extractPostIdFromUrl(postId);
@@ -511,39 +513,48 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         {/* Commission Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Commission Type</label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
-              onClick={() => { 
-                setCommissionType(COMMISSION_TYPES.SUBREDDIT); 
-                setPostId(''); 
-                setError('');
+              onClick={() => {
+                setCommissionType(COMMISSION_TYPES.RANDOM);
+                setSubreddit("");
+                setAmount("1"); // Set to bronze minimum
+                setError("");
+                if (paymentIntentId) updatePaymentIntent();
+              }}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.RANDOM ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              <span role="img" aria-label="Random">🎲</span> Random<br />Random subreddit & post
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCommissionType(COMMISSION_TYPES.SUBREDDIT);
+                setPostId("");
+                setError("");
                 if (paymentIntentId) updatePaymentIntent();
               }}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
-              🎲 Random Post
-              <div className="text-xs mt-1 opacity-75">From selected subreddit</div>
+              <span role="img" aria-label="Random Post">🎲</span> Random Post<br />From selected subreddit
             </button>
             <button
               type="button"
               onClick={() => {
                 setCommissionType(COMMISSION_TYPES.SPECIFIC);
-                setSubreddit(''); // Unset subreddit when switching to specific post
-                setPostId('');
-                setError('');
+                setError("");
                 if (paymentIntentId) updatePaymentIntent();
               }}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
-              🎯 Specific Post
-              <div className="text-xs mt-1 opacity-75">Choose exact post</div>
+              <span role="img" aria-label="Specific Post">🎯</span> Specific Post<br />Choose exact post
             </button>
           </div>
         </div>
 
         {/* Subreddit Selection */}
-        {commissionType !== COMMISSION_TYPES.SPECIFIC && (
+        {commissionType === COMMISSION_TYPES.SUBREDDIT && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
             <select

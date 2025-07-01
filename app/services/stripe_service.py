@@ -394,12 +394,6 @@ class StripeService:
             
             task_queue = TaskQueue(db)
             
-            # Determine subreddit for the task
-            subreddit_id = donation.subreddit_id
-            if not subreddit_id:
-                logger.error(f"No subreddit_id found for commission donation {donation.id}")
-                return None
-            
             # Determine task type and context based on commission type
             task_type = "SUBREDDIT_POST"
             context_data = {
@@ -430,6 +424,29 @@ class StripeService:
                     "commission_type": "random_subreddit",
                 })
                 logger.info(f"Creating random subreddit commission task for {donation.tier} tier")
+            elif donation.commission_type == "random_random":
+                # Random post from random subreddit - select a random subreddit
+                from app.agents.reddit_agent import pick_subreddit
+                random_subreddit_name = pick_subreddit()
+                
+                # Get or create the random subreddit entity
+                from app.subreddit_service import get_subreddit_service
+                subreddit_service = get_subreddit_service()
+                random_subreddit = subreddit_service.get_or_create_subreddit(random_subreddit_name, db)
+                
+                # Update the donation's subreddit_id to the randomly selected subreddit
+                donation.subreddit_id = random_subreddit.id
+                db.commit()
+                
+                # Use the randomly selected subreddit for the task
+                subreddit_id = random_subreddit.id
+                
+                task_type = "SUBREDDIT_POST"
+                context_data.update({
+                    "commission_type": "random_random",
+                    "selected_subreddit": random_subreddit_name,
+                })
+                logger.info(f"Creating random_random commission task for {donation.tier} tier - selected subreddit: {random_subreddit_name}")
             else:
                 # Default to random subreddit
                 task_type = "SUBREDDIT_POST"
@@ -437,6 +454,12 @@ class StripeService:
                     "commission_type": "random_subreddit",
                 })
                 logger.info(f"Creating default commission task for {donation.tier} tier")
+            
+            # Determine subreddit for the task (after random selection for random_random)
+            subreddit_id = donation.subreddit_id
+            if not subreddit_id:
+                logger.error(f"No subreddit_id found for commission donation {donation.id}")
+                return None
             
             # Create task with commission priority
             task = task_queue.add_task(

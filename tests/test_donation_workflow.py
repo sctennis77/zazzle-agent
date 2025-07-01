@@ -12,7 +12,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from app.db.database import Base, SessionLocal, engine
-from app.db.models import Donation, Sponsor, SponsorTier, SubredditFundraisingGoal, PipelineTask
+from app.db.models import Donation, SubredditFundraisingGoal, PipelineTask
 from app.models import DonationRequest, DonationStatus
 from app.services.stripe_service import StripeService
 
@@ -34,11 +34,23 @@ def stripe_service():
 
 @pytest.fixture
 def sample_fundraising_goal():
-    """Create a sample fundraising goal."""
+    """Create a sample fundraising goal and yield its ID."""
     db = SessionLocal()
     try:
+        # First create a subreddit
+        from app.db.models import Subreddit
+        subreddit = Subreddit(
+            subreddit_name="test_subreddit",
+            display_name="Test Subreddit"
+        )
+        db.add(subreddit)
+        db.commit()
+        db.refresh(subreddit)
+        
+        # Then create the fundraising goal
+        from app.db.models import SubredditFundraisingGoal
         goal = SubredditFundraisingGoal(
-            subreddit="test_subreddit",
+            subreddit_id=subreddit.id,
             goal_amount=Decimal('100.00'),
             current_amount=Decimal('0.00'),
             status="active"
@@ -46,7 +58,7 @@ def sample_fundraising_goal():
         db.add(goal)
         db.commit()
         db.refresh(goal)
-        return goal
+        yield goal.id
     finally:
         db.close()
 
@@ -62,7 +74,9 @@ def test_donation_creates_sponsor_and_task(stripe_service, sample_fundraising_go
             customer_name="Test User",
             subreddit="test_subreddit",
             reddit_username="testuser",
-            is_anonymous=False
+            is_anonymous=False,
+            donation_type="support",
+            post_id="test_post_id"
         )
         
         # Mock payment intent data
@@ -83,10 +97,11 @@ def test_donation_creates_sponsor_and_task(stripe_service, sample_fundraising_go
         assert updated_donation is not None
         assert updated_donation.status == DonationStatus.SUCCEEDED.value
         
-        # Check that fundraising goal was updated
-        db.refresh(sample_fundraising_goal)
-        assert sample_fundraising_goal.current_amount == Decimal('10.00')
-        assert sample_fundraising_goal.status == "active"  # Not completed yet
+        # Re-query fundraising goal from this session
+        from app.db.models import SubredditFundraisingGoal
+        goal = db.query(SubredditFundraisingGoal).get(sample_fundraising_goal)
+        assert goal.current_amount == Decimal('10.00')
+        assert goal.status == "active"  # Not completed yet
         
     finally:
         db.close()
@@ -103,7 +118,9 @@ def test_donation_updates_fundraising_goal(stripe_service, sample_fundraising_go
             customer_name="Test User",
             subreddit="test_subreddit",
             reddit_username="testuser",
-            is_anonymous=False
+            is_anonymous=False,
+            donation_type="support",
+            post_id="test_post_id"
         )
         
         # Mock payment intent data
@@ -122,10 +139,11 @@ def test_donation_updates_fundraising_goal(stripe_service, sample_fundraising_go
         updated_donation = stripe_service.update_donation_status(db, "pi_test456", DonationStatus.SUCCEEDED)
         assert updated_donation is not None
         
-        # Check that fundraising goal was updated
-        db.refresh(sample_fundraising_goal)
-        assert sample_fundraising_goal.current_amount == Decimal('10.00')
-        assert sample_fundraising_goal.status == "active"  # Not completed yet
+        # Re-query fundraising goal from this session
+        from app.db.models import SubredditFundraisingGoal
+        goal = db.query(SubredditFundraisingGoal).get(sample_fundraising_goal)
+        assert goal.current_amount == Decimal('10.00')
+        assert goal.status == "active"  # Not completed yet
         
     finally:
         db.close()
@@ -142,7 +160,9 @@ def test_donation_completes_fundraising_goal(stripe_service, sample_fundraising_
             customer_name="Test User",
             subreddit="test_subreddit",
             reddit_username="testuser",
-            is_anonymous=False
+            is_anonymous=False,
+            donation_type="support",
+            post_id="test_post_id"
         )
         
         # Mock payment intent data
@@ -161,11 +181,12 @@ def test_donation_completes_fundraising_goal(stripe_service, sample_fundraising_
         updated_donation = stripe_service.update_donation_status(db, "pi_test789", DonationStatus.SUCCEEDED)
         assert updated_donation is not None
         
-        # Check that fundraising goal was completed
-        db.refresh(sample_fundraising_goal)
-        assert sample_fundraising_goal.current_amount == Decimal('150.00')
-        assert sample_fundraising_goal.status == "completed"
-        assert sample_fundraising_goal.completed_at is not None
+        # Re-query fundraising goal from this session
+        from app.db.models import SubredditFundraisingGoal
+        goal = db.query(SubredditFundraisingGoal).get(sample_fundraising_goal)
+        assert goal.current_amount == Decimal('150.00')
+        assert goal.status == "completed"
+        assert goal.completed_at is not None
         
     finally:
         db.close()
@@ -182,7 +203,9 @@ def test_anonymous_donation_workflow(stripe_service, sample_fundraising_goal):
             customer_name="Anonymous",
             subreddit="test_subreddit",
             reddit_username="anonymous_user",
-            is_anonymous=True
+            is_anonymous=True,
+            donation_type="support",
+            post_id="test_post_id"
         )
         
         # Mock payment intent data
@@ -202,10 +225,11 @@ def test_anonymous_donation_workflow(stripe_service, sample_fundraising_goal):
         updated_donation = stripe_service.update_donation_status(db, "pi_anonymous123", DonationStatus.SUCCEEDED)
         assert updated_donation is not None
         
-        # Check that fundraising goal was updated
-        db.refresh(sample_fundraising_goal)
-        assert sample_fundraising_goal.current_amount == Decimal('25.00')
-        assert sample_fundraising_goal.status == "active"  # Not completed yet
+        # Re-query fundraising goal from this session
+        from app.db.models import SubredditFundraisingGoal
+        goal = db.query(SubredditFundraisingGoal).get(sample_fundraising_goal)
+        assert goal.current_amount == Decimal('25.00')
+        assert goal.status == "active"  # Not completed yet
         
     finally:
         db.close() 
