@@ -223,13 +223,19 @@ const DonationModal: React.FC<DonationModalProps> = ({
     }
   }, [isOpen, amount, tiers]);
 
-  // Debounced update effect - same as CommissionModal
+  // Debounced update effect - improved: only update if email is valid, and debounce is 1s
   useEffect(() => {
     if (!paymentIntentId || !isOpen) return;
 
+    // Email validation regex
+    const isEmailValid = !customerEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+
+    // Only update if email is valid
+    if (!isEmailValid) return;
+
     const timeoutId = setTimeout(() => {
       updatePaymentIntent();
-    }, 500); // 500ms debounce
+    }, 1000); // 1s debounce
 
     return () => clearTimeout(timeoutId);
   }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, message, subreddit, postId, isOpen]);
