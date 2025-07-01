@@ -6,7 +6,7 @@ import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 
 // Initialize Stripe
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 interface CommissionModalProps {
   isOpen: boolean;
@@ -48,6 +48,27 @@ const AVAILABLE_SUBREDDITS = [
   "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan"
 ];
 
+// Helper to extract subreddit from a Reddit URL
+function extractSubredditFromUrl(url: string): string | null {
+  try {
+    const match = url.match(/reddit\.com\/r\/([^/]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// Helper to extract post ID from a Reddit URL
+function extractPostIdFromUrl(url: string): string | null {
+  try {
+    // Match /comments/<postid>/
+    const match = url.match(/comments\/([a-zA-Z0-9_]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 // Component that uses the Express Checkout Element
 const CommissionForm: React.FC<{
   amount: string;
@@ -75,9 +96,22 @@ const CommissionForm: React.FC<{
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [elementsReady, setElementsReady] = useState(false);
+
+  // Monitor when Elements are ready
+  useEffect(() => {
+    if (stripe && elements) {
+      console.log('Stripe Elements ready:', { stripe: !!stripe, elements: !!elements });
+      setElementsReady(true);
+    } else {
+      console.log('Stripe Elements not ready:', { stripe: !!stripe, elements: !!elements });
+      setElementsReady(false);
+    }
+  }, [stripe, elements]);
 
   const handleConfirm = async () => {
     if (!stripe || !elements) {
+      console.error('Stripe or Elements not ready:', { stripe: !!stripe, elements: !!elements });
       onError('Payment not ready');
       return;
     }
@@ -94,11 +128,13 @@ const CommissionForm: React.FC<{
       });
 
       if (error) {
+        console.error('Payment confirmation error:', error);
         onError(error.message || 'Payment failed');
       } else {
         onSuccess();
       }
     } catch (error) {
+      console.error('Payment confirmation exception:', error);
       onError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setIsProcessing(false);
@@ -126,6 +162,13 @@ const CommissionForm: React.FC<{
             maxRows: 3,
             overflow: 'auto',
           },
+          paymentMethodOrder: ['link', 'applePay', 'googlePay', 'paypal'],
+          paymentMethods: {
+            applePay: 'auto',
+            googlePay: 'auto',
+            link: 'auto',
+            paypal: 'auto',
+          },
         }}
         onConfirm={handleConfirm}
       />
@@ -141,17 +184,33 @@ const CommissionForm: React.FC<{
       </div>
       
       {/* Payment Element for card payments */}
-      <PaymentElement />
+      <PaymentElement 
+        options={{
+          layout: 'tabs',
+          defaultValues: {
+            billingDetails: {
+              name: _customerName || '',
+              email: _customerEmail || '',
+            },
+          },
+        }}
+      />
 
       {/* Always-visible Pay button for card payments */}
       <button
         className="w-full mt-2 py-2 px-4 bg-purple-600 text-white rounded disabled:opacity-50"
         onClick={handleConfirm}
-        disabled={!stripe || !elements || isProcessing}
+        disabled={!stripe || !elements || isProcessing || !elementsReady}
         type="button"
       >
-        {isProcessing ? "Processing..." : "Pay"}
+        {!elementsReady ? "Loading payment methods..." : isProcessing ? "Processing..." : "Pay"}
       </button>
+      
+      {!elementsReady && (
+        <div className="text-center text-sm text-gray-600">
+          Initializing payment methods...
+        </div>
+      )}
       
       {isProcessing && (
         <div className="text-center text-sm text-gray-600">
@@ -206,13 +265,20 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const minTierIdx = tiers.findIndex(t => t.name === minTierName);
   const allowedTiers = minTierIdx >= 0 ? tiers.slice(minTierIdx) : tiers;
 
-  // Default to the minimum allowed tier
+  // Default to the minimum allowed tier on open
   useEffect(() => {
     if (isOpen && allowedTiers.length > 0) {
       setAmount(allowedTiers[0].min_amount.toString());
       setCustomAmount('');
     }
   }, [isOpen, commissionType, tiers.length]);
+
+  // Create payment intent when modal is open and amount is set
+  useEffect(() => {
+    if (isOpen && amount && parseFloat(amount) >= (allowedTiers[0]?.min_amount || 1)) {
+      createPaymentIntent();
+    }
+  }, [isOpen, amount, commissionType, tiers.length]);
 
   // Find the current tier based on amount
   const currentTier = allowedTiers
@@ -247,13 +313,11 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setSuccess(false);
       setShowMessage(false);
       // Don't reset clientSecret and paymentIntentId here - let createPaymentIntent handle it
-      // Immediately create a new PaymentIntent
       (async () => {
-        await createPaymentIntent();
+        const paymentIntentId = await createPaymentIntent();
         if (!isMounted.current) return;
       })();
     } else {
-      // Only reset when closing
       setClientSecret(null);
       setPaymentIntentId(null);
     }
@@ -262,6 +326,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   // Function to create new PaymentIntent
   const createPaymentIntent = async () => {
     if (!isOpen || !amount || parseFloat(amount) < minAmount) {
+      console.log('Skipping payment intent creation:', { isOpen, amount, minAmount });
       return null;
     }
 
@@ -274,6 +339,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     setError(''); // Clear any previous errors
 
     try {
+      console.log('Creating payment intent for commission:', { amount, subreddit, commissionType });
+      
       const commissionRequest: CommissionRequest = {
         amount_usd: amount,
         subreddit,
@@ -299,11 +366,16 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       }
 
       const { client_secret, payment_intent_id } = await response.json();
+      console.log('Payment intent created successfully:', { payment_intent_id });
+      
+      if (!isMounted.current) return null;
       setClientSecret(client_secret);
       setPaymentIntentId(payment_intent_id);
       setError(''); // Clear any previous errors
       return payment_intent_id;
     } catch (error) {
+      console.error('Failed to create payment intent:', error);
+      if (!isMounted.current) return null;
       setError(error instanceof Error ? error.message : 'Failed to create payment intent');
       setClientSecret(null);
       setPaymentIntentId(null);
@@ -350,7 +422,13 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       return client_secret;
     } catch (error) {
       // Silently handle update errors to avoid disrupting user experience
-      console.error('Failed to update payment intent:', error);
+      if (error instanceof Error) {
+        console.error('Failed to update payment intent:', error.message);
+      } else if (typeof error === 'object' && error !== null) {
+        console.error('Failed to update payment intent:', JSON.stringify(error));
+      } else {
+        console.error('Failed to update payment intent:', error);
+      }
       return null;
     }
   };
@@ -416,6 +494,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
               onClick={() => { 
                 setCommissionType(COMMISSION_TYPES.SUBREDDIT); 
                 setPostId(''); 
+                setError('');
                 if (paymentIntentId) updatePaymentIntent();
               }}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
@@ -427,6 +506,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
               type="button"
               onClick={() => {
                 setCommissionType(COMMISSION_TYPES.SPECIFIC);
+                setSubreddit(''); // Unset subreddit when switching to specific post
+                setPostId('');
+                setError('');
                 if (paymentIntentId) updatePaymentIntent();
               }}
               className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
@@ -438,36 +520,69 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         </div>
 
         {/* Subreddit Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
-          <select
-            value={subreddit}
-            onChange={(e) => {
-              setSubreddit(e.target.value);
-              if (paymentIntentId) updatePaymentIntent();
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-          >
-            {AVAILABLE_SUBREDDITS.map((sub) => (
-              <option key={sub} value={sub}>r/{sub}</option>
-            ))}
-          </select>
-        </div>
+        {commissionType !== COMMISSION_TYPES.SPECIFIC && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
+            <select
+              value={subreddit}
+              onChange={(e) => {
+                setSubreddit(e.target.value);
+                if (paymentIntentId) updatePaymentIntent();
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              {AVAILABLE_SUBREDDITS.map((sub) => (
+                <option key={sub} value={sub}>r/{sub}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Post ID Input (only for specific posts) */}
-        {commissionType === 'specific' && (
+        {commissionType === COMMISSION_TYPES.SPECIFIC && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Post ID or URL</label>
             <input
               type="text"
               value={postId}
-              onChange={(e) => setPostId(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setPostId(value);
+                // If it's a Reddit URL, extract subreddit and post ID
+                const subredditFromUrl = extractSubredditFromUrl(value);
+                const postIdFromUrl = extractPostIdFromUrl(value);
+                if (subredditFromUrl) {
+                  setSubreddit(subredditFromUrl);
+                } else {
+                  setSubreddit('');
+                }
+                if (paymentIntentId) updatePaymentIntent();
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="e.g., 1llckgq or https://reddit.com/r/golf/comments/1llckgq/..."
             />
             <p className="text-xs text-gray-500 mt-1">
               Enter the Reddit post ID or full URL
             </p>
+            {/* Extracted post ID and subreddit display */}
+            {(() => {
+              const postIdFromUrl = extractPostIdFromUrl(postId);
+              const displayPostId = postIdFromUrl || (postId && !postId.includes('reddit.com') ? postId : '');
+              return (
+                <>
+                  {displayPostId && (
+                    <div className="text-sm font-semibold text-purple-700 mt-2">
+                      Post ID: {displayPostId}
+                    </div>
+                  )}
+                  {subreddit && (
+                    <div className="text-sm font-semibold text-green-700 mt-1">
+                      Subreddit: r/{subreddit}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -652,10 +767,12 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
                     theme: 'stripe',
                     variables: {
                       colorPrimary: '#9333ea',
+                      borderRadius: '8px',
                     },
                   },
+                  loader: 'auto',
                 }}
-                key={`${clientSecret}-${paymentIntentId}`}
+                key={clientSecret}
               >
                 <CommissionForm
                   amount={amount}
