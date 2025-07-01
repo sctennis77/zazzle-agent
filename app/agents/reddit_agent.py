@@ -1086,7 +1086,7 @@ class RedditAgent:
             logger.error(f"Error finding trending post: {str(e)}")
             return None
 
-    async def _find_trending_post_for_task(self, tries: int = 3, limit: int = 50):
+    async def _find_trending_post_for_task(self, tries: int = 3, limit: int = 50, subreddit_name: str = None):
         """
         Find a trending Reddit post specifically for task-based processing.
         This is a simplified version that can be easily tested and mocked.
@@ -1095,7 +1095,7 @@ class RedditAgent:
         Returns the first valid post or None if none are found.
         """
         logger.info(
-            f"Starting _find_trending_post_for_task with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
+            f"Starting _find_trending_post_for_task with subreddit: {subreddit_name or self.subreddit_name}, limit: {limit}, retries: {tries}"
         )
         
         # Check if we have a specific post to commission from task context
@@ -1123,7 +1123,7 @@ class RedditAgent:
         try:
             for attempt in range(tries):
                 # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.reddit_client.reddit.subreddit(self.subreddit_name).hot(limit=limit):
+                for submission in self.reddit_client.reddit.subreddit(subreddit_name or self.subreddit_name).hot(limit=limit):
                     logger.info(
                         f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )

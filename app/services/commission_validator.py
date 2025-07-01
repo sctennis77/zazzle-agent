@@ -168,7 +168,7 @@ class CommissionValidator:
         try:
             if not self._validate_subreddit_exists(subreddit_name):
                 return ValidationResult(valid=False, error=f"Subreddit r/{subreddit_name} not found or not accessible")
-            submission = await self.reddit_agent._find_trending_post_for_task()
+            submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
             if not submission:
                 return ValidationResult(valid=False, error=f"No trending posts found in r/{subreddit_name}")
             return await self._validate_post(subreddit_name, submission.id, "random_subreddit")
