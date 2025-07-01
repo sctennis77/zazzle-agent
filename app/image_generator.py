@@ -148,13 +148,14 @@ class ImageGenerator:
             ImageGenerationError: If DALL-E API call fails
         """
         try:
-            # DALL-E 3 doesn't support the style parameter
+            # DALL-E 3: pass style="vivid" for consistency, even if ignored by API
             if self.model == "dall-e-3":
                 return self.client.images.generate(
                     model=self.model,
                     prompt=prompt,
                     size=size,
                     n=1,
+                    style="vivid",
                     response_format="b64_json",
                 )
             else:

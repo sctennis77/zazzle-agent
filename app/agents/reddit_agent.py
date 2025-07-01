@@ -1055,7 +1055,7 @@ class RedditAgent:
                     if (
                         datetime.now(timezone.utc)
                         - datetime.fromtimestamp(submission.created_utc, timezone.utc)
-                    ).days > 2:
+                    ).days > 30:
                         continue
                     if not submission.selftext:
                         continue
@@ -1132,7 +1132,7 @@ class RedditAgent:
                     if (
                         datetime.now(timezone.utc)
                         - datetime.fromtimestamp(submission.created_utc, timezone.utc)
-                    ).days > 2:
+                    ).days > 30:
                         continue
                     if not submission.selftext:
                         continue

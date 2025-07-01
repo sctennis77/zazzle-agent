@@ -156,7 +156,7 @@ class CommissionValidator:
         try:
             subreddit_name = pick_subreddit()
             logger.info(f"Selected random subreddit: {subreddit_name}")
-            submission = await self.reddit_agent._find_trending_post_for_task()
+            submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
             if not submission:
                 return ValidationResult(valid=False, error=f"No trending posts found in r/{subreddit_name}")
             return await self._validate_post(subreddit_name, submission.id, "random_random")
