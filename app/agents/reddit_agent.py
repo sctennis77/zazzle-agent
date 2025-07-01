@@ -924,7 +924,7 @@ class RedditAgent:
         
         try:
             # Fetch the specific post
-            submission = self.reddit_client.get_submission(post_id)
+            submission = self.reddit_client.get_post(post_id)
             if not submission:
                 logger.error(f"Failed to fetch post {post_id}")
                 return []
@@ -1105,7 +1105,7 @@ class RedditAgent:
                 logger.info(f"Commissioning specific post: {post_id}")
                 try:
                     # Fetch the specific post
-                    submission = self.reddit_client.get_submission(post_id)
+                    submission = self.reddit_client.get_post(post_id)
                     if submission:
                         # Generate comment summary and add to submission
                         comment_summary = self._generate_comment_summary(submission)
