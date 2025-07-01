@@ -25,6 +25,7 @@ from app.models import ProductInfo as ProductInfoDataClass
 from app.models import RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
+from app.services.commission_validator import CommissionValidator
 from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
@@ -1349,6 +1350,54 @@ async def update_payment_intent(payment_intent_id: str, donation_request: Donati
             raise HTTPException(status_code=400, detail=f"Payment intent {payment_intent_id} cannot be modified")
         else:
             raise HTTPException(status_code=500, detail=f"Failed to update payment intent: {error_message}")
+
+
+class CommissionValidationRequest(BaseModel):
+    """Request model for commission validation."""
+    commission_type: str  # random_random, random_subreddit, specific_post
+    subreddit: Optional[str] = None  # For random_subreddit
+    post_id: Optional[str] = None    # For specific_post
+    post_url: Optional[str] = None   # Alternative for specific_post
+
+
+@app.post("/api/commissions/validate")
+async def validate_commission(validation_request: CommissionValidationRequest):
+    """
+    Validate a commission request and return validated subreddit and post data.
+    
+    This endpoint validates commission requests before payment processing to ensure
+    we have valid subreddit and post data before creating pipeline tasks.
+    
+    Args:
+        validation_request: Commission validation request
+        
+    Returns:
+        Dict: Validation result with subreddit and post data
+    """
+    try:
+        logger.info(f"Validating commission: {validation_request.commission_type}")
+        
+        # Initialize validator
+        validator = CommissionValidator()
+        
+        # Validate commission
+        result = await validator.validate_commission(
+            commission_type=validation_request.commission_type,
+            subreddit=validation_request.subreddit,
+            post_id=validation_request.post_id,
+            post_url=validation_request.post_url
+        )
+        
+        logger.info(f"Commission validation result: valid={result.valid}")
+        if not result.valid:
+            logger.warning(f"Commission validation failed: {result.error}")
+        
+        return result.to_dict()
+        
+    except Exception as e:
+        logger.error(f"Error validating commission: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
 
 
 if __name__ == "__main__":
