@@ -3,6 +3,7 @@ import { Modal } from '../common/Modal';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem, FaPaintBrush } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
+import { useDonationTiers } from '../../hooks/useDonationTiers';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
@@ -10,33 +11,13 @@ interface ProductModalProps {
   onClose: () => void;
 }
 
-// Helper function to get tier icon and color
-const getTierDisplay = (tierName: string) => {
-  const tier = tierName.toLowerCase();
-  if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
-    return { icon: FaCrown, color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' };
-  } else if (tier.includes('silver')) {
-    return { icon: FaStar, color: 'text-gray-600', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
-  } else if (tier.includes('bronze')) {
-    return { icon: FaGem, color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
-  } else {
-    return { icon: FaHeart, color: 'text-pink-600', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' };
-  }
+// Map icon string to actual icon component
+const iconMap = {
+  FaCrown,
+  FaStar,
+  FaGem,
+  FaHeart,
 };
-
-// Interface for support donation data
-interface SupportDonation {
-  reddit_username: string;
-  tier_name: string;
-  tier_min_amount: number;
-  donation_amount: number;
-  is_anonymous: boolean;
-  message?: string;
-  created_at: string;
-  tier_id: number;
-  sponsor_id: number;
-  donation_id: number;
-}
 
 export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onClose }) => {
   if (!product) return null;
@@ -45,12 +26,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const [showFullPost, setShowFullPost] = useState(false);
   const [showDonation, setShowDonation] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const [supportDonations, setSupportDonations] = useState<SupportDonation[]>([]);
-  const [loadingDonation, setLoadingDonation] = useState(false);
+  const [supportDonations, setSupportDonations] = useState<any[]>([]);
+  const [_loadingDonation, setLoadingDonation] = useState(false);
   const postContent = product.reddit_post.content || '';
   const previewLength = 200;
   const isLong = postContent.length > previewLength;
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
+
+  const { getTierDisplay } = useDonationTiers();
 
   // Fetch donation information when modal opens
   useEffect(() => {
@@ -168,55 +151,42 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </div>
                 </div>
               )}
-              {/* Sponsor Donations */}
+              {/* Support Donations */}
               {supportDonations.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-900">Sponsored by</h4>
+                  <h4 className="font-semibold text-gray-900">Supported by</h4>
                   <div className="space-y-3">
-                    {supportDonations.map((donation, index) => (
-                      <div key={donation.donation_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-                        <div className="flex items-center gap-3">
-                          {(() => {
-                            const tierDisplay = getTierDisplay(donation.tier_name);
-                            const IconComponent = tierDisplay.icon;
-                            return (
-                              <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
-                                <IconComponent size={20} className={tierDisplay.color} />
-                              </div>
-                            );
-                          })()}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">
-                                {donation.reddit_username}
-                              </span>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${(() => {
-                                const tier = donation.tier_name.toLowerCase();
-                                if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
-                                  return 'bg-yellow-100 text-yellow-800';
-                                } else if (tier.includes('silver')) {
-                                  return 'bg-gray-100 text-gray-800';
-                                } else if (tier.includes('bronze')) {
-                                  return 'bg-orange-100 text-orange-800';
-                                } else {
-                                  return 'bg-pink-100 text-pink-800';
-                                }
-                              })()}`}>
-                                {donation.tier_name}
-                              </span>
+                    {supportDonations.map((donation) => {
+                      const tierDisplay = getTierDisplay(donation.tier_name);
+                      const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                      return (
+                        <div key={donation.donation_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
+                              <IconComponent size={20} className={tierDisplay.color} />
                             </div>
-                            {donation.message && (
-                              <p className="text-sm text-gray-600 mt-1 italic">
-                                "{donation.message}"
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">
+                                  {donation.reddit_username}
+                                </span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${tierDisplay.bgColor} ${tierDisplay.color}`}>
+                                  {donation.tier_name}
+                                </span>
+                              </div>
+                              {donation.message && (
+                                <p className="text-sm text-gray-600 mt-1 italic">
+                                  "{donation.message}"
+                                </p>
+                              )}
+                              <p className="text-sm text-gray-600 mt-1">
+                                Donated ${donation.donation_amount.toFixed(2)}
                               </p>
-                            )}
-                            <p className="text-sm text-gray-600 mt-1">
-                              Donated ${donation.donation_amount.toFixed(2)}
-                            </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

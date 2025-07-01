@@ -2,29 +2,25 @@ import React, { useState, useEffect } from 'react';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaPaintBrush } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
+import { useDonationTiers } from '../../hooks/useDonationTiers';
 
 interface ProductCardProps {
   product: GeneratedProduct;
 }
 
-// Helper function to get tier icon and color
-const getTierDisplay = (tierName: string) => {
-  const tier = tierName.toLowerCase();
-  if (tier.includes('gold') || tier.includes('platinum') || tier.includes('diamond')) {
-    return { icon: FaCrown, color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
-  } else if (tier.includes('silver')) {
-    return { icon: FaStar, color: 'text-gray-600', bgColor: 'bg-gray-100' };
-  } else if (tier.includes('bronze')) {
-    return { icon: FaGem, color: 'text-orange-600', bgColor: 'bg-orange-100' };
-  } else {
-    return { icon: FaHeart, color: 'text-pink-600', bgColor: 'bg-pink-100' };
-  }
+// Map icon string to actual icon component
+const iconMap = {
+  FaCrown,
+  FaStar,
+  FaGem,
+  FaHeart,
 };
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [showModal, setShowModal] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const [loadingDonation, setLoadingDonation] = useState(false);
+  const [_loadingDonation, setLoadingDonation] = useState(false);
+  const { getTierDisplay } = useDonationTiers();
 
   const handleImageClick = () => {
     setShowModal(true);
@@ -89,14 +85,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                 </div>
               </div>
             )}
-            {/* Fallback to sponsor indicator if no commission info */}
-            {!commissionInfo && product.product_info.sponsor_info && (
+            {/* Support donation indicator */}
+            {!commissionInfo && product.product_info.donation_info && (
               <div className="absolute top-2 left-2">
                 {(() => {
-                  const tierDisplay = getTierDisplay(product.product_info.sponsor_info.tier_name);
-                  const IconComponent = tierDisplay.icon;
+                  const tierDisplay = getTierDisplay(product.product_info.donation_info.tier_name);
+                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
                   return (
-                    <div className={`p-1.5 rounded-full ${tierDisplay.bgColor} border border-white shadow-sm`} title={`Sponsored by ${product.product_info.sponsor_info.reddit_username} (${product.product_info.sponsor_info.tier_name})`}>
+                    <div className={`p-1.5 rounded-full ${tierDisplay.bgColor} border border-white shadow-sm`} title={`Supported by ${product.product_info.donation_info.reddit_username} (${product.product_info.donation_info.tier_name})`}>
                       <IconComponent size={12} className={tierDisplay.color} />
                     </div>
                   );

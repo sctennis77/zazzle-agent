@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Modal } from './Modal';
+import { useDonationTiers } from '../../hooks/useDonationTiers';
+import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here');
@@ -58,14 +60,14 @@ const CommissionForm: React.FC<{
   onSuccess: () => void;
   onError: (error: string) => void;
 }> = ({ 
-  amount, 
-  commissionMessage, 
-  customerEmail, 
-  customerName, 
-  redditUsername, 
-  isAnonymous, 
-  subreddit, 
-  postId, 
+  amount: _amount, 
+  commissionMessage: _commissionMessage, 
+  customerEmail: _customerEmail, 
+  customerName: _customerName, 
+  redditUsername: _redditUsername, 
+  isAnonymous: _isAnonymous, 
+  subreddit: _subreddit, 
+  postId: _postId, 
   onSuccess, 
   onError 
 }) => {
@@ -159,6 +161,18 @@ const CommissionForm: React.FC<{
   );
 };
 
+const iconMap = {
+  FaCrown,
+  FaStar,
+  FaGem,
+  FaHeart,
+};
+
+const COMMISSION_MINIMUMS = {
+  random: 'silver', // $5
+  specific: 'gold', // $10
+};
+
 const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) => {
   const [amount, setAmount] = useState('25');
   const [commissionMessage, setCommissionMessage] = useState('');
@@ -176,8 +190,35 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [showMessage, setShowMessage] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-  const presetAmounts = [10, 25, 50, 100, 250];
   const isMounted = useRef(false);
+
+  // Use dynamic tiers from API
+  const { tiers, getTierDisplay } = useDonationTiers();
+
+  // Determine minimum tier for commission type
+  const minTierName = COMMISSION_MINIMUMS[commissionType];
+  const minTierIdx = tiers.findIndex(t => t.name === minTierName);
+  const allowedTiers = minTierIdx >= 0 ? tiers.slice(minTierIdx) : tiers;
+
+  // Default to the minimum allowed tier
+  useEffect(() => {
+    if (isOpen && allowedTiers.length > 0) {
+      setAmount(allowedTiers[0].min_amount.toString());
+      setCustomAmount('');
+    }
+  }, [isOpen, commissionType, tiers.length]);
+
+  // Find the current tier based on amount
+  const currentTier = allowedTiers
+    .slice()
+    .reverse()
+    .find(t => parseFloat(amount) >= t.min_amount) || allowedTiers[0];
+  const tierDisplay = getTierDisplay(currentTier?.name || minTierName);
+  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+
+  // Validate minimum
+  const minAmount = currentTier?.min_amount || 1;
+  const isBelowMin = parseFloat(amount) < minAmount;
 
   useEffect(() => {
     isMounted.current = isOpen;
@@ -204,7 +245,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
       setShowMessage(false);
       // Immediately create a new PaymentIntent
       (async () => {
-        const result = await createPaymentIntent();
+        await createPaymentIntent();
         if (!isMounted.current) return;
       })();
     }
@@ -323,22 +364,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
     setError(errorMessage);
   };
 
-  const extractPostId = (input: string) => {
-    // Handle various Reddit URL formats
-    const patterns = [
-      /reddit\.com\/r\/\w+\/comments\/(\w+)/,
-      /reddit\.com\/comments\/(\w+)/,
-      /^(\w+)$/ // Just the post ID
-    ];
-    
-    for (const pattern of patterns) {
-      const match = input.match(pattern);
-      if (match) {
-        return match[1];
-      }
-    }
-    return input; // Return as-is if no pattern matches
-  };
+
 
   if (success) {
     // Redirect to gallery view after a short delay
@@ -363,6 +389,16 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Commission Art">
       <div className="space-y-6 p-6">
+        {/* Tier selection and badge */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
+            <IconComponent size={20} className={tierDisplay.color} />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-base">{currentTier?.display_name || minTierName} Tier</div>
+            <div className="text-xs text-gray-500">Minimum: ${minAmount.toFixed(2)}</div>
+          </div>
+        </div>
         {/* Commission Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Commission Type</label>
@@ -419,32 +455,49 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
 
         {/* Preset Amount Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Commission Amount</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Choose Amount</label>
           <div className="grid grid-cols-3 gap-2 mb-2">
-            {presetAmounts.map((preset, idx) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => { setAmount(preset.toString()); setCustomAmount(''); }}
-                className={`px-2 py-1 border rounded-lg text-xs font-medium transition-colors h-9 ${amount === preset.toString() ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                ${preset}
-              </button>
-            ))}
+            {allowedTiers.map((tier) => {
+              const tDisplay = getTierDisplay(tier.name);
+              const TIcon = iconMap[tDisplay.icon as keyof typeof iconMap] || FaHeart;
+              return (
+                <button
+                  key={tier.name}
+                  type="button"
+                  onClick={() => {
+                    setAmount(tier.min_amount.toString());
+                    setCustomAmount('');
+                    if (paymentIntentId) updatePaymentIntent();
+                  }}
+                  className={`flex items-center gap-1 px-2 py-1 border rounded-lg text-xs font-medium transition-colors h-9 ${amount === tier.min_amount.toString() ? tDisplay.bgColor + ' ' + tDisplay.color + ' border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                >
+                  <TIcon size={14} className={tDisplay.color} />
+                  {tier.display_name}
+                  <span className="ml-1 text-gray-400">${tier.min_amount}</span>
+                </button>
+              );
+            })}
             {/* Custom Amount as last grid cell */}
             <div className="relative flex items-center h-9">
               <span className="absolute left-2 text-gray-500 text-xs">$</span>
               <input
                 type="number"
-                min="5"
-                step="1"
+                min={allowedTiers[0]?.min_amount || 1}
+                step="0.01"
                 value={customAmount}
-                onChange={e => { setCustomAmount(e.target.value); setAmount(e.target.value); }}
+                onChange={e => {
+                  setCustomAmount(e.target.value);
+                  setAmount(e.target.value);
+                  if (paymentIntentId) updatePaymentIntent();
+                }}
                 className="w-full border border-gray-300 rounded-lg pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent h-9"
                 placeholder="Custom"
               />
             </div>
           </div>
+          {isBelowMin && (
+            <div className="text-xs text-red-500 mt-1">Minimum for {currentTier?.display_name} is ${minAmount.toFixed(2)}</div>
+          )}
         </div>
 
         {/* Customer Information */}

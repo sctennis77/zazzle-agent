@@ -7,7 +7,7 @@ export interface RedditContext {
   permalink: string;
 }
 
-export interface SponsorInfo {
+export interface DonationInfo {
   reddit_username: string;
   tier_name: string;
   tier_min_amount: number;
@@ -37,7 +37,7 @@ export interface ProductInfo {
   product_type: string;
   design_description: string;
   affiliate_link?: string;
-  sponsor_info?: SponsorInfo;
+  donation_info?: DonationInfo;
 }
 
 export interface PipelineRun {
