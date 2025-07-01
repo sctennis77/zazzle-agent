@@ -106,6 +106,13 @@ const DonationForm: React.FC<{
             maxRows: 3,
             overflow: 'auto',
           },
+          paymentMethodOrder: ['link', 'applePay', 'googlePay', 'paypal'],
+          paymentMethods: {
+            applePay: 'auto',
+            googlePay: 'auto',
+            link: 'auto',
+            paypal: 'auto',
+          },
         }}
         onConfirm={handleConfirm}
       />
@@ -121,7 +128,17 @@ const DonationForm: React.FC<{
       </div>
       
       {/* Payment Element for card payments */}
-      <PaymentElement />
+      <PaymentElement 
+        options={{
+          layout: 'tabs',
+          defaultValues: {
+            billingDetails: {
+              name: _customerName || '',
+              email: _customerEmail || '',
+            },
+          },
+        }}
+      />
 
       {/* Always-visible Pay button for card payments */}
       <button
@@ -618,8 +635,10 @@ const DonationModal: React.FC<DonationModalProps> = ({
                     theme: 'stripe',
                     variables: {
                       colorPrimary: '#ec4899', // pink-600 for donation
+                      borderRadius: '8px',
                     },
                   },
+                  loader: 'auto',
                 }}
                 key={`${clientSecret}-${paymentIntentId}`}
               >

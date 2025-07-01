@@ -404,7 +404,7 @@ async def stripe_webhook(request: Request):
             except stripe.error.SignatureVerificationError as e:
                 raise HTTPException(status_code=400, detail="Invalid signature")
         
-        logger.info(f"Received Stripe webhook event: {event['type']}")
+        logger.info(f"Received Stripe webhook event: {event['type']} with ID: {event.get('id', 'unknown')}")
         
         # Handle the event
         if event['type'] == 'checkout.session.completed':
@@ -455,6 +455,21 @@ async def handle_checkout_session_completed(session):
             logger.info(f"Payment intent ID: {payment_intent_id}")
             
             # Create donation request from metadata
+            # Handle missing commission_type for commission donations
+            commission_type = metadata.get('commission_type')
+            if metadata.get('donation_type') == 'commission' and not commission_type:
+                # Default to random_subreddit if commission_type is missing
+                commission_type = 'random_subreddit'
+                logger.warning(f"Missing commission_type in metadata for commission donation, defaulting to {commission_type}")
+            
+            # Extract post ID if provided
+            post_id = metadata.get('post_id')
+            if post_id:
+                post_id = extract_post_id(post_id)
+                logger.info(f"Extracted post ID: {post_id} from metadata: {metadata.get('post_id')}")
+            
+            logger.info(f"Creating donation request from metadata: donation_type={metadata.get('donation_type')}, commission_type={commission_type}, post_id={post_id}, subreddit={metadata.get('subreddit')}")
+            
             donation_request = DonationRequest(
                 amount_usd=Decimal(session.amount_total / 100),
                 customer_email=session.customer_email,
@@ -464,8 +479,9 @@ async def handle_checkout_session_completed(session):
                 reddit_username=metadata.get('reddit_username'),
                 is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
                 donation_type=metadata.get('donation_type'),
-                post_id=metadata.get('post_id') if metadata.get('post_id') else None,
+                post_id=post_id,
                 commission_message=metadata.get('commission_message'),
+                commission_type=commission_type,
             )
             
             # Save donation to database
@@ -517,6 +533,21 @@ async def handle_payment_intent_succeeded(payment_intent):
             logger.info(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
             
             # Create donation request from metadata
+            # Handle missing commission_type for commission donations
+            commission_type = metadata.get('commission_type')
+            if metadata.get('donation_type') == 'commission' and not commission_type:
+                # Default to random_subreddit if commission_type is missing
+                commission_type = 'random_subreddit'
+                logger.warning(f"Missing commission_type in metadata for commission donation, defaulting to {commission_type}")
+            
+            # Extract post ID if provided
+            post_id = metadata.get('post_id')
+            if post_id:
+                post_id = extract_post_id(post_id)
+                logger.info(f"Extracted post ID: {post_id} from metadata: {metadata.get('post_id')}")
+            
+            logger.info(f"Creating donation request from metadata: donation_type={metadata.get('donation_type')}, commission_type={commission_type}, post_id={post_id}, subreddit={metadata.get('subreddit')}")
+            
             donation_request = DonationRequest(
                 amount_usd=Decimal(payment_intent.amount / 100),
                 customer_email=payment_intent.receipt_email,
@@ -526,9 +557,9 @@ async def handle_payment_intent_succeeded(payment_intent):
                 reddit_username=metadata.get('reddit_username'),
                 is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
                 donation_type=metadata.get('donation_type'),
-                post_id=metadata.get('post_id') if metadata.get('post_id') else None,
+                post_id=post_id,
                 commission_message=metadata.get('commission_message'),
-                commission_type=metadata.get('commission_type'),
+                commission_type=commission_type,
             )
             
             # Debug logging for extracted donation request
