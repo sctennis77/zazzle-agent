@@ -30,11 +30,19 @@ export const DonationTierProvider: React.FC<{ children: ReactNode }> = ({ childr
     fetch('/api/donation-tiers')
       .then(res => res.json())
       .then(data => {
-        setTiers(data);
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setTiers(data);
+        } else {
+          console.error('Expected array for donation tiers, got:', data);
+          setTiers([]);
+        }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Failed to load donation tiers:', err);
         setError('Failed to load donation tiers');
+        setTiers([]);
         setLoading(false);
       });
   }, []);

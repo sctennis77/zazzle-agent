@@ -13,9 +13,11 @@ export const useProducts = () => {
     try {
       setLoading(true);
       const response = await axios.get<GeneratedProduct[]>(API_URL);
-      setProducts(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setProducts(data);
       setError(null);
     } catch (err) {
+      setProducts([]);
       setError(err instanceof Error ? err.message : 'An error occurred while fetching products');
     } finally {
       setLoading(false);
