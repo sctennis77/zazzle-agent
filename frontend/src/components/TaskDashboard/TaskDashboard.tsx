@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Task, TaskStatus } from '../../types/taskTypes.ts';
+import type { Task } from '../../types/taskTypes.ts';
 
 interface TaskDashboardProps {
   className?: string;
@@ -187,7 +187,7 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
                       {task.status}
                     </span>
                     <span className="text-sm text-gray-500">
-                      {task.task_type === 'k8s_job' ? 'K8s Job' : 'Database Queue'}
+                      Commission Task
                     </span>
                   </div>
                   
@@ -196,9 +196,6 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
                     <p><strong>Donation ID:</strong> {task.donation_id}</p>
                     {task.created_at && (
                       <p><strong>Created:</strong> {formatDate(task.created_at)}</p>
-                    )}
-                    {task.started_at && (
-                      <p><strong>Started:</strong> {formatDate(task.started_at)}</p>
                     )}
                     {task.completed_at && (
                       <p><strong>Completed:</strong> {formatDate(task.completed_at)}</p>
@@ -211,12 +208,12 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
                 
                 <div className="flex space-x-2">
                   {task.status === 'pending' && (
-                    <button
-                      onClick={() => cancelTask(task.task_id, task.task_type)}
-                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                                      <button
+                    onClick={() => cancelTask(task.task_id, 'commission')}
+                    className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
                   )}
                 </div>
               </div>

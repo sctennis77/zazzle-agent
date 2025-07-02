@@ -11,6 +11,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 interface CommissionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 interface CommissionRequest {
@@ -247,7 +248,7 @@ const COMMISSION_MINIMUMS = {
   [COMMISSION_TYPES.RANDOM]: 'bronze',   // $1
 };
 
-const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) => {
+const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [amount, setAmount] = useState('');
   const [commissionMessage, setCommissionMessage] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -564,6 +565,15 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
 
   const handleSuccess = () => {
     setSuccess(true);
+    // Call onSuccess callback if provided, otherwise close modal after delay
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      setTimeout(() => {
+        onClose();
+        setSuccess(false);
+      }, 2000);
+    }
   };
 
   const handleError = (errorMessage: string) => {
@@ -571,9 +581,12 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   };
 
   if (success) {
-    // Redirect to gallery view to see new products and status updates
+    // Show success message briefly, then close modal and trigger success overlay
     setTimeout(() => {
-      window.location.href = '/';
+      onClose();
+      if (onSuccess) {
+        onSuccess();
+      }
     }, 1200);
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Commission Submitted!">
@@ -584,7 +597,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             </svg>
           </div>
           <p className="text-lg text-green-600 font-semibold mb-2">Thank you for your commission!</p>
-          <p className="text-gray-600 text-center">Your commission has been submitted and will be processed soon. You'll be redirected to the gallery.</p>
+          <p className="text-gray-600 text-center">Your commission has been submitted and will be processed soon.</p>
         </div>
       </Modal>
     );

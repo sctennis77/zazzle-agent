@@ -69,6 +69,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick }) =
                 An AI illustrator Inspired By Reddit
               </p>
             </div>
+            
             {/* Commission Button */}
             <button
               onClick={onCommissionClick}

@@ -25,7 +25,7 @@ from app.models import DonationStatus
 from app.services.commission_validator import CommissionValidator
 from app.utils.logging_config import get_logger
 from app.utils.openai_usage_tracker import log_session_summary
-from app.websocket_manager import websocket_manager
+from app.redis_service import redis_service
 
 logger = get_logger(__name__)
 
@@ -202,22 +202,29 @@ class CommissionWorker:
             self.db.commit()
             logger.info(f"Updated pipeline task {self.pipeline_task.id} status to {status}")
             
-            # Broadcast update over WebSocket
+            # Broadcast update over WebSocket with all relevant fields
             import asyncio
+            donation = self.pipeline_task.donation
+            subreddit = self.pipeline_task.subreddit
             update = {
                 "status": self.pipeline_task.status,
                 "completed_at": self.pipeline_task.completed_at.isoformat() if self.pipeline_task.completed_at else None,
                 "error": self.pipeline_task.error_message,
+                "reddit_username": donation.reddit_username if donation and donation.reddit_username and not donation.is_anonymous else "Anonymous",
+                "tier": donation.tier if donation else None,
+                "subreddit": subreddit.subreddit_name if subreddit else None,
+                "amount_usd": float(donation.amount_usd) if donation else None,
+                "is_anonymous": donation.is_anonymous if donation else None,
             }
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    asyncio.create_task(websocket_manager.broadcast_task_update(str(self.pipeline_task.id), update))
+                    asyncio.create_task(redis_service.publish_task_update(str(self.pipeline_task.id), update))
                 else:
-                    loop.run_until_complete(websocket_manager.broadcast_task_update(str(self.pipeline_task.id), update))
+                    loop.run_until_complete(redis_service.publish_task_update(str(self.pipeline_task.id), update))
             except RuntimeError:
                 # If no event loop, create one
-                asyncio.run(websocket_manager.broadcast_task_update(str(self.pipeline_task.id), update))
+                asyncio.run(redis_service.publish_task_update(str(self.pipeline_task.id), update))
             
         except Exception as e:
             logger.error(f"Error updating task status: {e}")

@@ -52,6 +52,12 @@ spec:
             secretKeyRef:
               name: zazzle-agent-secrets
               key: ZAZZLE_AFFILIATE_ID
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_DB
+          value: "0"
         volumeMounts:
         - name: data-volume
           mountPath: /app/data

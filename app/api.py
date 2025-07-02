@@ -65,10 +65,22 @@ task_manager = TaskManager()
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the database when the application starts."""
+    """Initialize the database and WebSocket manager when the application starts."""
     logger.info("Initializing database...")
     init_db()
     logger.info("Database initialized successfully!")
+    
+    logger.info("Starting WebSocket manager with Redis integration...")
+    await websocket_manager.start()
+    logger.info("WebSocket manager started successfully!")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources when the application shuts down."""
+    logger.info("Stopping WebSocket manager...")
+    await websocket_manager.stop()
+    logger.info("WebSocket manager stopped successfully!")
 
 
 @app.get("/health")
@@ -620,7 +632,12 @@ async def handle_payment_intent_succeeded(payment_intent):
                         "task_id": task_id,
                         "status": "pending",
                         "created_at": datetime.now().isoformat(),
-                        "donation_id": donation.id
+                        "donation_id": donation.id,
+                        "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                        "tier": donation.tier,
+                        "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
+                        "amount_usd": float(donation.amount_usd),
+                        "is_anonymous": donation.is_anonymous
                     }
                     await websocket_manager.broadcast_general_update({
                         "type": "task_created",
@@ -1590,6 +1607,58 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         websocket_manager.disconnect(websocket)
+
+
+@app.get("/api/products/commission/{donation_id}")
+async def get_commission_product(donation_id: int, db: Session = Depends(get_db)):
+    """
+    Get the product created for a specific commission donation.
+    
+    Args:
+        donation_id: ID of the donation
+        db: Database session
+        
+    Returns:
+        GeneratedProduct: The product created for this commission
+    """
+    try:
+        # Find the pipeline task for this donation
+        pipeline_task = db.query(PipelineTask).filter_by(donation_id=donation_id).first()
+        if not pipeline_task:
+            raise HTTPException(status_code=404, detail="Commission task not found")
+        
+        # Get the pipeline run
+        pipeline_run = db.query(PipelineRun).filter_by(id=pipeline_task.pipeline_run_id).first()
+        if not pipeline_run:
+            raise HTTPException(status_code=404, detail="Pipeline run not found")
+        
+        # Get the product info
+        product_info = db.query(ProductInfo).filter_by(pipeline_run_id=pipeline_run.id).first()
+        if not product_info:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        # Get the reddit post
+        reddit_post = db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run.id).first()
+        if not reddit_post:
+            raise HTTPException(status_code=404, detail="Reddit post not found")
+        
+        # Convert to the expected format
+        from app.db.mappers import product_info_from_db, reddit_post_from_db, pipeline_run_from_db
+        
+        generated_product = GeneratedProduct(
+            product_info=product_info_from_db(product_info),
+            pipeline_run=pipeline_run_from_db(pipeline_run),
+            reddit_post=reddit_post_from_db(reddit_post)
+        )
+        
+        return generated_product
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting commission product: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":

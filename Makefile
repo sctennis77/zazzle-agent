@@ -154,6 +154,26 @@ docker-clean:
 	@echo "✅ Docker cleanup completed"
 
 # =====================
+# Redis Management
+# =====================
+
+test-redis:
+	@echo "🧪 Testing Redis pub/sub functionality..."
+	$(POETRY) run python test_redis_pubsub.py
+
+redis-cli:
+	@echo "🔧 Connecting to Redis CLI..."
+	@docker-compose exec redis redis-cli
+
+redis-logs:
+	@echo "📋 Showing Redis logs..."
+	@docker-compose logs -f redis
+
+redis-status:
+	@echo "📊 Checking Redis status..."
+	@docker-compose exec redis redis-cli ping
+
+# =====================
 # API Management
 # =====================
 

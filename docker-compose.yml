@@ -1,4 +1,22 @@
 services:
+  # Redis service for real-time WebSocket updates
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Database service (SQLite with persistent storage)
   database:
     image: alpine:latest
@@ -37,6 +55,9 @@ services:
       - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
@@ -50,6 +71,8 @@ services:
       - STRIPE_CLI_MODE=${STRIPE_CLI_MODE:-false}
     depends_on:
       database:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -99,6 +122,9 @@ services:
       - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
@@ -113,6 +139,8 @@ services:
       - TASK_PROCESSING_INTERVAL=300  # 5 minutes
     depends_on:
       database:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       api:
         condition: service_healthy

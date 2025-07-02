@@ -2,15 +2,17 @@
 WebSocket Manager for real-time task progress updates.
 
 This module handles WebSocket connections for real-time updates
-about commission task progress.
+about commission task progress, using Redis pub/sub for cross-service communication.
 """
 
 import asyncio
 import json
 import logging
-from typing import Dict, Set, Any
+from typing import Dict, Set, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.utils.logging_config import get_logger
+from app.redis_service import redis_service
+from app.config import WEBSOCKET_TASK_UPDATES_CHANNEL, WEBSOCKET_GENERAL_UPDATES_CHANNEL
 
 logger = get_logger(__name__)
 
@@ -23,14 +25,80 @@ class WebSocketManager:
     - WebSocket connections
     - Broadcasting updates to connected clients
     - Task progress notifications
+    - Redis pub/sub integration for cross-service updates
     """
     
     def __init__(self):
         """Initialize the WebSocket manager."""
         self.active_connections: Set[WebSocket] = set()
         self.task_subscriptions: Dict[str, Set[WebSocket]] = {}
+        self._redis_listener_task: Optional[asyncio.Task] = None
         
         logger.info("WebSocket Manager initialized")
+    
+    async def start(self) -> None:
+        """Start the WebSocket manager and Redis listener."""
+        try:
+            # Connect to Redis
+            await redis_service.connect()
+            
+            # Subscribe to Redis channels
+            redis_service.subscribe_to_channel(
+                WEBSOCKET_TASK_UPDATES_CHANNEL,
+                self._handle_redis_task_update
+            )
+            redis_service.subscribe_to_channel(
+                WEBSOCKET_GENERAL_UPDATES_CHANNEL,
+                self._handle_redis_general_update
+            )
+            
+            # Start Redis listener
+            self._redis_listener_task = asyncio.create_task(
+                redis_service.start_listening()
+            )
+            
+            logger.info("WebSocket Manager started with Redis integration")
+            
+        except Exception as e:
+            logger.error(f"Failed to start WebSocket Manager: {e}")
+            raise
+    
+    async def stop(self) -> None:
+        """Stop the WebSocket manager and Redis listener."""
+        if self._redis_listener_task:
+            self._redis_listener_task.cancel()
+            try:
+                await self._redis_listener_task
+            except asyncio.CancelledError:
+                pass
+        
+        await redis_service.stop_listening()
+        await redis_service.disconnect()
+        
+        logger.info("WebSocket Manager stopped")
+    
+    async def _handle_redis_task_update(self, message: Dict[str, Any]) -> None:
+        """Handle task updates from Redis."""
+        try:
+            task_id = message.get("task_id")
+            data = message.get("data", {})
+            
+            if task_id:
+                await self._broadcast_to_task_subscribers(task_id, data)
+                logger.info(f"Handled Redis task update for {task_id}")
+            
+        except Exception as e:
+            logger.error(f"Error handling Redis task update: {e}")
+    
+    async def _handle_redis_general_update(self, message: Dict[str, Any]) -> None:
+        """Handle general updates from Redis."""
+        try:
+            data = message.get("data", {})
+            await self._broadcast_to_all_connections(data)
+            logger.info("Handled Redis general update")
+            
+        except Exception as e:
+            logger.error(f"Error handling Redis general update: {e}")
     
     async def connect(self, websocket: WebSocket):
         """Accept a new WebSocket connection."""
@@ -68,7 +136,11 @@ class WebSocketManager:
         logger.info(f"WebSocket unsubscribed from task {task_id}")
     
     async def broadcast_task_update(self, task_id: str, update: Dict[str, Any]):
-        """Broadcast a task update to all subscribed clients."""
+        """Broadcast a task update to Redis (for cross-service communication)."""
+        await redis_service.publish_task_update(task_id, update)
+    
+    async def _broadcast_to_task_subscribers(self, task_id: str, update: Dict[str, Any]):
+        """Broadcast a task update to all subscribed clients (internal method)."""
         if task_id not in self.task_subscriptions:
             return
         
@@ -93,7 +165,11 @@ class WebSocketManager:
         logger.info(f"Broadcasted task update for {task_id} to {len(self.task_subscriptions[task_id])} clients")
     
     async def broadcast_general_update(self, update: Dict[str, Any]):
-        """Broadcast a general update to all connected clients."""
+        """Broadcast a general update to Redis (for cross-service communication)."""
+        await redis_service.publish_general_update(update)
+    
+    async def _broadcast_to_all_connections(self, update: Dict[str, Any]):
+        """Broadcast a general update to all connected clients (internal method)."""
         message = {
             "type": "general_update",
             "data": update
