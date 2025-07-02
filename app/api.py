@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from fastapi import WebSocket
+from fastapi import WebSocketDisconnect
 
 from app.db.database import SessionLocal, get_db, init_db
 from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask
@@ -31,6 +33,8 @@ from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
 from app.utils.reddit_utils import extract_post_id
+from app.task_manager import TaskManager
+from app.websocket_manager import websocket_manager
 
 # Setup logging
 setup_logging()
@@ -54,6 +58,9 @@ app.add_middleware(
 
 # Initialize Stripe service
 stripe_service = StripeService()
+
+# Initialize task manager
+task_manager = TaskManager()
 
 
 @app.on_event("startup")
@@ -578,11 +585,56 @@ async def handle_payment_intent_succeeded(payment_intent):
                 "created": payment_intent.created,
             }, donation_request)
             
-            # Update donation status to succeeded
-            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
-            
             # Process subreddit tiers if applicable
             stripe_service.process_subreddit_tiers(db, donation)
+            
+            # Create commission task if this is a commission donation
+            if donation.donation_type == "commission":
+                try:
+                    # Prepare task data
+                    task_data = {
+                        "donation_id": donation.id,
+                        "amount_usd": float(donation.amount_usd),
+                        "tier": donation.tier,
+                        "customer_email": donation.customer_email,
+                        "customer_name": donation.customer_name,
+                        "message": donation.message,
+                        "commission_type": donation.commission_type,
+                        "post_id": donation.post_id,
+                        "commission_message": donation.commission_message,
+                        "subreddit_name": donation.subreddit.subreddit_name if donation.subreddit else None,
+                        "reddit_username": donation.reddit_username,
+                    }
+                    
+                    # Create commission task
+                    task_id = task_manager.create_commission_task(donation.id, task_data)
+                    
+                    # Update donation status to processing
+                    donation.status = DonationStatus.PROCESSING.value
+                    db.commit()
+                    
+                    logger.info(f"Created commission task {task_id} for donation {donation.id}")
+                    
+                    # Broadcast task creation
+                    task_info = {
+                        "task_id": task_id,
+                        "status": "pending",
+                        "created_at": datetime.now().isoformat(),
+                        "donation_id": donation.id
+                    }
+                    await websocket_manager.broadcast_general_update({
+                        "type": "task_created",
+                        "task_info": task_info,
+                        "donation_id": donation.id
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Error creating commission task: {e}")
+                    # Fallback to succeeded status if task creation fails
+                    stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
+            else:
+                # Update donation status to succeeded for non-commission donations
+                stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
             
         finally:
             db.close()
@@ -1393,6 +1445,151 @@ async def validate_commission(validation_request: CommissionValidationRequest):
         logger.error(f"Error validating commission: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
+
+
+@app.post("/api/tasks/commission")
+async def create_commission_task(donation_id: int, db: Session = Depends(get_db)):
+    """
+    Create a commission task for a donation.
+    
+    Args:
+        donation_id: ID of the donation
+        db: Database session
+        
+    Returns:
+        Dict: Task information
+    """
+    try:
+        # Get donation
+        donation = db.query(Donation).filter_by(id=donation_id).first()
+        if not donation:
+            raise HTTPException(status_code=404, detail="Donation not found")
+        
+        # Create task
+        task_info = task_manager.create_commission_task(donation)
+        
+        logger.info(f"Created commission task: {task_info['task_id']}")
+        
+        return task_info
+        
+    except Exception as e:
+        logger.error(f"Error creating commission task: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error creating task: {str(e)}")
+
+
+@app.get("/api/tasks")
+async def list_tasks(status: Optional[str] = None):
+    """
+    List all tasks.
+    
+    Args:
+        status: Optional status filter
+        
+    Returns:
+        List: Task information
+    """
+    try:
+        tasks = task_manager.list_tasks(status_filter=status)
+        return tasks
+        
+    except Exception as e:
+        logger.error(f"Error listing tasks: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error listing tasks: {str(e)}")
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task_status(task_id: str, task_type: str):
+    """
+    Get task status.
+    
+    Args:
+        task_id: ID of the task
+        task_type: Type of task (k8s_job or database_queue)
+        
+    Returns:
+        Dict: Task status information
+    """
+    try:
+        status = task_manager.get_task_status(task_id, task_type)
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error getting task status: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error getting task status: {str(e)}")
+
+
+@app.delete("/api/tasks/{task_id}")
+async def cancel_task(task_id: str, task_type: str):
+    """
+    Cancel a task.
+    
+    Args:
+        task_id: ID of the task
+        task_type: Type of task (k8s_job or database_queue)
+        
+    Returns:
+        Dict: Success status
+    """
+    try:
+        success = task_manager.cancel_task(task_id, task_type)
+        return {"success": success}
+        
+    except Exception as e:
+        logger.error(f"Error cancelling task: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error cancelling task: {str(e)}")
+
+
+@app.websocket("/ws/tasks")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time task updates.
+    
+    Clients can:
+    - Subscribe to specific task updates
+    - Receive general task notifications
+    - Get real-time progress updates
+    """
+    await websocket_manager.connect(websocket)
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Handle different message types
+            if message["type"] == "subscribe":
+                task_id = message.get("task_id")
+                if task_id:
+                    await websocket_manager.subscribe_to_task(websocket, task_id)
+                    await websocket_manager.send_personal_message(websocket, {
+                        "type": "subscribed",
+                        "task_id": task_id
+                    })
+            
+            elif message["type"] == "unsubscribe":
+                task_id = message.get("task_id")
+                if task_id:
+                    await websocket_manager.unsubscribe_from_task(websocket, task_id)
+                    await websocket_manager.send_personal_message(websocket, {
+                        "type": "unsubscribed",
+                        "task_id": task_id
+                    })
+            
+            elif message["type"] == "ping":
+                await websocket_manager.send_personal_message(websocket, {
+                    "type": "pong",
+                    "timestamp": datetime.now().isoformat()
+                })
+    
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        websocket_manager.disconnect(websocket)
 
 
 if __name__ == "__main__":

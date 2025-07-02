@@ -779,6 +779,7 @@ class DonationStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELED = "canceled"
+    PROCESSING = "processing"
 
 
 class DonationRequest(BaseModel):
@@ -825,30 +826,22 @@ class DonationRequest(BaseModel):
         if self.donation_type == "commission":
             if not self.commission_type:
                 raise ValueError("commission_type is required for commission donations")
-            
             # Validate tier requirements
             if not validate_commission_tier(self.amount_usd, self.commission_type):
                 required_tier = COMMISSION_MINIMUM_TIERS[self.commission_type]
                 required_amount = get_minimum_amount_for_tier(required_tier)
                 raise ValueError(f"Commission type '{self.commission_type}' requires minimum {required_tier.value} tier (${required_amount})")
-            
-            # For random_random, subreddit can be None
+            # For all commission types, allow post_id to be provided (for new workflow)
             if self.commission_type == "random_random":
-                if self.subreddit not in (None, ""):
-                    raise ValueError("subreddit should not be provided for random_random commissions")
-                if self.post_id not in (None, ""):
-                    raise ValueError("post_id should not be provided for random_random commissions")
+                pass  # No validation on subreddit or post_id for random_random
             elif self.commission_type == "random_subreddit":
                 if not self.subreddit:
                     raise ValueError("subreddit is required for random_subreddit commissions")
-                if self.post_id not in (None, ""):
-                    raise ValueError("post_id should not be provided for random_subreddit commissions")
             elif self.commission_type == "specific_post":
                 if not self.subreddit:
                     raise ValueError("subreddit is required for specific_post commissions")
                 if not self.post_id:
                     raise ValueError("post_id is required for specific_post commissions")
-        
         return self
     
     # Removed automatic is_anonymous validation - let frontend control this

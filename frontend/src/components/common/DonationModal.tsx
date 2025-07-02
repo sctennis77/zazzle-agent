@@ -385,13 +385,9 @@ const DonationModal: React.FC<DonationModalProps> = ({
   const isBelowMin = parseFloat(amount) < minAmount;
 
   if (success) {
-    // Redirect to product card view after a short delay
+    // Redirect to task dashboard to see commission status updates
     setTimeout(() => {
-      if (postId) {
-        window.location.href = `/product/${postId}`;
-      } else {
-        window.location.href = '/';
-      }
+      window.location.href = '/tasks';
     }, 1200);
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Thank you!">
@@ -402,7 +398,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
             </svg>
           </div>
           <p className="text-lg text-green-600 font-semibold mb-2">Thank you for your support!</p>
-          <p className="text-gray-600 text-center">Your donation helps keep this project running.</p>
+          <p className="text-gray-600 text-center">Your donation helps keep this project running. You'll be redirected to see your commission progress.</p>
         </div>
       </Modal>
     );

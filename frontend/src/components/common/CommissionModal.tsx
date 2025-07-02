@@ -459,7 +459,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         donation_type: 'commission',
         commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 
                         commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? validatedPostId : undefined,
+        post_id: validatedPostId, // Always use the validated post_id from validation result
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -515,7 +515,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
         donation_type: 'commission',
         commission_type: commissionType === COMMISSION_TYPES.SUBREDDIT ? 'random_subreddit' : 
                         commissionType === COMMISSION_TYPES.SPECIFIC ? 'specific_post' : 'random_random',
-        post_id: commissionType === COMMISSION_TYPES.SPECIFIC ? validatedPostId : undefined,
+        post_id: validatedPostId, // Always use the validated post_id from validation result
         commission_message: commissionMessage,
         customer_email: customerEmail || undefined,
         customer_name: customerName || undefined,
@@ -571,7 +571,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
   };
 
   if (success) {
-    // Redirect to gallery view after a short delay
+    // Redirect to gallery view to see new products and status updates
     setTimeout(() => {
       window.location.href = '/';
     }, 1200);
@@ -584,7 +584,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose }) =>
             </svg>
           </div>
           <p className="text-lg text-green-600 font-semibold mb-2">Thank you for your commission!</p>
-          <p className="text-gray-600 text-center">Your commission has been submitted and will be processed soon.</p>
+          <p className="text-gray-600 text-center">Your commission has been submitted and will be processed soon. You'll be redirected to the gallery.</p>
         </div>
       </Modal>
     );

@@ -321,3 +321,6 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# Expose FastAPI app for Uvicorn
+from app.api import app

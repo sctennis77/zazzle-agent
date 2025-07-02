@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: commission-worker-template
+  namespace: zazzle-agent
+  labels:
+    app: zazzle-commission
+    type: commission-task
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      labels:
+        app: zazzle-commission
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: commission-worker
+        image: zazzle-agent:latest
+        command: ["python", "-m", "app.commission_worker"]
+        args:
+        - "--donation-id"
+        - "{{DONATION_ID}}"
+        - "--task-data"
+        - "{{TASK_DATA}}"
+        env:
+        - name: DONATION_ID
+          value: "{{DONATION_ID}}"
+        - name: TASK_DATA
+          value: "{{TASK_DATA}}"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: database-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: openai-api-key
+        - name: REDDIT_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: reddit-client-id
+        - name: REDDIT_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: reddit-client-secret
+        - name: REDDIT_USER_AGENT
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: reddit-user-agent
+        - name: IMGUR_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: imgur-client-id
+        - name: ZAZZLE_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: zazzle-email
+        - name: ZAZZLE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: zazzle-password
+        - name: ZAZZLE_AFFILIATE_ID
+          valueFrom:
+            secretKeyRef:
+              name: zazzle-secrets
+              key: zazzle-affiliate-id
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /app/data
+      volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: zazzle-storage 
