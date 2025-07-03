@@ -285,7 +285,7 @@ class CommissionWorker:
             # Step 3: Save product to database
             self._save_product(product_info, donation)
             
-            # Broadcast commission completion
+            # Step 4: Broadcast commission completion (100%)
             await self._broadcast_commission_complete(donation, product_info)
             
             logger.info("Commission processing completed successfully")
@@ -350,11 +350,26 @@ class CommissionWorker:
             if not product_info:
                 return None
             
-            # Step 3: Broadcast image generation complete (80%)
+            # Step 3: Broadcast image generation started (50%)
+            await self._broadcast_image_generation_started({"post_id": donation.post_id}, donation)
+            
+            # Step 4: Broadcast image processing (60%)
+            await self._broadcast_image_processing(donation)
+            
+            # Step 5: Broadcast image uploading (70%)
+            await self._broadcast_image_uploading(donation)
+            
+            # Step 6: Broadcast image generation complete (80%)
             await self._broadcast_image_generation_complete(product_info, donation)
             
-            # Step 4: Broadcast image stamping complete (90%)
+            # Step 7: Broadcast Zazzle creation started (85%)
+            await self._broadcast_zazzle_creation_started(donation)
+            
+            # Step 8: Broadcast image stamping complete (90%)
             await self._broadcast_image_stamping_complete(donation)
+            
+            # Step 9: Broadcast Zazzle creation complete (95%)
+            await self._broadcast_zazzle_creation_complete(donation)
             
             return product_info
             
@@ -455,12 +470,36 @@ class CommissionWorker:
             message="Generating image with DALL-E..."
         )
     
+    async def _broadcast_image_processing(self, donation: Donation):
+        self._update_task_status(
+            status="in_progress",
+            progress=60,
+            stage="image_processing",
+            message="Processing and optimizing image..."
+        )
+    
+    async def _broadcast_image_uploading(self, donation: Donation):
+        self._update_task_status(
+            status="in_progress",
+            progress=70,
+            stage="image_uploading",
+            message="Uploading image to Imgur..."
+        )
+    
     async def _broadcast_image_generation_complete(self, product_info: ProductInfo, donation: Donation):
         self._update_task_status(
             status="in_progress",
             progress=80,
             stage="image_generated",
             message="Image generated successfully"
+        )
+    
+    async def _broadcast_zazzle_creation_started(self, donation: Donation):
+        self._update_task_status(
+            status="in_progress",
+            progress=85,
+            stage="zazzle_creation_started",
+            message="Creating product on Zazzle..."
         )
     
     async def _broadcast_image_stamping_complete(self, donation: Donation):
@@ -470,6 +509,14 @@ class CommissionWorker:
             progress=90,
             stage="image_stamped",
             message=f"Image stamped with QR code for {customer_name}"
+        )
+    
+    async def _broadcast_zazzle_creation_complete(self, donation: Donation):
+        self._update_task_status(
+            status="in_progress",
+            progress=95,
+            stage="zazzle_creation_complete",
+            message="Product created on Zazzle successfully"
         )
     
     async def _broadcast_commission_complete(self, donation: Donation, product_info: ProductInfo):
