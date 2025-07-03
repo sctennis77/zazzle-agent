@@ -1,22 +1,26 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useProducts } from '../../hooks/useProducts';
 import { ProductCard } from './ProductCard';
 import { ProductModal } from './ProductModal';
 import { CommissionStatusBanner } from './CommissionStatusBanner';
+import { InProgressProductCard } from './InProgressProductCard';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
-import { FaTasks } from 'react-icons/fa';
+import { toast } from 'react-toastify';
+
 
 export const ProductGrid: React.FC = () => {
-  const { products, loading, error, refresh: refreshProducts, setProducts } = useProducts();
+  const { products, loading, error, refresh: refreshProducts } = useProducts();
   const [searchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [activeTasks, setActiveTasks] = useState<Task[]>([]);
-  const [showCommissionSidebar, setShowCommissionSidebar] = useState(true);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const [websocketError, setWebsocketError] = useState<string | null>(null);
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Handle query parameter for opening specific product
   useEffect(() => {
@@ -34,6 +38,23 @@ export const ProductGrid: React.FC = () => {
     }
   }, [searchParams, products]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === '1') {
+      setShowSuccessBanner(true);
+      // Remove the query param from the URL
+      params.delete('success');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.showToast) {
+      toast.success('Commission submitted!');
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
+
   // Setup WebSocket for real-time task updates
   useEffect(() => {
     setupWebSocket();
@@ -46,229 +67,247 @@ export const ProductGrid: React.FC = () => {
     };
   }, []);
 
-  const setupWebSocket = () => {
-    const wsUrl = window.location.hostname === 'localhost' 
-      ? 'ws://localhost:8000/ws/tasks'
-      : `ws://${window.location.hostname}:8000/ws/tasks`;
-    
-    const ws = new WebSocket(wsUrl);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected for gallery updates:', wsUrl);
-    };
-
-    ws.onmessage = (event) => {
-      const message: WebSocketMessage = JSON.parse(event.data);
-      
-      if (message.type === 'task_update') {
-        // Update specific task
-        setActiveTasks(prevTasks => {
-          const updatedTasks = prevTasks.map(task =>
-            task.task_id === message.task_id
-              ? { ...task, ...message.data }
-              : task
-          );
-          // If task just completed, add justCompleted flag and timestamp
-          if (message.data.status === 'completed') {
-            return updatedTasks.map(task =>
-              task.task_id === message.task_id
-                ? { ...task, justCompleted: true, completedAt: Date.now() }
-                : task
-            );
-          }
-          return updatedTasks;
-        });
-        setAllTasks(prevTasks =>
-          prevTasks.map(task =>
-            task.task_id === message.task_id
-              ? { ...task, ...message.data }
-              : task
-          )
-        );
-
-        // If task completed successfully, fetch the new product
-        if (message.data.status === 'completed') {
-          console.log('Task completed, fetching new product...');
-          setTimeout(() => {
-            fetchNewProduct(message.task_id);
-          }, 1000); // Small delay to ensure backend has saved the product
-
-          // Remove the completed task from activeTasks after 7 seconds
-          setTimeout(() => {
-            setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
-          }, 7000);
-        }
-      } else if (message.type === 'task_created') {
-        // Add new task
-        setActiveTasks(prevTasks => [message.task_info, ...prevTasks]);
-        setAllTasks(prevTasks => [message.task_info, ...prevTasks]);
-        setShowCommissionSidebar(true); // Show sidebar when new commission is created
-      } else if (message.type === 'general_update') {
-        // Handle general updates
-        if (message.data.type === 'task_created') {
-          setActiveTasks(prevTasks => [message.data.task_info, ...prevTasks]);
-          setAllTasks(prevTasks => [message.data.task_info, ...prevTasks]);
-          setShowCommissionSidebar(true);
-        }
+  // Helper to subscribe to all active tasks
+  const subscribeToActiveTasks = (ws: WebSocket, tasks: Task[]) => {
+    tasks.forEach(task => {
+      if (task.status === 'pending' || task.status === 'in_progress') {
+        console.log('Subscribing to task', task.task_id);
+        ws.send(JSON.stringify({ type: 'subscribe', task_id: task.task_id }));
       }
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-
-    wsRef.current = ws;
+    });
   };
 
-  const fetchNewProduct = async (taskId: string) => {
-    try {
-      // Find the task to get the donation ID
-      const task = allTasks.find(t => t.task_id === taskId);
-      if (!task) {
-        console.log('Task not found, doing full refresh');
-        refreshProducts();
-        return;
-      }
-
-      // Fetch the specific product for this commission
-      const response = await fetch(`/api/products/commission/${task.donation_id}`);
-      if (response.ok) {
-        const newProduct = await response.json();
-        if (newProduct) {
-          console.log('Adding new product to gallery:', newProduct.product_info.id);
-          // Add the new product to the beginning of the list
-          setProducts((prevProducts: GeneratedProduct[]) => [newProduct, ...prevProducts]);
-        } else {
-          console.log('No product found, doing full refresh');
-          refreshProducts();
-        }
-      } else {
-        console.log('Failed to fetch specific product, doing full refresh');
-        refreshProducts();
-      }
-    } catch (err) {
-      console.error('Error fetching new product:', err);
-      console.log('Falling back to full refresh');
-      refreshProducts();
+  const setupWebSocket = () => {
+    let wsUrl: string;
+    if (window.location.protocol === 'https:') {
+      wsUrl = 'wss://' + window.location.host + '/ws/tasks';
+    } else {
+      wsUrl = 'ws://' + window.location.host + '/ws/tasks';
     }
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = (event) => {
+      setWebsocketError(null);
+      console.log('WebSocket connected for gallery updates:', wsUrl, event);
+      ws.send(JSON.stringify({ type: 'ping' }));
+      // Subscribe to all active tasks if already loaded
+      if (activeTasks.length > 0) {
+        subscribeToActiveTasks(ws, activeTasks);
+      }
+    };
+    ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event);
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data);
+        console.log('Parsed WebSocket message:', message);
+        if (message.type === 'task_update') {
+          setActiveTasks(prevTasks => {
+            const updatedTasks = prevTasks.map(task =>
+              task.task_id === message.task_id
+                ? { ...task, ...message.data }
+                : task
+            );
+            if (message.data.status === 'completed') {
+              return updatedTasks.map(task =>
+                task.task_id === message.task_id
+                  ? { ...task, justCompleted: true, completedAt: Date.now() }
+                  : task
+              );
+            }
+            return updatedTasks;
+          });
+          if (message.data.status === 'completed') {
+            console.log('Task completed, fetching new product...');
+            setTimeout(() => {
+              fetchNewProduct();
+            }, 1000);
+            setTimeout(() => {
+              setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
+            }, 7000);
+          }
+        } else if (message.type === 'task_created') {
+          setActiveTasks(prevTasks => [message.task_info, ...prevTasks]);
+          // Subscribe to the new task
+          if (ws.readyState === WebSocket.OPEN) {
+            subscribeToActiveTasks(ws, [message.task_info]);
+          }
+        } else if (message.type === 'general_update') {
+          if (message.data.type === 'task_created') {
+            setActiveTasks(prevTasks => [message.data.task_info, ...prevTasks]);
+            // Subscribe to the new task
+            if (ws.readyState === WebSocket.OPEN) {
+              subscribeToActiveTasks(ws, [message.data.task_info]);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing WebSocket message:', event.data, err);
+      }
+    };
+    ws.onerror = (error) => {
+      setWebsocketError('WebSocket connection failed. Live updates are unavailable.');
+      console.error('WebSocket error:', error);
+    };
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected:', event);
+    };
+    wsRef.current = ws;
   };
 
   const fetchActiveTasks = async () => {
     try {
       const response = await fetch('/api/tasks');
       if (response.ok) {
-        const tasks: Task[] = await response.json();
-        setAllTasks(tasks);
-        // Filter for active tasks (pending, in_progress) - completed tasks are filtered out
-        const active = tasks.filter(task => 
+        const tasks = await response.json();
+        const active = tasks.filter((task: Task) => 
           task.status === 'pending' || task.status === 'in_progress'
         );
         setActiveTasks(active);
-        setShowCommissionSidebar(active.length > 0);
+        // Subscribe to all active tasks if WebSocket is open
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          subscribeToActiveTasks(wsRef.current, active);
+        }
       }
-    } catch (err) {
-      console.error('Failed to fetch active tasks:', err);
+    } catch (error) {
+      console.error('Failed to fetch active tasks:', error);
     }
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setSelectedProduct(null);
+  const fetchNewProduct = async () => {
+    try {
+      await refreshProducts();
+    } catch (error) {
+      console.error('Failed to fetch new product:', error);
+    }
   };
 
-  const toggleSidebar = () => {
-    setShowCommissionSidebar(!showCommissionSidebar);
+  const handleCancelTask = async (taskId: string) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}?task_type=commission`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== taskId));
+      }
+    } catch (error) {
+      console.error('Failed to cancel task:', error);
+    }
   };
+
+  const handleViewProduct = (task: Task) => {
+    // Find the product that was just completed
+    const completedProduct = products.find(product => 
+      product.reddit_post && product.reddit_post.post_id === task.task_id
+    );
+    
+    if (completedProduct) {
+      setSelectedProduct(completedProduct);
+      setShowModal(true);
+    }
+  };
+
+  // Separate in-progress tasks from completed products
+  const inProgressTasks = activeTasks.filter(task => 
+    task.status === 'pending' || task.status === 'in_progress'
+  );
+
+  const hasActiveCommissions = inProgressTasks.length > 0;
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center text-red-600 p-4">
-        Error loading products: {error}
-      </div>
-    );
-  }
-
-  if (!products.length) {
-    return (
-      <div className="text-center text-gray-600 p-4">
-        No products found
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Products</h2>
+          <p className="text-gray-600">{error}</p>
+          <button
+            onClick={refreshProducts}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <>
-      {/* Main Product Grid - Full Width */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-8 bg-gray-50">
-        {products.map((product) => (
-          <ProductCard 
-            key={product.product_info.id} 
-            product={product}
-            activeTasks={activeTasks}
-          />
-        ))}
+    <div className="min-h-screen bg-gray-50">
+      {showSuccessBanner && (
+        <div className="bg-green-100 text-green-800 px-4 py-2 text-center font-semibold rounded shadow mb-4">
+          🎉 Commission submitted successfully!
+        </div>
+      )}
+      {websocketError && (
+        <div className="bg-red-100 text-red-700 px-4 py-2 text-center">{websocketError}</div>
+      )}
+      {/* Sticky header banner for active commissions */}
+      {hasActiveCommissions && (
+        <CommissionStatusBanner
+          tasks={inProgressTasks}
+          onClose={() => {}}
+          onRefresh={fetchActiveTasks}
+          isStickyHeader={true}
+          onViewProduct={handleViewProduct}
+        />
+      )}
+
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Product Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* In-progress commission cards */}
+          {inProgressTasks.map((task) => (
+            <InProgressProductCard
+              key={task.task_id}
+              task={task}
+              onCancel={handleCancelTask}
+            />
+          ))}
+          {/* Generated product cards */}
+          {products.map((product) => (
+            <ProductCard
+              key={product.product_info.id}
+              product={product}
+            />
+          ))}
+        </div>
+
+        {/* Empty state - simplified */}
+        {products.length === 0 && inProgressTasks.length === 0 && (
+          <div className="text-center py-24">
+            <div className="text-6xl mb-4">🎨</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Products Yet</h2>
+            <p className="text-gray-600 mb-6">
+              Start by commissioning a piece or wait for the system to generate products.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Commission Status Sidebar - Overlay */}
-      {showCommissionSidebar && (
-        <>
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/10 z-40"
-            onClick={() => setShowCommissionSidebar(false)}
-          />
-          {/* Sidebar */}
-          <div className="fixed top-20 right-4 z-50 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto">
-            <CommissionStatusBanner 
-              tasks={activeTasks.length > 0 ? activeTasks : allTasks}
-              onClose={() => setShowCommissionSidebar(false)}
-              onRefresh={fetchActiveTasks}
-              isSidebar={true}
-              onViewProduct={(task: Task) => {
-                // Find the product for this completed commission
-                fetch(`/api/products/commission/${task.donation_id}`)
-                  .then(res => res.json())
-                  .then(product => {
-                    setSelectedProduct(product);
-                    setShowModal(true);
-                  });
-              }}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Toggle Button - Fixed Position */}
-      {!showCommissionSidebar && (
-        <button
-          onClick={toggleSidebar}
-          className="fixed top-20 right-4 z-50 p-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 transition-colors"
-          title="Show commission status"
-        >
-          <FaTasks className="w-5 h-5" />
-        </button>
-      )}
-
-      {/* Global modal for query parameter products */}
+      {/* Product Modal */}
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
           isOpen={showModal}
-          onClose={handleCloseModal}
+          onClose={() => setShowModal(false)}
         />
       )}
-    </>
+    </div>
   );
 }; 

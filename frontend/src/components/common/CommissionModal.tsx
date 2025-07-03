@@ -4,6 +4,8 @@ import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElement
 import { Modal } from './Modal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
+import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -130,18 +132,21 @@ const CommissionForm: React.FC<{
 
     try {
       // Confirm the payment with the Express Checkout Element
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/commission/success`,
-        },
+        // Remove return_url to handle success directly in frontend
+        redirect: 'if_required', // Only redirect if required (like 3D Secure)
       });
 
       if (error) {
         console.error('Payment confirmation error:', error);
         onError(error.message || 'Payment failed');
-      } else {
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // Payment succeeded, call onSuccess directly
         onSuccess();
+      } else {
+        // Payment is processing or requires additional action
+        onError('Payment is being processed. Please check your email for confirmation.');
       }
     } catch (error) {
       console.error('Payment confirmation exception:', error);
@@ -284,17 +289,17 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
 
   // Default to the minimum allowed tier on open
   useEffect(() => {
-    if (isOpen && allowedTiers.length > 0) {
+    if (isOpen && allowedTiers && allowedTiers.length > 0) {
       setAmount(allowedTiers[0].min_amount.toString());
       setCustomAmount('');
     }
   }, [isOpen, commissionType, tiers.length]);
 
   // Find the current tier based on amount
-  const currentTier = allowedTiers
+  const currentTier = allowedTiers && allowedTiers.length > 0 ? allowedTiers
     .slice()
     .reverse()
-    .find(t => parseFloat(amount) >= t.min_amount) || allowedTiers[0];
+    .find(t => parseFloat(amount) >= t.min_amount) || allowedTiers[0] : null;
   const tierDisplay = getTierDisplay(currentTier?.name || minTierName);
   const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
 
@@ -563,17 +568,25 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     return () => clearTimeout(timeoutId);
   }, [paymentIntentId, amount, customerName, customerEmail, redditUsername, isAnonymous, commissionMessage]);
 
-  const handleSuccess = () => {
-    setSuccess(true);
-    // Call onSuccess callback if provided, otherwise close modal after delay
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      setTimeout(() => {
-        onClose();
-        setSuccess(false);
-      }, 2000);
+  // Track timeout for auto-closing success modal
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset success state when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setSuccess(false);
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+      }
     }
+  }, [isOpen]);
+
+  const navigate = useNavigate();
+
+  const handleSuccess = () => {
+    onClose();
+    navigate('/', { state: { showToast: true } });
   };
 
   const handleError = (errorMessage: string) => {
@@ -581,15 +594,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   };
 
   if (success) {
-    // Show success message briefly, then close modal and trigger success overlay
-    setTimeout(() => {
-      onClose();
-      if (onSuccess) {
-        onSuccess();
-      }
-    }, 1200);
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Commission Submitted!">
+      <Modal isOpen={isOpen} onClose={() => { setSuccess(false); onClose(); }} title="Commission Submitted!">
         <div className="flex flex-col items-center justify-center p-6">
           <div className="text-green-600 mb-4">
             <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
@@ -597,7 +603,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
             </svg>
           </div>
           <p className="text-lg text-green-600 font-semibold mb-2">Thank you for your commission!</p>
-          <p className="text-gray-600 text-center">Your commission has been submitted and will be processed soon.</p>
+          <p className="text-gray-600 text-center">Your commission is being processed. You'll be redirected to the gallery shortly...</p>
         </div>
       </Modal>
     );
@@ -729,7 +735,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Choose Amount</label>
           <div className="grid grid-cols-3 gap-2 mb-2">
-            {allowedTiers.map((tier) => {
+            {allowedTiers && allowedTiers.length > 0 ? allowedTiers.map((tier) => {
               const tDisplay = getTierDisplay(tier.name);
               const TIcon = iconMap[tDisplay.icon as keyof typeof iconMap] || FaHeart;
               return (
@@ -748,13 +754,17 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                   <span className="ml-1 text-gray-400">${tier.min_amount}</span>
                 </button>
               );
-            })}
+            }) : (
+              <div className="col-span-3 text-center text-gray-500 text-sm py-4">
+                Loading tiers...
+              </div>
+            )}
             {/* Custom Amount as last grid cell */}
             <div className="relative flex items-center h-9">
               <span className="absolute left-2 text-gray-500 text-xs">$</span>
               <input
                 type="number"
-                min={allowedTiers[0]?.min_amount || 1}
+                min={allowedTiers && allowedTiers.length > 0 ? allowedTiers[0]?.min_amount || 1 : 1}
                 step="0.01"
                 value={customAmount}
                 onChange={e => {
