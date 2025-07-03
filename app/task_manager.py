@@ -11,6 +11,7 @@ import threading
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from enum import Enum
+import asyncio
 
 from app.db.database import SessionLocal
 from app.db.models import Donation, PipelineTask
@@ -107,7 +108,6 @@ class TaskManager:
                 
                 # Create and run the commission worker
                 worker = CommissionWorker(donation_id, task_data)
-                import asyncio
                 
                 # Run the async worker in a new event loop
                 try:
@@ -163,17 +163,18 @@ class TaskManager:
                     "amount_usd": float(donation.amount_usd) if donation else None,
                     "is_anonymous": donation.is_anonymous if donation else None,
                 }
-                import asyncio
                 from app.redis_service import redis_service
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.create_task(redis_service.publish_task_update(str(task.id), update))
-                    else:
-                        loop.run_until_complete(redis_service.publish_task_update(str(task.id), update))
-                except RuntimeError:
-                    # If no event loop, create one
-                    asyncio.run(redis_service.publish_task_update(str(task.id), update))
+                    # Use a simple approach that doesn't conflict with event loops
+                    import asyncio
+                    try:
+                        # Try to get the current event loop
+                        loop = asyncio.get_running_loop()
+                        # Create a task in the current loop
+                        loop.create_task(redis_service.publish_task_update(str(task.id), update))
+                    except RuntimeError:
+                        # No running event loop, create a new one
+                        asyncio.run(redis_service.publish_task_update(str(task.id), update))
                 except Exception as e:
                     logger.error(f"Failed to publish task update to Redis: {e}")
                     
@@ -188,14 +189,44 @@ class TaskManager:
         try:
             task = db.query(PipelineTask).filter(PipelineTask.id == task_id).first()
             if task:
+                # Get donation information
+                donation = task.donation
+                subreddit = task.subreddit
+                
+                # Calculate progress based on status
+                progress = 0
+                stage = "pending"
+                message = "Task created"
+                
+                if task.status == "in_progress":
+                    progress = 25
+                    stage = "post_fetching"
+                    message = "Processing commission..."
+                elif task.status == "completed":
+                    progress = 100
+                    stage = "commission_complete"
+                    message = "Commission completed successfully"
+                elif task.status == "failed":
+                    progress = 0
+                    stage = "failed"
+                    message = f"Commission failed: {task.error_message or 'Unknown error'}"
+                
                 return {
                     "task_id": str(task.id),
                     "status": task.status,
                     "created_at": task.created_at.isoformat() if task.created_at else None,
-                    "started_at": task.started_at.isoformat() if task.started_at else None,
                     "completed_at": task.completed_at.isoformat() if task.completed_at else None,
                     "error_message": task.error_message,
-                    "donation_id": task.donation_id
+                    "donation_id": task.donation_id,
+                    "stage": stage,
+                    "message": message,
+                    "progress": progress,
+                    "reddit_username": donation.reddit_username if donation and donation.reddit_username and not donation.is_anonymous else "Anonymous",
+                    "tier": donation.tier if donation else None,
+                    "subreddit": subreddit.subreddit_name if subreddit else None,
+                    "amount_usd": float(donation.amount_usd) if donation else None,
+                    "is_anonymous": donation.is_anonymous if donation else None,
+                    "timestamp": task.created_at.timestamp() if task.created_at else None
                 }
             return None
         finally:
