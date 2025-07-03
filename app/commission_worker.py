@@ -30,6 +30,7 @@ from app.services.commission_validator import CommissionValidator
 from app.utils.logging_config import get_logger
 from app.utils.openai_usage_tracker import log_session_summary
 from app.redis_service import redis_service
+from app.config import WEBSOCKET_TASK_UPDATES_CHANNEL, REDIS_HOST, REDIS_PORT, REDIS_DB
 
 logger = get_logger(__name__)
 
@@ -191,45 +192,57 @@ class CommissionWorker:
             self.db.rollback()
             return None
     
+    def _publish_task_update_sync(self, task_id: str, update: dict):
+        try:
+            client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+            message = json.dumps({
+                "type": "task_update",
+                "task_id": task_id,
+                "data": update,
+                "timestamp": time.time(),
+            })
+            client.publish(WEBSOCKET_TASK_UPDATES_CHANNEL, message)
+            client.close()
+            logger.info(f"[SYNC REDIS] Published task update for {task_id}: {update}")
+        except Exception as e:
+            logger.error(f"[SYNC REDIS] Failed to publish task update: {e}")
+
+    def _build_update_dict(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None):
+        if not self.pipeline_task:
+            logger.warning("No pipeline task to update")
+            return None
+        donation = self.pipeline_task.donation
+        subreddit = self.pipeline_task.subreddit
+        update = {
+            "status": status,
+            "completed_at": self.pipeline_task.completed_at.isoformat() if self.pipeline_task.completed_at else None,
+            "error": error_message or self.pipeline_task.error_message,
+            "reddit_username": donation.reddit_username if donation and donation.reddit_username and not donation.is_anonymous else "Anonymous",
+            "tier": donation.tier if donation else None,
+            "subreddit": subreddit.subreddit_name if subreddit else None,
+            "amount_usd": float(donation.amount_usd) if donation else None,
+            "is_anonymous": donation.is_anonymous if donation else None,
+            "progress": progress if progress is not None else (100 if status == "completed" else 0),
+            "stage": stage if stage is not None else ("commission_complete" if status == "completed" else status),
+            "message": message if message is not None else ("Commission completed successfully" if status == "completed" else "Processing commission..."),
+        }
+        return update
+
     def _update_task_status(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None):
-        """Update the pipeline task status and broadcast over WebSocket."""
         try:
             if not self.pipeline_task:
                 logger.warning("No pipeline task to update")
                 return
-
             self.pipeline_task.status = status
             if status in ["completed", "failed"]:
                 self.pipeline_task.completed_at = datetime.now()
             if error_message:
                 self.pipeline_task.error_message = error_message
-
             self.db.commit()
             logger.info(f"Updated pipeline task {self.pipeline_task.id} status to {status}")
-
-            # Broadcast update over WebSocket with all relevant fields
-            donation = self.pipeline_task.donation
-            subreddit = self.pipeline_task.subreddit
-            update = {
-                "status": self.pipeline_task.status,
-                "completed_at": self.pipeline_task.completed_at.isoformat() if self.pipeline_task.completed_at else None,
-                "error": self.pipeline_task.error_message,
-                "reddit_username": donation.reddit_username if donation and donation.reddit_username and not donation.is_anonymous else "Anonymous",
-                "tier": donation.tier if donation else None,
-                "subreddit": subreddit.subreddit_name if subreddit else None,
-                "amount_usd": float(donation.amount_usd) if donation else None,
-                "is_anonymous": donation.is_anonymous if donation else None,
-                "progress": progress if progress is not None else (100 if status == "completed" else 0),
-                "stage": stage if stage is not None else ("commission_complete" if status == "completed" else status),
-                "message": message if message is not None else ("Commission completed successfully" if status == "completed" else "Processing commission..."),
-            }
-
-            # Publish to Redis for cross-service communication
-            try:
+            update = self._build_update_dict(status, error_message, progress, stage, message)
+            if update is not None:
                 self._publish_task_update_sync(str(self.pipeline_task.id), update)
-            except Exception as e:
-                logger.error(f"Failed to publish task update to Redis: {e}")
-
         except Exception as e:
             logger.error(f"Error updating task status: {e}")
             self.db.rollback()
@@ -394,134 +407,64 @@ class CommissionWorker:
             return None
     
     async def _broadcast_post_fetch_started(self, donation: Donation):
-        """Broadcast that post fetching has started."""
-        try:
-            update = {
-                "status": "in_progress",
-                "stage": "post_fetching",
-                "message": f"Fetching commissioned post from r/{donation.subreddit.subreddit_name if donation.subreddit else 'unknown'}",
-                "progress": 10,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting post fetch started: {e}")
+        self._update_task_status(
+            status="in_progress",
+            progress=10,
+            stage="post_fetching",
+            message=f"Fetching commissioned post from r/{donation.subreddit.subreddit_name if donation.subreddit else 'unknown'}"
+        )
     
     async def _broadcast_post_fetched(self, donation: Donation, post_title: str):
-        """Broadcast that post has been fetched."""
-        try:
-            update = {
-                "status": "in_progress",
-                "stage": "post_fetched",
-                "message": f"Fetched commissioned post: {post_title}",
-                "progress": 20,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting post fetched: {e}")
+        self._update_task_status(
+            status="in_progress",
+            progress=20,
+            stage="post_fetched",
+            message=f"Fetched commissioned post: {post_title}"
+        )
     
     async def _broadcast_product_designed(self, product_info: ProductInfo, donation: Donation):
-        """Broadcast that product design is complete."""
-        try:
-            update = {
-                "status": "in_progress",
-                "stage": "product_designed",
-                "message": f"Product design created: {product_info.theme}",
-                "progress": 40,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting product designed: {e}")
+        self._update_task_status(
+            status="in_progress",
+            progress=40,
+            stage="product_designed",
+            message=f"Product design created: {product_info.theme}"
+        )
     
     async def _broadcast_image_generation_started(self, product_idea: dict, donation: Donation):
-        """Broadcast that image generation has started."""
-        try:
-            update = {
-                "status": "in_progress",
-                "stage": "image_generation_started",
-                "message": "Generating image with DALL-E...",
-                "progress": 50,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting image generation started: {e}")
+        self._update_task_status(
+            status="in_progress",
+            progress=50,
+            stage="image_generation_started",
+            message="Generating image with DALL-E..."
+        )
     
     async def _broadcast_image_generation_complete(self, product_info: ProductInfo, donation: Donation):
-        """Broadcast that image generation is complete."""
-        try:
-            update = {
-                "status": "in_progress",
-                "stage": "image_generated",
-                "message": "Image generated successfully",
-                "progress": 80,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting image generation complete: {e}")
+        self._update_task_status(
+            status="in_progress",
+            progress=80,
+            stage="image_generated",
+            message="Image generated successfully"
+        )
     
     async def _broadcast_image_stamping_complete(self, donation: Donation):
-        """Broadcast that image stamping is complete."""
-        try:
-            customer_name = donation.customer_name if donation.customer_name else "Anonymous"
-            update = {
-                "status": "in_progress",
-                "stage": "image_stamped",
-                "message": f"Image stamped with QR code for {customer_name}",
-                "progress": 90,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting image stamping complete: {e}")
+        customer_name = donation.customer_name if donation.customer_name else "Anonymous"
+        self._update_task_status(
+            status="in_progress",
+            progress=90,
+            stage="image_stamped",
+            message=f"Image stamped with QR code for {customer_name}"
+        )
     
     async def _broadcast_commission_complete(self, donation: Donation, product_info: ProductInfo):
-        """Broadcast that commission is complete."""
-        try:
-            # Get the post title from the product info's reddit context
-            post_title = "Unknown Post"
-            if hasattr(product_info, 'reddit_context') and product_info.reddit_context:
-                post_title = product_info.reddit_context.post_title
-            
-            update = {
-                "status": "in_progress",
-                "stage": "commission_complete",
-                "message": f"Commission finished: Illustrated {post_title}",
-                "progress": 100,
-                "timestamp": time.time()
-            }
-            await self._publish_task_update_sync(str(self.pipeline_task.id), update)
-        except Exception as e:
-            logger.error(f"Error broadcasting commission complete: {e}")
-    
-    def _publish_task_update_sync(self, task_id: str, update: dict):
-        """Publish task update to Redis using a synchronous client to avoid event loop conflicts."""
-        import redis
-        import threading
-        from app.config import WEBSOCKET_TASK_UPDATES_CHANNEL, REDIS_HOST, REDIS_PORT, REDIS_DB
-        
-        def _publish_in_thread():
-            try:
-                # Use synchronous Redis client
-                client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
-                message = json.dumps({
-                    "type": "task_update",
-                    "task_id": task_id,
-                    "data": update,
-                    "timestamp": time.time(),
-                })
-                client.publish(WEBSOCKET_TASK_UPDATES_CHANNEL, message)
-                client.close()
-            except Exception as e:
-                logger.error(f"Error publishing task update to Redis: {e}")
-        
-        # Run in a separate thread to avoid blocking
-        thread = threading.Thread(target=_publish_in_thread)
-        thread.daemon = True
-        thread.start()
+        post_title = "Unknown Post"
+        if hasattr(product_info, 'reddit_context') and product_info.reddit_context:
+            post_title = product_info.reddit_context.post_title
+        self._update_task_status(
+            status="in_progress",
+            progress=100,
+            stage="commission_complete",
+            message=f"Commission finished: Illustrated {post_title}"
+        )
     
     async def _create_zazzle_product(self, product_info: ProductInfo, donation: Donation) -> bool:
         """Create product on Zazzle."""
