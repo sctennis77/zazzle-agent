@@ -192,41 +192,13 @@ class CommissionWorker:
             self.db.rollback()
             return None
     
-    def _publish_task_update_sync(self, task_id: str, update: dict):
+    async def _publish_task_update_async(self, task_id: str, update: dict):
+        """Publish task update using the async Redis service."""
         try:
-            client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
-            message = json.dumps({
-                "type": "task_update",
-                "task_id": task_id,
-                "data": update,
-                "timestamp": time.time(),
-            })
-            client.publish(WEBSOCKET_TASK_UPDATES_CHANNEL, message)
-            client.close()
-            logger.info(f"[SYNC REDIS] Published task update for {task_id}: {update}")
+            await redis_service.publish_task_update(task_id, update)
+            logger.info(f"[ASYNC REDIS] Published task update for {task_id}: {update}")
         except Exception as e:
-            logger.error(f"[SYNC REDIS] Failed to publish task update: {e}")
-
-    def _build_update_dict(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None):
-        if not self.pipeline_task:
-            logger.warning("No pipeline task to update")
-            return None
-        donation = self.pipeline_task.donation
-        subreddit = self.pipeline_task.subreddit
-        update = {
-            "status": status,
-            "completed_at": self.pipeline_task.completed_at.isoformat() if self.pipeline_task.completed_at else None,
-            "error": error_message or self.pipeline_task.error_message,
-            "reddit_username": donation.reddit_username if donation and donation.reddit_username and not donation.is_anonymous else "Anonymous",
-            "tier": donation.tier if donation else None,
-            "subreddit": subreddit.subreddit_name if subreddit else None,
-            "amount_usd": float(donation.amount_usd) if donation else None,
-            "is_anonymous": donation.is_anonymous if donation else None,
-            "progress": progress if progress is not None else (100 if status == "completed" else 0),
-            "stage": stage if stage is not None else ("commission_complete" if status == "completed" else status),
-            "message": message if message is not None else ("Commission completed successfully" if status == "completed" else "Processing commission..."),
-        }
-        return update
+            logger.error(f"[ASYNC REDIS] Failed to publish task update: {e}")
 
     def _update_task_status(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None):
         try:
@@ -242,11 +214,57 @@ class CommissionWorker:
             logger.info(f"Updated pipeline task {self.pipeline_task.id} status to {status}")
             update = self._build_update_dict(status, error_message, progress, stage, message)
             if update is not None:
-                self._publish_task_update_sync(str(self.pipeline_task.id), update)
+                logger.info(f"Task update for {self.pipeline_task.id}: {update}")
+                # Use simple Redis publishing to avoid event loop conflicts
+                self._publish_task_update_simple(self.pipeline_task.id, update)
         except Exception as e:
             logger.error(f"Error updating task status: {e}")
             self.db.rollback()
-    
+
+    def _publish_task_update_simple(self, task_id: str, update: dict):
+        """Simple synchronous Redis publishing without event loop conflicts."""
+        try:
+            import redis
+            import json
+            
+            # Create a simple Redis client for this operation
+            r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            
+            # Create the message
+            message = {
+                "type": "task_update",
+                "task_id": str(task_id),
+                "data": update,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Publish to Redis
+            r.publish("task_updates", json.dumps(message))
+            logger.info(f"[SIMPLE REDIS] Published task update for {task_id}: {update}")
+            
+        except Exception as e:
+            logger.error(f"[SIMPLE REDIS] Failed to publish task update: {e}")
+
+    def _build_update_dict(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None) -> Optional[dict]:
+        """Build the update dictionary for Redis publishing."""
+        if not self.pipeline_task:
+            return None
+        
+        update = {
+            "status": status,
+            "completed_at": self.pipeline_task.completed_at.isoformat() if self.pipeline_task.completed_at else None,
+            "error": error_message,
+            "reddit_username": self.donation.reddit_username,
+            "tier": self.donation.tier,  # Fixed: removed .value since tier is already a string
+            "subreddit": self.donation.subreddit.subreddit_name if self.donation.subreddit else None,
+            "amount_usd": float(self.donation.amount_usd),
+            "is_anonymous": self.donation.is_anonymous,
+            "progress": progress,
+            "stage": stage,
+            "message": message
+        }
+        return update
+
     async def _process_commission(self, donation: Donation) -> bool:
         """Process the commission workflow."""
         try:
@@ -321,20 +339,22 @@ class CommissionWorker:
     async def _generate_product_with_progress(self, donation: Donation) -> Optional[ProductInfo]:
         """Generate product with detailed progress updates."""
         try:
-            # Step 1: Fetch the post
-            post_info = await self._fetch_post_with_progress(donation)
-            if not post_info:
-                return None
+            # Step 1: Start the process (10%)
+            await self._broadcast_post_fetch_started(donation)
             
-            # Step 2: Generate product idea
-            product_idea = await self._generate_product_idea_with_progress(post_info)
-            if not product_idea:
-                return None
-            
-            # Step 3: Generate image
-            product_info = await self._generate_image_with_progress(product_idea, donation)
+            # Step 2: Generate the actual product (this will trigger progress callbacks)
+            # The RedditAgent will call our progress callback for:
+            # - post_fetched (20%)
+            # - product_designed (40%)
+            product_info = await self.reddit_agent.find_and_create_product_for_task()
             if not product_info:
                 return None
+            
+            # Step 3: Broadcast image generation complete (80%)
+            await self._broadcast_image_generation_complete(product_info, donation)
+            
+            # Step 4: Broadcast image stamping complete (90%)
+            await self._broadcast_image_stamping_complete(donation)
             
             return product_info
             
@@ -345,16 +365,8 @@ class CommissionWorker:
     async def _fetch_post_with_progress(self, donation: Donation) -> Optional[dict]:
         """Fetch the Reddit post with progress update."""
         try:
-            # This will trigger the post fetching in RedditAgent
-            # The actual fetch happens in _find_trending_post_for_task
-            # We'll broadcast after the post is fetched
-            
-            # For now, we'll broadcast when we start the fetch process
-            await self._broadcast_post_fetch_started(donation)
-            
             # The actual post fetching happens in the RedditAgent
-            # We'll need to modify the RedditAgent to call back to us
-            # For now, we'll assume the post is fetched successfully
+            # The progress callback will handle the "post_fetched" stage
             
             return {
                 'post_id': donation.post_id,
@@ -368,11 +380,8 @@ class CommissionWorker:
     async def _generate_product_idea_with_progress(self, post_info: dict) -> Optional[dict]:
         """Generate product idea with progress update."""
         try:
-            # This will trigger the product idea generation in RedditAgent
-            # We'll broadcast when the product idea is generated
-            
-            # For now, we'll assume the product idea is generated successfully
-            # The actual generation happens in _determine_product_idea
+            # The actual generation happens in RedditAgent._determine_product_idea
+            # The progress callback will handle the "product_designed" stage
             
             return {
                 'post_id': post_info['post_id'],
@@ -386,7 +395,7 @@ class CommissionWorker:
     async def _generate_image_with_progress(self, product_idea: dict, donation: Donation) -> Optional[ProductInfo]:
         """Generate image with progress updates."""
         try:
-            # Step 1: Broadcast image generation start
+            # Step 1: Broadcast image generation start (50%)
             await self._broadcast_image_generation_started(product_idea, donation)
             
             # Step 2: Generate the actual product (this includes image generation)
@@ -394,10 +403,10 @@ class CommissionWorker:
             if not product_info:
                 return None
             
-            # Step 3: Broadcast image generation complete
+            # Step 3: Broadcast image generation complete (80%)
             await self._broadcast_image_generation_complete(product_info, donation)
             
-            # Step 4: Broadcast image stamping complete
+            # Step 4: Broadcast image stamping complete (90%)
             await self._broadcast_image_stamping_complete(donation)
             
             return product_info
@@ -420,6 +429,14 @@ class CommissionWorker:
             progress=20,
             stage="post_fetched",
             message=f"Fetched commissioned post: {post_title}"
+        )
+    
+    async def _broadcast_product_idea_started(self, post_info: dict):
+        self._update_task_status(
+            status="in_progress",
+            progress=30,
+            stage="product_idea_generation",
+            message="Generating product idea from Reddit post..."
         )
     
     async def _broadcast_product_designed(self, product_info: ProductInfo, donation: Donation):
@@ -490,14 +507,11 @@ class CommissionWorker:
         """Save product to database."""
         try:
             logger.info("Saving product to database")
-            
-            # For commissions, we need to create a minimal pipeline run to satisfy the database constraints
             from app.db.models import PipelineRun
             from app.pipeline_status import PipelineStatus
             from app.db.mappers import reddit_context_to_db, product_info_to_db
-            
             pipeline_run = PipelineRun(
-                status=PipelineStatus.COMPLETED.value,  # Use the correct status value
+                status="completed",  # Use simple string status
                 summary=f"Commission for donation {donation.id}",
                 config={"commission": True, "donation_id": donation.id},
                 start_time=datetime.now(),
@@ -546,30 +560,49 @@ class CommissionWorker:
     def _update_donation_status(self, donation: Donation, success: bool, error: str = None):
         """Update donation status."""
         try:
+            from app.models import DonationStatus
             if success:
-                donation.status = DonationStatus.SUCCEEDED.value
+                donation.status = "succeeded"
                 logger.info(f"Updated donation {self.donation_id} status to SUCCEEDED")
             else:
-                donation.status = DonationStatus.FAILED.value
+                donation.status = "failed"
                 if error:
                     donation.message = f"Commission failed: {error}"
                 logger.error(f"Updated donation {self.donation_id} status to FAILED")
-            
             self.db.commit()
-            
         except Exception as e:
             logger.error(f"Error updating donation status: {e}")
             self.db.rollback()
 
     async def _progress_callback(self, stage: str, data: dict):
         """Callback for RedditAgent progress updates."""
-        if stage == "post_fetched":
-            await self._broadcast_post_fetched(self.donation, data.get("post_title", ""))
-        elif stage == "product_designed":
-            # Create a mock ProductInfo for the broadcast
-            class MockProductInfo:
-                theme = data.get("theme", "")
-            await self._broadcast_product_designed(MockProductInfo(), self.donation)
+        try:
+            logger.info(f"Progress callback received: {stage} with data: {data}")
+            
+            if stage == "post_fetched":
+                post_title = data.get("post_title", "Unknown Post")
+                self._update_task_status(
+                    status="in_progress",
+                    progress=20,
+                    stage="post_fetched",
+                    message=f"Fetched commissioned post: {post_title}"
+                )
+                
+            elif stage == "product_designed":
+                theme = data.get("theme", "Unknown Theme")
+                self._update_task_status(
+                    status="in_progress",
+                    progress=40,
+                    stage="product_designed",
+                    message=f"Product design created: {theme}"
+                )
+                
+            else:
+                logger.warning(f"Unknown progress stage: {stage}")
+                
+        except Exception as e:
+            logger.error(f"Error in progress callback for stage {stage}: {e}")
+            # Don't let callback errors break the main workflow
 
 
 def main():
