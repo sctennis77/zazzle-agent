@@ -480,6 +480,7 @@ class RedditAgent:
         subreddit_name: str = "golf",
         reddit_client: Optional[Any] = None,
         task_context: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[callable] = None,
     ):
         """
         Initialize the Reddit agent.
@@ -506,6 +507,7 @@ class RedditAgent:
         self.subreddit_name = subreddit_name
         self.commission_message = None  # Optional commission message for commissioned posts
         self.task_context = task_context or {}  # Task context for commissioning logic
+        self.progress_callback = progress_callback  # Callback for progress updates
         
         # Initialize Reddit client
         if reddit_client:
@@ -562,7 +564,7 @@ class RedditAgent:
         )
         return response.choices[0].message.content
 
-    def _determine_product_idea(
+    async def _determine_product_idea(
         self, reddit_context: RedditContext
     ) -> Optional[ProductIdea]:
         """
@@ -639,6 +641,18 @@ class RedditAgent:
             logger.info(f"Successfully generated product idea: {theme}")
             if image_title:
                 logger.info(f"Generated image title: {image_title}")
+            
+            # Call progress callback if available
+            if self.progress_callback:
+                try:
+                    await self.progress_callback("product_designed", {
+                        "theme": theme,
+                        "image_title": image_title,
+                        "image_description": image_description
+                    })
+                except Exception as e:
+                    logger.error(f"Error calling progress callback: {e}")
+            
             return product_idea
 
         except ValueError:
@@ -698,8 +712,8 @@ class RedditAgent:
                 ],
             )
 
-            # Determine product idea from post (synchronous call)
-            product_idea = self._determine_product_idea(reddit_context)
+            # Determine product idea from post (asynchronous call)
+            product_idea = await self._determine_product_idea(reddit_context)
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
                 return None
@@ -798,8 +812,8 @@ class RedditAgent:
                 ],
             )
 
-            # Determine product idea from post (synchronous call)
-            product_idea = self._determine_product_idea(reddit_context)
+            # Determine product idea from post (asynchronous call)
+            product_idea = await self._determine_product_idea(reddit_context)
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
                 return None
@@ -1111,6 +1125,18 @@ class RedditAgent:
                         comment_summary = self._generate_comment_summary(submission)
                         submission.comment_summary = comment_summary
                         logger.info(f"Successfully fetched commissioned post: {submission.title}")
+                        
+                        # Call progress callback if available
+                        if self.progress_callback:
+                            try:
+                                await self.progress_callback("post_fetched", {
+                                    "post_title": submission.title,
+                                    "post_id": submission.id,
+                                    "subreddit": submission.subreddit.display_name
+                                })
+                            except Exception as e:
+                                logger.error(f"Error calling progress callback: {e}")
+                        
                         return submission
                     else:
                         logger.error(f"Failed to fetch commissioned post {post_id}")

@@ -89,4 +89,4 @@ watchfiles==1.1.0
 wcwidth==0.2.13
 websocket-client==1.8.0
 websockets==12.0
--e git+https://github.com/sctennis77/zazzle-agent.git@eacc94c947e943611c4d91f7628447b02f7601f0#egg=zazzle_agent
+zazzle_agent @ git+https://github.com/sctennis77/zazzle-agent.git@main

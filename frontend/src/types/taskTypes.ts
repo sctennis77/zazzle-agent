@@ -12,9 +12,22 @@ export interface Task {
   is_anonymous?: boolean;
   justCompleted?: boolean;
   completedAt?: number;
+  stage?: string;
+  message?: string;
+  progress?: number;
+  timestamp?: number;
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+
+export type TaskStage = 
+  | 'post_fetching'
+  | 'post_fetched'
+  | 'product_designed'
+  | 'image_generation_started'
+  | 'image_generated'
+  | 'image_stamped'
+  | 'commission_complete';
 
 export interface TaskUpdate {
   type: 'task_update';

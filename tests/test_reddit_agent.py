@@ -431,7 +431,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_product_idea.theme = "Test Theme"
         mock_product_idea.image_description = "Test image description"
         mock_product_idea.design_instructions = {"image_title": "Test Image"}
-        agent._determine_product_idea = MagicMock(return_value=mock_product_idea)
+        agent._determine_product_idea = AsyncMock(return_value=mock_product_idea)
         
         # Mock the image generator
         agent.image_generator = MagicMock()
@@ -475,7 +475,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_product_idea.theme = "Test Theme"
         mock_product_idea.image_description = "Test image description"
         mock_product_idea.design_instructions = {"image_title": "Test Image"}
-        agent._determine_product_idea = MagicMock(return_value=mock_product_idea)
+        agent._determine_product_idea = AsyncMock(return_value=mock_product_idea)
         
         # Mock the image generator
         agent.image_generator = MagicMock()

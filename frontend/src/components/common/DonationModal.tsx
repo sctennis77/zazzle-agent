@@ -41,14 +41,14 @@ const DonationForm: React.FC<{
   onSuccess: () => void;
   onError: (error: string) => void;
 }> = ({ 
-  amount: _amount, 
-  message: _message, 
-  customerEmail: _customerEmail, 
-  customerName: _customerName, 
-  redditUsername: _redditUsername, 
-  isAnonymous: _isAnonymous, 
-  subreddit: _subreddit, 
-  postId: _postId, 
+  amount, 
+  message, 
+  customerEmail, 
+  customerName, 
+  redditUsername, 
+  isAnonymous, 
+  subreddit, 
+  postId, 
   onSuccess, 
   onError
 }) => {
@@ -66,17 +66,20 @@ const DonationForm: React.FC<{
 
     try {
       // Confirm the payment with the Express Checkout Element
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/payment-success`,
-        },
+        // Remove return_url to handle success directly in frontend
+        redirect: 'if_required', // Only redirect if required (like 3D Secure)
       });
 
       if (error) {
         onError(error.message || 'Payment failed');
-      } else {
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // Payment succeeded, call onSuccess directly
         onSuccess();
+      } else {
+        // Payment is processing or requires additional action
+        onError('Payment is being processed. Please check your email for confirmation.');
       }
     } catch (error) {
       onError(error instanceof Error ? error.message : 'An error occurred');
@@ -133,8 +136,8 @@ const DonationForm: React.FC<{
           layout: 'tabs',
           defaultValues: {
             billingDetails: {
-              name: _customerName || '',
-              email: _customerEmail || '',
+              name: customerName || '',
+              email: customerEmail || '',
             },
           },
         }}

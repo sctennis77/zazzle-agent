@@ -69,6 +69,12 @@ class TaskManager:
         """Create a pipeline task in the database."""
         db = SessionLocal()
         try:
+            # Check if a task already exists for this donation
+            existing_task = db.query(PipelineTask).filter_by(donation_id=donation_id).first()
+            if existing_task:
+                logger.info(f"Task already exists for donation {donation_id}: {existing_task.id}, returning existing task")
+                return str(existing_task.id)
+            
             # Get the donation to find the subreddit_id
             donation = db.query(Donation).filter(Donation.id == donation_id).first()
             if not donation:
@@ -163,20 +169,28 @@ class TaskManager:
                     "amount_usd": float(donation.amount_usd) if donation else None,
                     "is_anonymous": donation.is_anonymous if donation else None,
                 }
-                from app.redis_service import redis_service
+                # Use simple Redis publishing to avoid event loop conflicts
                 try:
-                    # Use a simple approach that doesn't conflict with event loops
-                    import asyncio
-                    try:
-                        # Try to get the current event loop
-                        loop = asyncio.get_running_loop()
-                        # Create a task in the current loop
-                        loop.create_task(redis_service.publish_task_update(str(task.id), update))
-                    except RuntimeError:
-                        # No running event loop, create a new one
-                        asyncio.run(redis_service.publish_task_update(str(task.id), update))
+                    import redis
+                    import json
+                    
+                    # Create a simple Redis client for this operation
+                    r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                    
+                    # Create the message
+                    message = {
+                        "type": "task_update",
+                        "task_id": str(task.id),
+                        "data": update,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    # Publish to Redis
+                    r.publish("task_updates", json.dumps(message))
+                    logger.info(f"[TASK MANAGER] Published task update for {task.id}: {update}")
+                    
                 except Exception as e:
-                    logger.error(f"Failed to publish task update to Redis: {e}")
+                    logger.error(f"[TASK MANAGER] Failed to publish task update: {e}")
                     
         except Exception as e:
             logger.error(f"Failed to update task status: {e}")

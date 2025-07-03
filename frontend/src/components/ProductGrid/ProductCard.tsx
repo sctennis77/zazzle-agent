@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import type { Task } from '../../types/taskTypes';
-import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaPaintBrush, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 
@@ -12,16 +12,15 @@ interface ProductCardProps {
 
 // Map icon string to actual icon component
 const iconMap = {
-  FaCrown,
-  FaStar,
-  FaGem,
-  FaHeart,
+  crown: FaCrown,
+  star: FaStar,
+  gem: FaGem,
+  heart: FaHeart,
 };
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [] }) => {
   const [showModal, setShowModal] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const [_loadingDonation, setLoadingDonation] = useState(false);
   const { getTierDisplay } = useDonationTiers();
 
   // Find associated task for this product by checking if it's a commission product
@@ -39,7 +38,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   // Fetch donation information when component mounts
   useEffect(() => {
     const fetchDonationInfo = async () => {
-      setLoadingDonation(true);
       try {
         const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
         if (response.ok) {
@@ -50,8 +48,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
         }
       } catch (error) {
         console.error('Error fetching donation info:', error);
-      } finally {
-        setLoadingDonation(false);
       }
     };
 
@@ -88,12 +84,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     }
   };
 
+  // For commission products, use commissionInfo and donation_info for tier
+  let tierName = '';
+  if (commissionInfo && product.product_info.donation_info) {
+    tierName = product.product_info.donation_info.tier_name;
+  } else if (product.product_info.donation_info) {
+    tierName = product.product_info.donation_info.tier_name;
+  }
+  const tierDisplay = getTierDisplay(tierName);
+  const IconComponent = iconMap[tierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart;
+
   return (
     <>
       <div
-        className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 max-w-md w-full mx-auto flex flex-col border border-gray-200 group h-full"
+        className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col border border-gray-200 group h-full"
       >
-        <div className="w-full aspect-square overflow-hidden rounded-t-2xl flex items-center justify-center bg-gray-100 relative">
+        <div className="w-full aspect-square overflow-hidden rounded-t-lg flex items-center justify-center bg-gray-100 relative">
           <div className="relative w-full h-full">
             <img
               src={product.product_info.image_url}
@@ -120,13 +126,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             
             {/* Commission indicator with task status */}
             {commissionInfo && (
-              <div className="absolute top-2 left-2">
-                <div className="p-1.5 rounded-full bg-purple-100 border border-white shadow-sm" title={`Commissioned by ${commissionInfo.reddit_username}${commissionInfo.commission_message ? `: ${commissionInfo.commission_message}` : ''}`}>
-                  <FaPaintBrush size={12} className="text-purple-600" />
+              <div className="absolute top-2 left-2 flex items-center gap-2">
+                <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}
+                  title={`Commissioned by ${commissionInfo.reddit_username}${commissionInfo.commission_message ? `: ${commissionInfo.commission_message}` : ''}`}>
+                  <IconComponent size={14} className={tierDisplay.color} />
                 </div>
                 {/* Task status indicator */}
                 {associatedTask && (
-                  <div className={`mt-1 p-1 rounded-full border ${getTaskStatusColor(associatedTask.status)}`} title={`Task ${associatedTask.status}`}>
+                  <div className={`ml-1 p-1 rounded-full border ${getTaskStatusColor(associatedTask.status)}`} title={`Task ${associatedTask.status}`}>
                     {getTaskStatusIcon(associatedTask.status)}
                   </div>
                 )}
@@ -136,15 +143,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             {/* Support donation indicator */}
             {!commissionInfo && product.product_info.donation_info && (
               <div className="absolute top-2 left-2">
-                {(() => {
-                  const tierDisplay = getTierDisplay(product.product_info.donation_info.tier_name);
-                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
-                  return (
-                    <div className={`p-1.5 rounded-full ${tierDisplay.bgColor} border border-white shadow-sm`} title={`Supported by ${product.product_info.donation_info.reddit_username} (${product.product_info.donation_info.tier_name})`}>
-                      <IconComponent size={12} className={tierDisplay.color} />
-                    </div>
-                  );
-                })()}
+                <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}> 
+                  <IconComponent size={14} className={tierDisplay.color} />
+                </div>
               </div>
             )}
           </div>

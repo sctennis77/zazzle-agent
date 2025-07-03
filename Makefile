@@ -187,7 +187,7 @@ run-api:
 	@echo "Waiting for port 8000 to be released..."
 	@while lsof -i :8000 > /dev/null; do sleep 1; done
 	@echo "Starting API server..."
-	$(POETRY) run python -m app.api
+	$(POETRY) run uvicorn app.api:app --host 0.0.0.0 --port 8000 --reload
 
 stop-api:
 	@echo "Stopping API server..."

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { Task } from '../../types/taskTypes.ts';
+import React, { useEffect, useState, useRef } from 'react';
+import type { Task } from '../../types/taskTypes';
 
 interface TaskDashboardProps {
   className?: string;
@@ -114,6 +114,34 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
     }
   };
 
+  const getStageIcon = (stage?: string) => {
+    switch (stage) {
+      case 'post_fetching':
+        return '🔍';
+      case 'post_fetched':
+        return '📄';
+      case 'product_designed':
+        return '🎨';
+      case 'image_generation_started':
+        return '🎭';
+      case 'image_generated':
+        return '🖼️';
+      case 'image_stamped':
+        return '🏷️';
+      case 'commission_complete':
+        return '🎉';
+      default:
+        return '⚙️';
+    }
+  };
+
+  const getProgressBarColor = (progress?: number) => {
+    if (!progress) return 'bg-gray-200';
+    if (progress < 30) return 'bg-red-500';
+    if (progress < 70) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -150,35 +178,24 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
     );
   }
 
+  if (error) {
+    return (
+      <div className={`p-6 ${className}`}>
+        <div className="text-red-600">Error: {error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className={`p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Commission Tasks</h2>
-        <button
-          onClick={fetchTasks}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-        >
-          Refresh
-        </button>
-      </div>
-
-      {error && (
-        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-
+      <h2 className="text-xl font-semibold mb-4">Commission Tasks</h2>
+      
       {tasks.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <p>No tasks found</p>
-        </div>
+        <div className="text-gray-500">No tasks found.</div>
       ) : (
         <div className="space-y-4">
           {tasks.map((task) => (
-            <div
-              key={task.task_id}
-              className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-            >
+            <div key={task.task_id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-2">
@@ -190,6 +207,22 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
                       Commission Task
                     </span>
                   </div>
+                  
+                  {/* Progress bar for in_progress tasks */}
+                  {task.status === 'in_progress' && task.progress !== undefined && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span>{getStageIcon(task.stage)} {task.message || 'Processing...'}</span>
+                        <span>{task.progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(task.progress)}`}
+                          style={{ width: `${task.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="text-sm text-gray-600 space-y-1">
                     <p><strong>Task ID:</strong> {task.task_id}</p>
@@ -208,12 +241,12 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
                 
                 <div className="flex space-x-2">
                   {task.status === 'pending' && (
-                                      <button
-                    onClick={() => cancelTask(task.task_id, 'commission')}
-                    className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                    <button
+                      onClick={() => cancelTask(task.task_id, 'commission')}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   )}
                 </div>
               </div>

@@ -7,6 +7,7 @@ interface CommissionStatusBannerProps {
   onClose: () => void;
   onRefresh: () => void;
   isSidebar?: boolean;
+  isStickyHeader?: boolean;
   onViewProduct?: (task: Task) => void;
 }
 
@@ -15,6 +16,7 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
   onClose, 
   onRefresh,
   isSidebar = false,
+  isStickyHeader = false,
   onViewProduct
 }) => {
   const getStatusIcon = (status: string) => {
@@ -62,9 +64,82 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
     }
   };
 
+  const getStageIcon = (stage?: string) => {
+    switch (stage) {
+      case 'post_fetching':
+        return '🔍';
+      case 'post_fetched':
+        return '📄';
+      case 'product_designed':
+        return '🎨';
+      case 'image_generation_started':
+        return '🎭';
+      case 'image_generated':
+        return '🖼️';
+      case 'image_stamped':
+        return '🏷️';
+      case 'commission_complete':
+        return '🎉';
+      default:
+        return '⚙️';
+    }
+  };
+
+  const getProgressBarColor = (progress?: number) => {
+    if (!progress) return 'bg-gray-300';
+    if (progress < 30) return 'bg-red-500';
+    if (progress < 70) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  // Sticky header banner
+  if (isStickyHeader) {
+    const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress');
+    if (activeTasks.length === 0) return null;
+
+    const primaryTask = activeTasks[0];
+    const progress = primaryTask.progress || 0;
+
+    return (
+      <div className="sticky top-0 z-50 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg border-b border-purple-500">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                <FaSpinner className="animate-spin text-white" />
+                <span className="font-semibold">Active Commission</span>
+              </div>
+              <div className="flex items-center space-x-2 text-sm opacity-90">
+                <span>{getStageIcon(primaryTask.stage)}</span>
+                <span>{primaryTask.message || 'Processing...'}</span>
+                <span className="font-medium">{progress}%</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <div className="w-24 bg-white/20 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-500 ${getProgressBarColor(progress)}`}
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <button
+                onClick={onRefresh}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+                title="Refresh status"
+              >
+                <FaRedo className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const containerClasses = isSidebar 
     ? "bg-white rounded-lg shadow-xl border border-gray-200 backdrop-blur-sm bg-white/95"
@@ -116,7 +191,7 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
                 <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-white border border-gray-200 shadow">
                   {getStatusIcon(task.status)}
                 </div>
-                <div>
+                <div className="flex-1">
                   <div className="font-semibold text-lg text-gray-900 flex items-center gap-2">
                     <span>{task.reddit_username || 'Anonymous'}</span>
                     <span className="text-xs font-normal text-gray-400">•</span>
@@ -130,6 +205,26 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
                       <span className="ml-2 text-xs text-gray-500">${task.amount_usd.toFixed(2)}</span>
                     )}
                   </div>
+                  
+                  {/* Progress bar for in_progress tasks */}
+                  {task.status === 'in_progress' && task.progress !== undefined && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                        <span className="flex items-center gap-1">
+                          <span>{getStageIcon(task.stage)}</span>
+                          <span>{task.message || 'Processing...'}</span>
+                        </span>
+                        <span className="font-medium">{task.progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all duration-500 ${getProgressBarColor(task.progress)}`}
+                          style={{ width: `${task.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {task.created_at && (
                     <div className="text-xs opacity-60 mt-2">
                       Created: {formatDate(task.created_at)}
@@ -138,7 +233,7 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
                 </div>
               </div>
               <div className="flex flex-col items-end space-y-3 min-w-[110px]">
-                {task.status === 'in_progress' && (
+                {task.status === 'in_progress' && !task.progress && (
                   <div className="flex items-center space-x-1 text-base max-w-[140px] truncate whitespace-nowrap">
                     <FaSpinner className="animate-spin text-blue-500" />
                     <span className="truncate">Processing...</span>

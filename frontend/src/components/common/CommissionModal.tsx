@@ -4,7 +4,6 @@ import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElement
 import { Modal } from './Modal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
-import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
 // Initialize Stripe
@@ -13,7 +12,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 interface CommissionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (paymentIntentId?: string) => void;
 }
 
 interface CommissionRequest {
@@ -95,7 +94,7 @@ const CommissionForm: React.FC<{
   isAnonymous: boolean;
   subreddit: string;
   postId?: string;
-  onSuccess: () => void;
+  onSuccess: (paymentIntentId?: string) => void;
   onError: (error: string) => void;
 }> = ({ 
   amount: _amount, 
@@ -143,7 +142,7 @@ const CommissionForm: React.FC<{
         onError(error.message || 'Payment failed');
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         // Payment succeeded, call onSuccess directly
-        onSuccess();
+        onSuccess(paymentIntent.id);
       } else {
         // Payment is processing or requires additional action
         onError('Payment is being processed. Please check your email for confirmation.');
@@ -584,9 +583,13 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
 
   const navigate = useNavigate();
 
-  const handleSuccess = () => {
+  const handleSuccess = (paymentIntentId?: string) => {
     onClose();
-    navigate('/', { state: { showToast: true } });
+    if (paymentIntentId) {
+      navigate(`/donation/success?payment_intent_id=${paymentIntentId}`);
+    } else {
+      navigate('/', { state: { showToast: true } });
+    }
   };
 
   const handleError = (errorMessage: string) => {

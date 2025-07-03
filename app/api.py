@@ -539,8 +539,7 @@ async def handle_payment_intent_succeeded(payment_intent):
         try:
             # Check if this payment intent has already been processed
             existing_donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id=payment_intent.id,
-                status=DonationStatus.SUCCEEDED.value
+                stripe_payment_intent_id=payment_intent.id
             ).first()
             
             if existing_donation:
@@ -741,27 +740,10 @@ async def get_donation_by_payment_intent(
     """
     try:
         donation = stripe_service.get_donation_by_payment_intent(db, payment_intent_id)
-        
         if not donation:
             raise HTTPException(status_code=404, detail="Donation not found")
         
-        return DonationSchema(
-            id=donation.id,
-            stripe_payment_intent_id=donation.stripe_payment_intent_id,
-            amount_cents=int(float(donation.amount_usd) * 100),
-            amount_usd=donation.amount_usd,
-            currency="usd",
-            customer_name=donation.customer_name,
-            customer_email=donation.customer_email,
-            message=donation.message,
-            subreddit=donation.subreddit.subreddit_name if donation.subreddit else None,
-            reddit_username=donation.reddit_username,
-            is_anonymous=donation.is_anonymous,
-            status=donation.status,
-            created_at=donation.created_at,
-            updated_at=donation.updated_at,
-        )
-        
+        return DonationSchema.model_validate(donation)
     except HTTPException:
         raise
     except Exception as e:
@@ -923,41 +905,20 @@ async def get_subreddit_fundraising(db: Session = Depends(get_db)):
 
 
 @app.get("/api/tasks")
-async def get_tasks(db: Session = Depends(get_db)):
+async def get_tasks(limit: int = 50, db: Session = Depends(get_db)):
     """
     Get all tasks.
     
     Args:
+        limit: Maximum number of tasks to return
         db: Database session
         
     Returns:
         List: Tasks with related data
     """
     try:
-        tasks = (
-            db.query(PipelineTask)
-            .join(PipelineTask.subreddit)
-            .order_by(PipelineTask.created_at.desc())
-            .all()
-        )
-        
-        return [
-            {
-                "id": task.id,
-                "type": task.type,
-                "subreddit": task.subreddit.subreddit_name,
-                "donation_id": task.donation_id,
-                "status": task.status,
-                "priority": task.priority,
-                "created_at": task.created_at.isoformat(),
-                "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
-                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-                "error_message": task.error_message,
-                "context_data": task.context_data,
-                "pipeline_run_id": task.pipeline_run_id,
-            }
-            for task in tasks
-        ]
+        tasks = task_manager.list_tasks(limit=limit)
+        return tasks
         
     except Exception as e:
         logger.error(f"Error getting tasks: {str(e)}")
@@ -1495,69 +1456,26 @@ async def create_commission_task(donation_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=f"Error creating task: {str(e)}")
 
 
-@app.get("/api/tasks")
-async def list_tasks(status: Optional[str] = None):
-    """
-    List all tasks.
-    
-    Args:
-        status: Optional status filter
-        
-    Returns:
-        List: Task information
-    """
-    try:
-        tasks = task_manager.list_tasks(status_filter=status)
-        return tasks
-        
-    except Exception as e:
-        logger.error(f"Error listing tasks: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error listing tasks: {str(e)}")
-
-
 @app.get("/api/tasks/{task_id}")
-async def get_task_status(task_id: str, task_type: str):
+async def get_task_status(task_id: str):
     """
     Get task status.
-    
     Args:
         task_id: ID of the task
-        task_type: Type of task (k8s_job or database_queue)
-        
     Returns:
         Dict: Task status information
     """
     try:
-        status = task_manager.get_task_status(task_id, task_type)
+        status = task_manager.get_task_status(task_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail="Task not found")
         return status
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting task status: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error getting task status: {str(e)}")
-
-
-@app.delete("/api/tasks/{task_id}")
-async def cancel_task(task_id: str, task_type: str):
-    """
-    Cancel a task.
-    
-    Args:
-        task_id: ID of the task
-        task_type: Type of task (k8s_job or database_queue)
-        
-    Returns:
-        Dict: Success status
-    """
-    try:
-        success = task_manager.cancel_task(task_id, task_type)
-        return {"success": success}
-        
-    except Exception as e:
-        logger.error(f"Error cancelling task: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error cancelling task: {str(e)}")
 
 
 @app.websocket("/ws/tasks")

@@ -905,6 +905,26 @@ class DonationSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("subreddit", mode="before")
+    @classmethod
+    def extract_subreddit_name(cls, value):
+        """Extract subreddit name from relationship object if needed."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        # Handle SQLAlchemy relationship object
+        if hasattr(value, 'subreddit_name'):
+            return value.subreddit_name
+        # Handle case where subreddit might be a different object
+        if hasattr(value, '__class__') and 'Subreddit' in str(value.__class__):
+            # Try to get subreddit_name attribute
+            try:
+                return getattr(value, 'subreddit_name', str(value))
+            except:
+                return str(value)
+        return str(value)
+
     class Config:
         from_attributes = True
 

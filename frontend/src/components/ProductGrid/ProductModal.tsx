@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
-import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem, FaPaintBrush } from 'react-icons/fa';
+import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 
@@ -27,7 +27,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const [showDonation, setShowDonation] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
-  const [_loadingDonation, setLoadingDonation] = useState(false);
   const postContent = product.reddit_post.content || '';
   const previewLength = 200;
   const isLong = postContent.length > previewLength;
@@ -39,7 +38,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   useEffect(() => {
     if (isOpen) {
       const fetchDonationInfo = async () => {
-        setLoadingDonation(true);
         try {
           const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
           if (response.ok) {
@@ -53,8 +51,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
           }
         } catch (error) {
           console.error('Error fetching donation info:', error);
-        } finally {
-          setLoadingDonation(false);
         }
       };
 
@@ -122,19 +118,34 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
               {commissionInfo && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-900">Commissioned by</h4>
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-purple-100 border border-purple-200">
-                        <FaPaintBrush size={20} className="text-purple-600" />
-                      </div>
+                      {(() => {
+                        // Use donation tier for commission styling
+                        const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
+                        const tierDisplay = getTierDisplay(tierName);
+                        const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                        return (
+                          <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
+                            <IconComponent size={20} className={tierDisplay.color} />
+                          </div>
+                        );
+                      })()}
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900">
                             {commissionInfo.reddit_username}
                           </span>
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            {commissionInfo.commission_type || 'Commission'}
-                          </span>
+                          {/* Show tier name as badge, styled like donation */}
+                          {(() => {
+                            const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
+                            const tierDisplay = getTierDisplay(tierName);
+                            return tierName ? (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${tierDisplay.bgColor} ${tierDisplay.color}`}>
+                                {tierName}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         {commissionInfo.commission_message && (
                           <p className="text-sm text-gray-600 mt-1 italic">

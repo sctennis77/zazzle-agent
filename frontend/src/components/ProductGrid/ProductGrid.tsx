@@ -125,14 +125,14 @@ export const ProductGrid: React.FC = () => {
             }, 7000);
           }
         } else if (message.type === 'task_created') {
-          setActiveTasks(prevTasks => [message.task_info, ...prevTasks]);
+          setActiveTasks(prevTasks => dedupeTasks([message.task_info, ...prevTasks]));
           // Subscribe to the new task
           if (ws.readyState === WebSocket.OPEN) {
             subscribeToActiveTasks(ws, [message.task_info]);
           }
         } else if (message.type === 'general_update') {
           if (message.data.type === 'task_created') {
-            setActiveTasks(prevTasks => [message.data.task_info, ...prevTasks]);
+            setActiveTasks(prevTasks => dedupeTasks([message.data.task_info, ...prevTasks]));
             // Subscribe to the new task
             if (ws.readyState === WebSocket.OPEN) {
               subscribeToActiveTasks(ws, [message.data.task_info]);
@@ -161,7 +161,7 @@ export const ProductGrid: React.FC = () => {
         const active = tasks.filter((task: Task) => 
           task.status === 'pending' || task.status === 'in_progress'
         );
-        setActiveTasks(active);
+        setActiveTasks(prevTasks => dedupeTasks([...active, ...prevTasks]));
         // Subscribe to all active tasks if WebSocket is open
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           subscribeToActiveTasks(wsRef.current, active);
@@ -212,6 +212,15 @@ export const ProductGrid: React.FC = () => {
   );
 
   const hasActiveCommissions = inProgressTasks.length > 0;
+
+  // Helper to ensure tasks are unique by task_id
+  const dedupeTasks = (tasks: Task[]): Task[] => {
+    const map = new Map<string, Task>();
+    for (const task of tasks) {
+      map.set(task.task_id, { ...map.get(task.task_id), ...task });
+    }
+    return Array.from(map.values());
+  };
 
   if (loading) {
     return (

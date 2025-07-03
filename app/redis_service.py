@@ -8,6 +8,7 @@ for real-time task updates across multiple services.
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Callable, Dict, Optional
 import redis.asyncio as redis
 from app.config import (
@@ -90,7 +91,7 @@ class RedisService:
                 "type": "task_update",
                 "task_id": task_id,
                 "data": update,
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": time.time(),
             }
             
             await self.redis_client.publish(
@@ -112,7 +113,7 @@ class RedisService:
             message = {
                 "type": "general_update",
                 "data": update,
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": time.time(),
             }
             
             await self.redis_client.publish(
@@ -154,14 +155,19 @@ class RedisService:
                 if not self._running:
                     break
                 
+                logger.info(f"Redis received message: {message}")
+                
                 if message["type"] == "message":
                     channel = message["channel"]
                     data = message["data"]
+                    
+                    logger.info(f"Processing Redis message on channel {channel}: {data}")
                     
                     if channel in self._subscribers:
                         try:
                             # Parse the JSON message
                             parsed_data = json.loads(data)
+                            logger.info(f"Parsed Redis message: {parsed_data}")
                             callback = self._subscribers[channel]
                             if asyncio.iscoroutinefunction(callback):
                                 await callback(parsed_data)
@@ -169,8 +175,12 @@ class RedisService:
                                 callback(parsed_data)
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse Redis message: {e}")
+                            logger.error(f"Raw message data: {data}")
                         except Exception as e:
                             logger.error(f"Error in subscriber callback: {e}")
+                            logger.error(f"Parsed data that caused error: {parsed_data}")
+                    else:
+                        logger.warning(f"No subscriber found for channel: {channel}")
             
         except Exception as e:
             logger.error(f"Error in Redis listener: {e}")

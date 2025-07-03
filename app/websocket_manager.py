@@ -60,8 +60,10 @@ class WebSocketManager:
             logger.info("WebSocket Manager started with Redis integration")
             
         except Exception as e:
-            logger.error(f"Failed to start WebSocket Manager: {e}")
-            raise
+            logger.warning(f"Redis not available, starting WebSocket Manager without Redis: {e}")
+            logger.info("WebSocket Manager started without Redis integration")
+            # Continue without Redis - WebSocket functionality will still work
+            # but cross-service communication will be limited
     
     async def stop(self) -> None:
         """Stop the WebSocket manager and Redis listener."""
@@ -80,15 +82,19 @@ class WebSocketManager:
     async def _handle_redis_task_update(self, message: Dict[str, Any]) -> None:
         """Handle task updates from Redis."""
         try:
+            logger.info(f"Received Redis task update message: {message}")
             task_id = message.get("task_id")
             data = message.get("data", {})
             
             if task_id:
                 await self._broadcast_to_task_subscribers(task_id, data)
                 logger.info(f"Handled Redis task update for {task_id}")
+            else:
+                logger.warning(f"Redis task update message missing task_id: {message}")
             
         except Exception as e:
             logger.error(f"Error handling Redis task update: {e}")
+            logger.error(f"Message that caused error: {message}")
     
     async def _handle_redis_general_update(self, message: Dict[str, Any]) -> None:
         """Handle general updates from Redis."""
@@ -137,7 +143,12 @@ class WebSocketManager:
     
     async def broadcast_task_update(self, task_id: str, update: Dict[str, Any]):
         """Broadcast a task update to Redis (for cross-service communication)."""
-        await redis_service.publish_task_update(task_id, update)
+        try:
+            await redis_service.publish_task_update(task_id, update)
+        except Exception as e:
+            logger.warning(f"Redis not available for task update broadcast: {e}")
+            # Fallback to direct WebSocket broadcast
+            await self._broadcast_to_task_subscribers(task_id, update)
     
     async def _broadcast_to_task_subscribers(self, task_id: str, update: Dict[str, Any]):
         """Broadcast a task update to all subscribed clients (internal method)."""
@@ -166,7 +177,12 @@ class WebSocketManager:
     
     async def broadcast_general_update(self, update: Dict[str, Any]):
         """Broadcast a general update to Redis (for cross-service communication)."""
-        await redis_service.publish_general_update(update)
+        try:
+            await redis_service.publish_general_update(update)
+        except Exception as e:
+            logger.warning(f"Redis not available for general update broadcast: {e}")
+            # Fallback to direct WebSocket broadcast
+            await self._broadcast_to_all_connections(update)
     
     async def _broadcast_to_all_connections(self, update: Dict[str, Any]):
         """Broadcast a general update to all connected clients (internal method)."""
