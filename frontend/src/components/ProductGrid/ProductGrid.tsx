@@ -9,8 +9,11 @@ import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
 
+interface ProductGridProps {
+  onCommissionProgressChange?: (inProgress: boolean) => void;
+}
 
-export const ProductGrid: React.FC = () => {
+export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange }) => {
   const { products, loading, error, refresh: refreshProducts } = useProducts();
   const [searchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
@@ -212,6 +215,13 @@ export const ProductGrid: React.FC = () => {
   );
 
   const hasActiveCommissions = inProgressTasks.length > 0;
+
+  // Notify parent of commission progress state
+  useEffect(() => {
+    if (onCommissionProgressChange) {
+      onCommissionProgressChange(hasActiveCommissions);
+    }
+  }, [hasActiveCommissions, onCommissionProgressChange]);
 
   // Helper to ensure tasks are unique by task_id
   const dedupeTasks = (tasks: Task[]): Task[] => {

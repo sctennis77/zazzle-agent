@@ -9,6 +9,7 @@ import DonationSuccessPage from './components/common/DonationSuccessPage';
 
 function App() {
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
+  const [isCommissionInProgress, setIsCommissionInProgress] = useState(false);
 
   const handleCommissionClick = () => {
     setIsCommissionModalOpen(true);
@@ -26,10 +27,10 @@ function App() {
 
   return (
     <Router>
-      <Layout onCommissionClick={handleCommissionClick}>
+      <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
         <Routes>
-          <Route path="/" element={<ProductGrid />} />
-          <Route path="/tasks" element={<ProductGrid />} />
+          <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
+          <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
         </Routes>
         <CommissionModal 

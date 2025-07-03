@@ -88,7 +88,7 @@ export const InProgressProductCard: React.FC<InProgressProductCardProps> = ({
               <img 
                 src={logo} 
                 alt="Clouvel" 
-                className="w-16 h-16 object-contain animate-pulse"
+                className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-white/30 ring-4 ring-white/10 animate-pulse transition-all duration-300"
                 style={{ animationDuration: '2s' }}
               />
               {/* Subtle glow effect */}
