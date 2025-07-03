@@ -21,55 +21,25 @@
     radial-gradient(2px 2px at 160px 30px, #ddd, transparent);
   background-repeat: repeat;
   background-size: 200px 100px;
-  animation: twinkle 4s infinite ease-in-out;
+  animation: twinkle 4s linear infinite;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.7s ease-in-out;
 }
 
-@keyframes shooting-star {
-  0% {
-    opacity: 0;
-    transform: translateX(0) translateY(0) scaleX(1);
-  }
-  10% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-    transform: translateX(30px) translateY(8px) scaleX(1.2);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(60px) translateY(16px) scaleX(1.4);
-  }
-}
-.shooting-star {
-  animation: shooting-star 2.5s linear infinite;
-}
-.shooting-star.delay-1 {
-  animation-delay: 1s;
-}
-.shooting-star.delay-2 {
-  animation-delay: 1.5s;
+.group:hover .star-bg {
+  opacity: 1;
 }
 
 @keyframes twinkle {
-  0%, 100% { opacity: 1; }
-  20% { opacity: 0.7; }
-  40% { opacity: 1; }
-  60% { opacity: 0.5; }
-  80% { opacity: 1; }
+  0%, 100% { filter: brightness(1); }
+  20% { filter: brightness(0.7); }
+  40% { filter: brightness(1); }
+  60% { filter: brightness(0.5); }
+  80% { filter: brightness(1); }
 }
-.twinkle {
-  animation: twinkle 2.5s infinite ease-in-out;
-}
-.twinkle.delay-1 { animation-delay: 0.3s; }
-.twinkle.delay-2 { animation-delay: 0.6s; }
-.twinkle.delay-3 { animation-delay: 0.9s; }
-.twinkle.delay-4 { animation-delay: 1.2s; }
-.twinkle.delay-5 { animation-delay: 1.5s; }
-.twinkle.delay-6 { animation-delay: 1.8s; }
-.twinkle.delay-7 { animation-delay: 2.1s; }
-.twinkle.delay-8 { animation-delay: 2.4s; }
-.twinkle.delay-9 { animation-delay: 2.7s; }
 
 /* Success page animations */
 @keyframes slide-in-from-bottom {
@@ -129,3 +99,19 @@
   stroke-dasharray: 100;
   animation: checkmark-draw 0.8s ease-out forwards;
 }
+
+/* Logo glow animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(147, 51, 234, 0.3), 0 0 40px rgba(147, 51, 234, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(147, 51, 234, 0.5), 0 0 60px rgba(147, 51, 234, 0.3);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+
