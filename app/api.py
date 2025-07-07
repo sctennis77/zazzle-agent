@@ -303,379 +303,32 @@ async def get_product_by_image(image_name: str):
         db.close()
 
 
-@app.post("/api/donations/create-checkout-session", response_model=CheckoutSessionResponse)
-async def create_checkout_session(
-    donation_request: DonationRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Create a Stripe Checkout session for Express Checkout Element.
-    
-    This follows Stripe's best practices by using their hosted checkout page
-    which handles all payment processing securely on Stripe's servers.
-    """
+@app.post("/api/donations/create-payment-intent")
+async def create_payment_intent(donation_request: DonationRequest):
+    """Create a Stripe payment intent for a donation."""
     try:
-        logger.info(f"Creating checkout session for {donation_request.donation_type} donation: ${donation_request.amount_usd}")
+        # Debug logging
+        logger.info(f"Received donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
         
-        # Extract and validate post_id if provided
+        # Extract post ID from subreddit if provided
         post_id = None
         if donation_request.post_id:
             post_id = extract_post_id(donation_request.post_id)
             logger.info(f"Extracted post ID: {post_id} from input: {donation_request.post_id}")
+            donation_request.post_id = post_id
         
-        # --- NEW: Check post_id existence for support donations ---
-        if donation_request.donation_type == "support":
-            if not post_id:
-                raise HTTPException(status_code=422, detail="post_id is required for support donations")
-            # Check if post_id exists in a completed pipeline run
-            from app.db.models import PipelineRun, RedditPost
-            pipeline_run = (
-                db.query(PipelineRun)
-                .join(RedditPost, PipelineRun.id == RedditPost.pipeline_run_id)
-                .filter(
-                    PipelineRun.status == "completed",
-                    RedditPost.post_id == post_id
-                )
-                .first()
-            )
-            if not pipeline_run:
-                raise HTTPException(status_code=422, detail=f"No completed pipeline run found for post_id '{post_id}'")
-        # --- END NEW ---
-
-        # Convert amount to cents for Stripe
-        amount_cents = int(float(donation_request.amount_usd) * 100)
+        # Create payment intent
+        result = stripe_service.create_payment_intent(donation_request)
         
-        # Create checkout session with Express Checkout support
-        metadata = {
-            'donation_type': donation_request.donation_type,
-            'subreddit': donation_request.subreddit,
-            'post_id': post_id or '',
-            'commission_message': donation_request.commission_message or '',
-            'message': donation_request.message or '',
-            'customer_name': donation_request.customer_name or '',
-            'reddit_username': donation_request.reddit_username or '',
-            'is_anonymous': str(donation_request.is_anonymous),
-        }
+        logger.info(f"Created payment intent {result['payment_intent_id']} for donation")
         
-        # DEBUG: Log the metadata being set
-        logger.info(f"Setting metadata for {donation_request.donation_type} donation: {metadata}")
-        
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card', 'link'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': f'{donation_request.donation_type.title()} Donation',
-                        'description': f'Donation to r/{donation_request.subreddit}',
-                    },
-                    'unit_amount': amount_cents,
-                },
-                'quantity': 1,
-            }],
-            mode='payment',
-            success_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/success?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{os.getenv("FRONTEND_URL", "http://localhost:5173")}/donation/cancel',
-            customer_email=donation_request.customer_email,
-            metadata=metadata,
-            payment_intent_data={
-                'metadata': metadata
-            }
-        )
-        
-        # DEBUG: Log the created session metadata
-        logger.info(f"Created checkout session {checkout_session.id} with metadata: {checkout_session.metadata}")
-        logger.info(f"Created checkout session {checkout_session.id} for donation")
         return {
-            "session_id": checkout_session.id,
-            "url": checkout_session.url,
+            "client_secret": result["client_secret"],
+            "payment_intent_id": result["payment_intent_id"]
         }
-        
     except Exception as e:
-        logger.error(f"Error creating checkout session: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
-
-
-@app.post("/api/donations/webhook")
-async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events."""
-    try:
-        body = await request.body()
-        sig_header = request.headers.get('stripe-signature')
-        
-        # For development/testing with Stripe CLI, skip signature verification
-        webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '')
-        if not webhook_secret or os.getenv('STRIPE_CLI_MODE', 'false').lower() == 'true':
-            # Parse event without signature verification for development
-            import json
-            event = json.loads(body)
-            logger.info("Skipping webhook signature verification (development mode)")
-        else:
-            if not sig_header:
-                raise HTTPException(status_code=400, detail="Missing stripe-signature header")
-            
-            # Verify webhook signature
-            try:
-                event = stripe.Webhook.construct_event(
-                    body, sig_header, webhook_secret
-                )
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail="Invalid payload")
-            except stripe.error.SignatureVerificationError as e:
-                raise HTTPException(status_code=400, detail="Invalid signature")
-        
-        logger.info(f"Received Stripe webhook event: {event['type']} with ID: {event.get('id', 'unknown')}")
-        
-        # Handle the event
-        if event['type'] == 'checkout.session.completed':
-            session = event['data']['object']
-            await handle_checkout_session_completed(session)
-        elif event['type'] == 'payment_intent.succeeded':
-            payment_intent = event['data']['object']
-            await handle_payment_intent_succeeded(payment_intent)
-        elif event['type'] == 'payment_intent.payment_failed':
-            payment_intent = event['data']['object']
-            await handle_payment_intent_failed(payment_intent)
-        else:
-            logger.info(f"Unhandled event type: {event['type']}")
-        
-        return {"status": "success"}
-        
-    except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        raise HTTPException(status_code=500, detail="Webhook processing failed")
-
-
-async def handle_checkout_session_completed(session):
-    """Handle successful checkout session completion."""
-    try:
-        logger.info(f"Processing completed checkout session: {session.id}")
-        
-        # Get database session
-        db = SessionLocal()
-        try:
-            # Check if this checkout session has already been processed
-            payment_intent_id = session.payment_intent
-            if payment_intent_id:
-                existing_donation = db.query(Donation).filter_by(
-                    stripe_payment_intent_id=payment_intent_id,
-                    status=DonationStatus.SUCCEEDED.value
-                ).first()
-                
-                if existing_donation:
-                    logger.info(f"Checkout session {session.id} already processed for donation {existing_donation.id}, skipping")
-                    return
-            
-            # Extract donation data from session metadata
-            metadata = session.metadata
-            payment_intent_id = session.payment_intent
-            
-            # DEBUG: Log the metadata to see what we're getting
-            logger.info(f"Session metadata: {metadata}")
-            logger.info(f"Payment intent ID: {payment_intent_id}")
-            
-            # Create donation request from metadata
-            # Handle missing commission_type for commission donations
-            commission_type = metadata.get('commission_type')
-            if metadata.get('donation_type') == 'commission' and not commission_type:
-                # Default to random_subreddit if commission_type is missing
-                commission_type = 'random_subreddit'
-                logger.warning(f"Missing commission_type in metadata for commission donation, defaulting to {commission_type}")
-            
-            # Extract post ID if provided
-            post_id = metadata.get('post_id')
-            if post_id:
-                post_id = extract_post_id(post_id)
-                logger.info(f"Extracted post ID: {post_id} from metadata: {metadata.get('post_id')}")
-            
-            logger.info(f"Creating donation request from metadata: donation_type={metadata.get('donation_type')}, commission_type={commission_type}, post_id={post_id}, subreddit={metadata.get('subreddit')}")
-            
-            donation_request = DonationRequest(
-                amount_usd=Decimal(session.amount_total / 100),
-                customer_email=session.customer_email,
-                customer_name=metadata.get('customer_name'),
-                message=metadata.get('message'),
-                subreddit=metadata.get('subreddit'),
-                reddit_username=metadata.get('reddit_username'),
-                is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
-                donation_type=metadata.get('donation_type'),
-                post_id=post_id,
-                commission_message=metadata.get('commission_message'),
-                commission_type=commission_type,
-            )
-            
-            # Save donation to database
-            stripe_service = StripeService()
-            donation = stripe_service.save_donation_to_db(db, {
-                'payment_intent_id': payment_intent_id,
-                'amount_cents': session.amount_total,
-                'amount_usd': str(donation_request.amount_usd),
-                'metadata': metadata
-            }, donation_request)
-            
-            # Update donation status to succeeded
-            stripe_service.update_donation_status(db, payment_intent_id, DonationStatus.SUCCEEDED)
-            
-            # Process subreddit tiers if applicable
-            stripe_service.process_subreddit_tiers(db, donation)
-            
-            logger.info(f"Successfully processed checkout session {session.id} for donation {donation.id}")
-            
-        finally:
-            db.close()
-            
-    except Exception as e:
-        logger.error(f"Error handling checkout session completion: {str(e)}")
-        raise
-
-
-async def handle_payment_intent_succeeded(payment_intent):
-    """Handle successful payment intent."""
-    try:
-        logger.info(f"Processing successful payment intent: {payment_intent.id}")
-        
-        # Get database session
-        db = SessionLocal()
-        try:
-            # Check if this payment intent has already been processed
-            existing_donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id=payment_intent.id
-            ).first()
-            
-            if existing_donation:
-                logger.info(f"Payment intent {payment_intent.id} already processed for donation {existing_donation.id}, skipping")
-                return
-            
-            # Extract metadata
-            metadata = payment_intent.metadata
-            
-            logger.info(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
-            
-            # Create donation request from metadata
-            # Handle missing commission_type for commission donations
-            commission_type = metadata.get('commission_type')
-            if metadata.get('donation_type') == 'commission' and not commission_type:
-                # Default to random_subreddit if commission_type is missing
-                commission_type = 'random_subreddit'
-                logger.warning(f"Missing commission_type in metadata for commission donation, defaulting to {commission_type}")
-            
-            # Extract post ID if provided
-            post_id = metadata.get('post_id')
-            if post_id:
-                post_id = extract_post_id(post_id)
-                logger.info(f"Extracted post ID: {post_id} from metadata: {metadata.get('post_id')}")
-            
-            logger.info(f"Creating donation request from metadata: donation_type={metadata.get('donation_type')}, commission_type={commission_type}, post_id={post_id}, subreddit={metadata.get('subreddit')}")
-            
-            donation_request = DonationRequest(
-                amount_usd=Decimal(payment_intent.amount / 100),
-                customer_email=payment_intent.receipt_email,
-                customer_name=metadata.get('customer_name'),
-                message=metadata.get('message'),
-                subreddit=metadata.get('subreddit'),
-                reddit_username=metadata.get('reddit_username'),
-                is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
-                donation_type=metadata.get('donation_type'),
-                post_id=post_id,
-                commission_message=metadata.get('commission_message'),
-                commission_type=commission_type,
-            )
-            
-            # Debug logging for extracted donation request
-            logger.info(f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
-            
-            # Process the donation
-            donation = stripe_service.save_donation_to_db(db, {
-                "payment_intent_id": payment_intent.id,
-                "amount_cents": payment_intent.amount,
-                "amount_usd": Decimal(payment_intent.amount / 100),
-                "currency": payment_intent.currency,
-                "status": payment_intent.status,
-                "metadata": payment_intent.metadata,
-                "receipt_email": getattr(payment_intent, "receipt_email", None),
-                "created": payment_intent.created,
-            }, donation_request)
-            
-            # Process subreddit tiers if applicable
-            stripe_service.process_subreddit_tiers(db, donation)
-            
-            # Create commission task if this is a commission donation
-            if donation.donation_type == "commission":
-                try:
-                    # Prepare task data
-                    task_data = {
-                        "donation_id": donation.id,
-                        "amount_usd": float(donation.amount_usd),
-                        "tier": donation.tier,
-                        "customer_email": donation.customer_email,
-                        "customer_name": donation.customer_name,
-                        "message": donation.message,
-                        "commission_type": donation.commission_type,
-                        "post_id": donation.post_id,
-                        "commission_message": donation.commission_message,
-                        "subreddit_name": donation.subreddit.subreddit_name if donation.subreddit else None,
-                        "reddit_username": donation.reddit_username,
-                    }
-                    
-                    # Create commission task
-                    task_id = task_manager.create_commission_task(donation.id, task_data)
-                    
-                    # Update donation status to processing
-                    donation.status = DonationStatus.PROCESSING.value
-                    db.commit()
-                    
-                    logger.info(f"Created commission task {task_id} for donation {donation.id}")
-                    
-                    # Broadcast task creation
-                    task_info = {
-                        "task_id": task_id,
-                        "status": "pending",
-                        "created_at": datetime.now().isoformat(),
-                        "donation_id": donation.id,
-                        "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
-                        "tier": donation.tier,
-                        "subreddit": donation.subreddit.subreddit_name if donation.subreddit else None,
-                        "amount_usd": float(donation.amount_usd),
-                        "is_anonymous": donation.is_anonymous
-                    }
-                    await websocket_manager.broadcast_general_update({
-                        "type": "task_created",
-                        "task_info": task_info,
-                        "donation_id": donation.id
-                    })
-                    
-                except Exception as e:
-                    logger.error(f"Error creating commission task: {e}")
-                    # Fallback to succeeded status if task creation fails
-                    stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
-            else:
-                # Update donation status to succeeded for non-commission donations
-                stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
-            
-        finally:
-            db.close()
-            
-    except Exception as e:
-        logger.error(f"Error handling payment intent success: {str(e)}")
-        raise
-
-
-async def handle_payment_intent_failed(payment_intent):
-    """Handle failed payment intent."""
-    try:
-        logger.info(f"Processing failed payment intent: {payment_intent.id}")
-        
-        # Get database session
-        db = SessionLocal()
-        try:
-            stripe_service = StripeService()
-            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.FAILED)
-        finally:
-            db.close()
-            
-    except Exception as e:
-        logger.error(f"Error handling payment intent failure: {str(e)}")
-        raise
+        logger.error(f"Error creating payment intent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/donations/summary", response_model=DonationSummary)
@@ -736,14 +389,35 @@ async def get_donation_by_payment_intent(
         db: Database session
         
     Returns:
-        DonationSchema: Donation information
+        DonationSchema: The donation data
     """
     try:
         donation = stripe_service.get_donation_by_payment_intent(db, payment_intent_id)
         if not donation:
             raise HTTPException(status_code=404, detail="Donation not found")
         
-        return DonationSchema.model_validate(donation)
+        # Convert database model to schema manually to handle relationships
+        return DonationSchema(
+            id=donation.id,
+            stripe_payment_intent_id=donation.stripe_payment_intent_id,
+            amount_cents=donation.amount_cents,
+            amount_usd=donation.amount_usd,
+            currency=donation.currency,
+            status=donation.status,
+            tier=donation.tier,
+            customer_email=donation.customer_email,
+            customer_name=donation.customer_name,
+            message=donation.message,
+            subreddit=donation.subreddit.subreddit_name if donation.subreddit else None,
+            reddit_username=donation.reddit_username,
+            is_anonymous=donation.is_anonymous,
+            donation_type=donation.donation_type,
+            commission_type=donation.commission_type,
+            post_id=donation.post_id,
+            commission_message=donation.commission_message,
+            created_at=donation.created_at,
+            updated_at=donation.updated_at,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1316,34 +990,6 @@ async def get_product_donations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/api/donations/create-payment-intent")
-async def create_payment_intent(donation_request: DonationRequest):
-    """Create a Stripe payment intent for a donation."""
-    try:
-        # Debug logging
-        logger.info(f"Received donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
-        
-        # Extract post ID from subreddit if provided
-        post_id = None
-        if donation_request.post_id:
-            post_id = extract_post_id(donation_request.post_id)
-            logger.info(f"Extracted post ID: {post_id} from input: {donation_request.post_id}")
-            donation_request.post_id = post_id
-        
-        # Create payment intent
-        result = stripe_service.create_payment_intent(donation_request)
-        
-        logger.info(f"Created payment intent {result['payment_intent_id']} for donation")
-        
-        return {
-            "client_secret": result["client_secret"],
-            "payment_intent_id": result["payment_intent_id"]
-        }
-    except Exception as e:
-        logger.error(f"Error creating payment intent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.put("/api/donations/payment-intent/{payment_intent_id}/update")
 async def update_payment_intent(payment_intent_id: str, donation_request: DonationRequest):
     """Update a Stripe payment intent with new metadata and amount."""
@@ -1382,29 +1028,178 @@ async def update_payment_intent(payment_intent_id: str, donation_request: Donati
             raise HTTPException(status_code=500, detail=f"Failed to update payment intent: {error_message}")
 
 
+@app.post("/api/donations/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
+    try:
+        body = await request.body()
+        sig_header = request.headers.get('stripe-signature')
+        
+        # For development/testing with Stripe CLI, skip signature verification
+        webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+        if not webhook_secret or os.getenv('STRIPE_CLI_MODE', 'false').lower() == 'true':
+            # Parse event without signature verification for development
+            import json
+            event = json.loads(body)
+            logger.info("Skipping webhook signature verification (development mode)")
+        else:
+            if not sig_header:
+                raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+            
+            # Verify webhook signature
+            try:
+                event = stripe.Webhook.construct_event(
+                    body, sig_header, webhook_secret
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail="Invalid payload")
+            except stripe.error.SignatureVerificationError as e:
+                raise HTTPException(status_code=400, detail="Invalid signature")
+        
+        logger.info(f"Received Stripe webhook event: {event['type']}")
+        
+        # Handle the event
+        if event['type'] == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            await handle_payment_intent_succeeded(payment_intent)
+        elif event['type'] == 'payment_intent.payment_failed':
+            payment_intent = event['data']['object']
+            await handle_payment_intent_failed(payment_intent)
+        else:
+            logger.info(f"Unhandled event type: {event['type']}")
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        logger.error(f"Error processing webhook: {str(e)}")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+
+
+
+
+async def handle_payment_intent_succeeded(payment_intent):
+    """Handle successful payment intent."""
+    try:
+        logger.info(f"Processing successful payment intent: {payment_intent.id}")
+        
+        # Get database session
+        db = SessionLocal()
+        try:
+            # Check if this payment intent has already been processed
+            existing_donation = db.query(Donation).filter_by(
+                stripe_payment_intent_id=payment_intent.id,
+                status=DonationStatus.SUCCEEDED.value
+            ).first()
+            
+            if existing_donation:
+                logger.info(f"Payment intent {payment_intent.id} already processed for donation {existing_donation.id}, skipping")
+                return
+            
+            # Extract metadata
+            metadata = payment_intent.metadata
+            
+            logger.info(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
+            
+            # Create donation request from metadata
+            donation_request = DonationRequest(
+                amount_usd=Decimal(payment_intent.amount / 100),
+                customer_email=payment_intent.receipt_email,
+                customer_name=metadata.get('customer_name'),
+                message=metadata.get('message'),
+                subreddit=metadata.get('subreddit'),
+                reddit_username=metadata.get('reddit_username'),
+                is_anonymous=metadata.get('is_anonymous', 'false').lower() == 'true',
+                donation_type=metadata.get('donation_type'),
+                post_id=metadata.get('post_id') if metadata.get('post_id') else None,
+                commission_message=metadata.get('commission_message'),
+                commission_type=metadata.get('commission_type'),
+            )
+            
+            # Debug logging for extracted donation request
+            logger.info(f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
+            
+            # Process the donation
+            donation = stripe_service.save_donation_to_db(db, {
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": payment_intent.amount,
+                "amount_usd": Decimal(payment_intent.amount / 100),
+                "currency": payment_intent.currency,
+                "status": payment_intent.status,
+                "metadata": payment_intent.metadata,
+                "receipt_email": getattr(payment_intent, "receipt_email", None),
+                "created": payment_intent.created,
+            }, donation_request)
+            
+            # Update donation status to succeeded
+            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
+            
+            # Process subreddit tiers if applicable
+            stripe_service.process_subreddit_tiers(db, donation)
+            
+            # Create commission task if this is a commission donation
+            if donation.donation_type == "commission":
+                logger.info(f"Creating commission task for donation {donation.id}")
+                
+                # Prepare task data for TaskManager
+                task_data = {
+                    "donation_id": donation.id,
+                    "donation_amount": float(donation.amount_usd),
+                    "tier": donation.tier,
+                    "customer_name": donation.customer_name,
+                    "reddit_username": donation.reddit_username,
+                    "is_anonymous": donation.is_anonymous,
+                    "donation_type": donation.donation_type,
+                    "commission_type": donation.commission_type,
+                    "commission_message": donation.commission_message,
+                    "post_id": donation.post_id,
+                }
+                
+                # Create task using TaskManager (this will automatically run in background thread if K8s not available)
+                task_id = task_manager.create_commission_task(donation.id, task_data)
+                logger.info(f"Created commission task {task_id} for donation {donation.id}")
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling payment intent success: {str(e)}")
+        raise
+
+
+async def handle_payment_intent_failed(payment_intent):
+    """Handle failed payment intent."""
+    try:
+        logger.info(f"Processing failed payment intent: {payment_intent.id}")
+        
+        # Get database session
+        db = SessionLocal()
+        try:
+            stripe_service = StripeService()
+            stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.FAILED)
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling payment intent failure: {str(e)}")
+        raise
+
+
 from app.models import CommissionValidationRequest
 
+def get_commission_validator():
+    return CommissionValidator()
 
 @app.post("/api/commissions/validate")
-async def validate_commission(validation_request: CommissionValidationRequest):
+async def validate_commission(
+    validation_request: CommissionValidationRequest,
+    validator: CommissionValidator = Depends(get_commission_validator),
+):
     """
     Validate a commission request and return validated subreddit and post data.
-    
-    This endpoint validates commission requests before payment processing to ensure
-    we have valid subreddit and post data before creating pipeline tasks.
-    
-    Args:
-        validation_request: Commission validation request
-        
-    Returns:
-        Dict: Validation result with subreddit and post data
     """
     try:
         logger.info(f"Validating commission: {validation_request.commission_type}")
-        
-        # Initialize validator
-        validator = CommissionValidator()
-        
         # Validate commission
         result = await validator.validate_commission(
             commission_type=validation_request.commission_type,
@@ -1412,13 +1207,13 @@ async def validate_commission(validation_request: CommissionValidationRequest):
             post_id=validation_request.post_id,
             post_url=None  # Not supported in current model
         )
-        
         logger.info(f"Commission validation result: valid={result.valid}")
         if not result.valid:
             logger.warning(f"Commission validation failed: {result.error}")
-        
+            raise HTTPException(status_code=422, detail=result.to_dict())
         return result.to_dict()
-        
+    except HTTPException as e:
+        raise e
     except Exception as e:
         logger.error(f"Error validating commission: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1443,12 +1238,26 @@ async def create_commission_task(donation_id: int, db: Session = Depends(get_db)
         if not donation:
             raise HTTPException(status_code=404, detail="Donation not found")
         
-        # Create task
-        task_info = task_manager.create_commission_task(donation)
+        # Prepare task data for TaskManager
+        task_data = {
+            "donation_id": donation.id,
+            "donation_amount": float(donation.amount_usd),
+            "tier": donation.tier,
+            "customer_name": donation.customer_name,
+            "reddit_username": donation.reddit_username,
+            "is_anonymous": donation.is_anonymous,
+            "donation_type": donation.donation_type,
+            "commission_type": donation.commission_type,
+            "commission_message": donation.commission_message,
+            "post_id": donation.post_id,
+        }
         
-        logger.info(f"Created commission task: {task_info['task_id']}")
+        # Create task using TaskManager (this will automatically run in background thread if K8s not available)
+        task_id = task_manager.create_commission_task(donation.id, task_data)
         
-        return task_info
+        logger.info(f"Created commission task: {task_id}")
+        
+        return {"task_id": task_id}
         
     except Exception as e:
         logger.error(f"Error creating commission task: {str(e)}")
