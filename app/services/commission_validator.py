@@ -154,27 +154,32 @@ class CommissionValidator:
     
     async def _validate_random_random(self) -> ValidationResult:
         try:
-            subreddit_name = pick_subreddit()
-            logger.info(f"Selected random subreddit: {subreddit_name}")
-            submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
+            subreddit_name = 'all'
+            logger.info(f"Finding top post in subreddit: {subreddit_name}")
+            submission = await self.reddit_agent.find_top_post_from_subreddit(subreddit_name=subreddit_name)
             if not submission:
-                return ValidationResult(valid=False, error=f"No trending posts found in r/{subreddit_name}")
-            return await self._validate_post(subreddit_name, submission.id, "random_random")
+                submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
+            if not submission:
+                return ValidationResult(valid=False, error=f"No top or trending posts found in r/{subreddit_name}")
+            logger.info(f"Found post from {submission.subreddit.display_name} in top /all")
+            return await self._validate_post(submission.subreddit.display_name, submission.id, "random_random")
         except Exception as e:
             logger.error(f"Error in random_random validation: {str(e)}")
-            return ValidationResult(valid=False, error=f"Failed to find trending post in random subreddit: {str(e)}")
+            return ValidationResult(valid=False, error=f"Failed to find top or trending post in random subreddit: {str(e)}")
     
     async def _validate_random_subreddit(self, subreddit_name: str) -> ValidationResult:
         try:
             if not self._validate_subreddit_exists(subreddit_name):
                 return ValidationResult(valid=False, error=f"Subreddit r/{subreddit_name} not found or not accessible")
-            submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
+            submission = await self.reddit_agent.find_top_post_from_subreddit(subreddit_name=subreddit_name)
             if not submission:
-                return ValidationResult(valid=False, error=f"No trending posts found in r/{subreddit_name}")
+                submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
+            if not submission:
+                return ValidationResult(valid=False, error=f"No top or trending posts found in r/{subreddit_name}")
             return await self._validate_post(subreddit_name, submission.id, "random_subreddit")
         except Exception as e:
             logger.error(f"Error in random_subreddit validation: {str(e)}")
-            return ValidationResult(valid=False, error=f"Failed to find trending post in r/{subreddit_name}: {str(e)}")
+            return ValidationResult(valid=False, error=f"Failed to find top or trending post in r/{subreddit_name}: {str(e)}")
     
     async def _validate_specific_post(self, post_id: Optional[str], post_url: Optional[str]) -> ValidationResult:
         try:

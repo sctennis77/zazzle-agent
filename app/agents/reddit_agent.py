@@ -1234,3 +1234,98 @@ class RedditAgent:
         except Exception as e:
             logger.error(f"Error generating comment summary: {str(e)}")
             return "Error generating comment summary."
+
+    async def find_top_post_from_subreddit(self, tries: int = 3, limit: int = 100, subreddit_name: str = None, time_filter: str = "week"):
+        """
+        Find a top Reddit post from a subreddit using Reddit's top method.
+        This method uses the top() method instead of hot() to find the highest-scoring posts.
+        Works for both specific subreddits and "all" (front page).
+        Skips posts that are stickied, too old, or already present in the database (by post_id).
+        Returns the first valid post or None if none are found.
+        
+        Args:
+            tries: Number of attempts to find a suitable post
+            limit: Number of posts to fetch per attempt
+            subreddit_name: Name of subreddit to search (defaults to self.subreddit_name)
+            time_filter: Time filter for top posts - can be "all", "day", "hour", "month", "week", or "year" (default: "week")
+        """
+        logger.info(
+            f"Starting find_top_post_from_subreddit with subreddit: {subreddit_name or self.subreddit_name}, limit: {limit}, retries: {tries}, time_filter: {time_filter}"
+        )
+        
+        # Check if we have a specific post to commission from task context
+        if hasattr(self, 'task_context') and self.task_context:
+            post_id = self.task_context.get('post_id')
+            if post_id:
+                logger.info(f"Commissioning specific post: {post_id}")
+                try:
+                    # Fetch the specific post
+                    submission = self.reddit_client.get_post(post_id)
+                    if submission:
+                        # Generate comment summary and add to submission
+                        comment_summary = self._generate_comment_summary(submission)
+                        submission.comment_summary = comment_summary
+                        logger.info(f"Successfully fetched commissioned post: {submission.title}")
+                        
+                        # Call progress callback if available
+                        if self.progress_callback:
+                            try:
+                                await self.progress_callback("post_fetched", {
+                                    "post_title": submission.title,
+                                    "post_id": submission.id,
+                                    "subreddit": submission.subreddit.display_name
+                                })
+                            except Exception as e:
+                                logger.error(f"Error calling progress callback: {e}")
+                        
+                        return submission
+                    else:
+                        logger.error(f"Failed to fetch commissioned post {post_id}")
+                        return None
+                except Exception as e:
+                    logger.error(f"Error fetching commissioned post {post_id}: {str(e)}")
+                    return None
+        
+        # Otherwise, find a top post using the top method
+        try:
+            for attempt in range(tries):
+                # Use the existing subreddit object (works for "all" and specific subreddits)
+                for submission in self.reddit_client.reddit.subreddit(subreddit_name or self.subreddit_name).top(time_filter=time_filter, limit=limit):
+                    logger.info(
+                        f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
+                    )
+                    if submission.stickied:
+                        continue
+                    if (
+                        datetime.now(timezone.utc)
+                        - datetime.fromtimestamp(submission.created_utc, timezone.utc)
+                    ).days > 30:
+                        continue
+                    if not submission.selftext:
+                        continue
+
+                    # Check if already processed
+                    if self.session:
+                        existing_post = (
+                            self.session.query(RedditPost)
+                            .filter_by(post_id=submission.id)
+                            .first()
+                        )
+                        if existing_post:
+                            logger.info(
+                                f"Skipping post {submission.id}: already processed"
+                            )
+                            continue
+
+                    # Generate comment summary and add to submission
+                    comment_summary = self._generate_comment_summary(submission)
+                    submission.comment_summary = comment_summary
+                    return submission
+                # If we reach here, no suitable post was found in this attempt
+                logger.info(
+                    f"No suitable top post found on attempt {attempt + 1}/{tries}"
+                )
+            return None
+        except Exception as e:
+            logger.error(f"Error finding top post: {str(e)}")
+            return None

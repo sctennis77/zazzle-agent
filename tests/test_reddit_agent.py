@@ -2,7 +2,7 @@ import logging
 import os
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import StringIO
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -506,6 +506,369 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         # (though it's theoretically possible to get the same one 10 times, it's very unlikely)
         self.assertGreaterEqual(len(results), 1)
         self.assertLessEqual(len(results), len(AVAILABLE_SUBREDDITS))
+
+    async def test_find_top_post_from_subreddit_simple(self):
+        """Test the find_top_post_from_subreddit method with simple mocking."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Mock the subreddit.top method directly
+        mock_submission = MagicMock()
+        mock_submission.id = "test_post_id"
+        mock_submission.title = "Test Top Post"
+        mock_submission.score = 500  # Higher score for top post
+        mock_submission.is_self = True
+        mock_submission.selftext = "Test content for top post"
+        mock_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_submission.stickied = False
+        mock_submission.subreddit.display_name = "test_subreddit"
+        mock_submission.permalink = "/r/test/123"
+        mock_submission.url = "https://reddit.com/test"
+        mock_submission.author = "test_user"
+        mock_submission.num_comments = 50
+        
+        # Mock the subreddit.top method
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        # Mock the comment summary generation
+        agent._generate_comment_summary = MagicMock(return_value="Test comment summary for top post")
+        
+        # Test the method with default parameters
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "test_post_id")
+        self.assertEqual(result.title, "Test Top Post")
+        self.assertEqual(result.comment_summary, "Test comment summary for top post")
+        
+        # Verify the top method was called with correct parameters
+        mock_subreddit.top.assert_called_once_with(time_filter="week", limit=100)
+
+    async def test_find_top_post_from_subreddit_with_custom_parameters(self):
+        """Test find_top_post_from_subreddit with custom parameters."""
+        agent = RedditAgent(subreddit_name="golf")
+        
+        # Mock the subreddit.top method
+        mock_submission = MagicMock()
+        mock_submission.id = "custom_post_id"
+        mock_submission.title = "Custom Top Post"
+        mock_submission.score = 750
+        mock_submission.is_self = True
+        mock_submission.selftext = "Custom content"
+        mock_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_submission.stickied = False
+        mock_submission.subreddit.display_name = "custom_subreddit"
+        mock_submission.comment_summary = "Custom comment summary"
+        
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="Custom comment summary")
+        
+        # Test with custom parameters
+        result = await agent.find_top_post_from_subreddit(
+            tries=2,
+            limit=50,
+            subreddit_name="custom_subreddit",
+            time_filter="month"
+        )
+        
+        # Verify the result
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "custom_post_id")
+        
+        # Verify the top method was called with custom parameters
+        mock_subreddit.top.assert_called_once_with(time_filter="month", limit=50)
+
+    async def test_find_top_post_from_subreddit_skips_stickied_posts(self):
+        """Test that find_top_post_from_subreddit skips stickied posts."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Create mock submissions - first one stickied, second one valid
+        mock_stickied_submission = MagicMock()
+        mock_stickied_submission.id = "stickied_post_id"
+        mock_stickied_submission.title = "Stickied Post"
+        mock_stickied_submission.score = 1000
+        mock_stickied_submission.is_self = True
+        mock_stickied_submission.selftext = "Stickied content"
+        mock_stickied_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_stickied_submission.stickied = True  # This should be skipped
+        mock_stickied_submission.subreddit.display_name = "test_subreddit"
+        
+        mock_valid_submission = MagicMock()
+        mock_valid_submission.id = "valid_post_id"
+        mock_valid_submission.title = "Valid Post"
+        mock_valid_submission.score = 500
+        mock_valid_submission.is_self = True
+        mock_valid_submission.selftext = "Valid content"
+        mock_valid_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_valid_submission.stickied = False  # This should be accepted
+        mock_valid_submission.subreddit.display_name = "test_subreddit"
+        
+        # Mock the subreddit.top method to return both submissions
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_stickied_submission, mock_valid_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="Valid comment summary")
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the valid submission (not the stickied one)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "valid_post_id")
+        self.assertEqual(result.title, "Valid Post")
+
+    async def test_find_top_post_from_subreddit_skips_old_posts(self):
+        """Test that find_top_post_from_subreddit skips posts older than 30 days."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Create mock submissions - first one old, second one recent
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=35)).timestamp()
+        recent_timestamp = (datetime.now(timezone.utc) - timedelta(days=5)).timestamp()
+        
+        mock_old_submission = MagicMock()
+        mock_old_submission.id = "old_post_id"
+        mock_old_submission.title = "Old Post"
+        mock_old_submission.score = 1000
+        mock_old_submission.is_self = True
+        mock_old_submission.selftext = "Old content"
+        mock_old_submission.created_utc = old_timestamp  # 35 days old
+        mock_old_submission.stickied = False
+        mock_old_submission.subreddit.display_name = "test_subreddit"
+        
+        mock_recent_submission = MagicMock()
+        mock_recent_submission.id = "recent_post_id"
+        mock_recent_submission.title = "Recent Post"
+        mock_recent_submission.score = 500
+        mock_recent_submission.is_self = True
+        mock_recent_submission.selftext = "Recent content"
+        mock_recent_submission.created_utc = recent_timestamp  # 5 days old
+        mock_recent_submission.stickied = False
+        mock_recent_submission.subreddit.display_name = "test_subreddit"
+        
+        # Mock the subreddit.top method to return both submissions
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_old_submission, mock_recent_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="Recent comment summary")
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the recent submission (not the old one)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "recent_post_id")
+        self.assertEqual(result.title, "Recent Post")
+
+    async def test_find_top_post_from_subreddit_skips_posts_without_selftext(self):
+        """Test that find_top_post_from_subreddit skips posts without selftext."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Create mock submissions - first one without selftext, second one with selftext
+        mock_no_selftext_submission = MagicMock()
+        mock_no_selftext_submission.id = "no_selftext_post_id"
+        mock_no_selftext_submission.title = "No Selftext Post"
+        mock_no_selftext_submission.score = 1000
+        mock_no_selftext_submission.is_self = True
+        mock_no_selftext_submission.selftext = ""  # Empty selftext
+        mock_no_selftext_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_no_selftext_submission.stickied = False
+        mock_no_selftext_submission.subreddit.display_name = "test_subreddit"
+        
+        mock_with_selftext_submission = MagicMock()
+        mock_with_selftext_submission.id = "with_selftext_post_id"
+        mock_with_selftext_submission.title = "With Selftext Post"
+        mock_with_selftext_submission.score = 500
+        mock_with_selftext_submission.is_self = True
+        mock_with_selftext_submission.selftext = "Has selftext content"  # Has selftext
+        mock_with_selftext_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_with_selftext_submission.stickied = False
+        mock_with_selftext_submission.subreddit.display_name = "test_subreddit"
+        
+        # Mock the subreddit.top method to return both submissions
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_no_selftext_submission, mock_with_selftext_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="With selftext comment summary")
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the submission with selftext
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "with_selftext_post_id")
+        self.assertEqual(result.title, "With Selftext Post")
+
+    async def test_find_top_post_from_subreddit_skips_processed_posts(self):
+        """Test that find_top_post_from_subreddit skips posts that have already been processed."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Mock the session and query
+        mock_session = MagicMock()
+        agent.session = mock_session
+        
+        # Create mock submissions
+        mock_processed_submission = MagicMock()
+        mock_processed_submission.id = "processed_post_id"
+        mock_processed_submission.title = "Processed Post"
+        mock_processed_submission.score = 1000
+        mock_processed_submission.is_self = True
+        mock_processed_submission.selftext = "Processed content"
+        mock_processed_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_processed_submission.stickied = False
+        mock_processed_submission.subreddit.display_name = "test_subreddit"
+        
+        mock_unprocessed_submission = MagicMock()
+        mock_unprocessed_submission.id = "unprocessed_post_id"
+        mock_unprocessed_submission.title = "Unprocessed Post"
+        mock_unprocessed_submission.score = 500
+        mock_unprocessed_submission.is_self = True
+        mock_unprocessed_submission.selftext = "Unprocessed content"
+        mock_unprocessed_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_unprocessed_submission.stickied = False
+        mock_unprocessed_submission.subreddit.display_name = "test_subreddit"
+        
+        # Mock the database query to return existing post for processed submission
+        mock_query = MagicMock()
+        mock_query.filter_by.return_value.first.side_effect = [
+            MagicMock(),  # Return existing post for processed_post_id
+            None  # Return None for unprocessed_post_id
+        ]
+        mock_session.query.return_value = mock_query
+        
+        # Mock the subreddit.top method to return both submissions
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_processed_submission, mock_unprocessed_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="Unprocessed comment summary")
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the unprocessed submission
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "unprocessed_post_id")
+        self.assertEqual(result.title, "Unprocessed Post")
+
+    async def test_find_top_post_from_subreddit_with_task_context(self):
+        """Test find_top_post_from_subreddit with task context for specific post commissioning."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        agent.task_context = {"post_id": "commissioned_post_id"}
+        
+        # Mock the reddit client to return a specific post
+        mock_commissioned_submission = MagicMock()
+        mock_commissioned_submission.id = "commissioned_post_id"
+        mock_commissioned_submission.title = "Commissioned Post"
+        mock_commissioned_submission.score = 1000
+        mock_commissioned_submission.is_self = True
+        mock_commissioned_submission.selftext = "Commissioned content"
+        mock_commissioned_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_commissioned_submission.stickied = False
+        mock_commissioned_submission.subreddit.display_name = "test_subreddit"
+        
+        agent.reddit_client.get_post = MagicMock(return_value=mock_commissioned_submission)
+        agent._generate_comment_summary = MagicMock(return_value="Commissioned comment summary")
+        
+        # Mock progress callback
+        mock_progress_callback = AsyncMock()
+        agent.progress_callback = mock_progress_callback
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the commissioned submission
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "commissioned_post_id")
+        self.assertEqual(result.title, "Commissioned Post")
+        
+        # Verify the get_post method was called with the correct post_id
+        agent.reddit_client.get_post.assert_called_once_with("commissioned_post_id")
+        
+        # Verify progress callback was called
+        mock_progress_callback.assert_called_once_with("post_fetched", {
+            "post_title": "Commissioned Post",
+            "post_id": "commissioned_post_id",
+            "subreddit": "test_subreddit"
+        })
+
+    async def test_find_top_post_from_subreddit_returns_none_when_no_valid_posts(self):
+        """Test that find_top_post_from_subreddit returns None when no valid posts are found."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Mock the subreddit.top method to return an empty list
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = []
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit(tries=2)
+        
+        # Verify the result is None
+        self.assertIsNone(result)
+        
+        # Verify the top method was called twice (once per try)
+        self.assertEqual(mock_subreddit.top.call_count, 2)
+
+    async def test_find_top_post_from_subreddit_handles_exceptions(self):
+        """Test that find_top_post_from_subreddit handles exceptions gracefully."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Mock the subreddit.top method to raise an exception
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.side_effect = Exception("Reddit API error")
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is None when exception occurs
+        self.assertIsNone(result)
+
+    async def test_find_top_post_from_subreddit_different_time_filters(self):
+        """Test find_top_post_from_subreddit with different time filters."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Mock the subreddit.top method
+        mock_submission = MagicMock()
+        mock_submission.id = "time_filter_test_id"
+        mock_submission.title = "Time Filter Test Post"
+        mock_submission.score = 300
+        mock_submission.is_self = True
+        mock_submission.selftext = "Time filter test content"
+        mock_submission.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_submission.stickied = False
+        mock_submission.subreddit.display_name = "test_subreddit"
+        
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_submission]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        agent._generate_comment_summary = MagicMock(return_value="Time filter test summary")
+        
+        # Test different time filters
+        time_filters = ["all", "day", "hour", "month", "week", "year"]
+        
+        for time_filter in time_filters:
+            # Reset the mock call count
+            mock_subreddit.top.reset_mock()
+            
+            # Test with this time filter
+            result = await agent.find_top_post_from_subreddit(time_filter=time_filter)
+            
+            # Verify the result
+            self.assertIsNotNone(result)
+            self.assertEqual(result.id, "time_filter_test_id")
+            
+            # Verify the top method was called with the correct time filter
+            mock_subreddit.top.assert_called_once_with(time_filter=time_filter, limit=100)
 
 
 if __name__ == "__main__":
