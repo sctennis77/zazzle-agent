@@ -29,7 +29,16 @@ const DonationSuccessPage: React.FC = () => {
   const paymentIntentId = searchParams.get('payment_intent');
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 30; // Increased from 15 to 30 attempts
-  const [autoRedirectTimer, setAutoRedirectTimer] = useState<number | null>(null);
+
+  // Auto-redirect when donation is found
+  useEffect(() => {
+    if (donation) {
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 3000); // 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [donation, navigate]);
 
   useEffect(() => {
     if (!paymentIntentId) {
@@ -50,13 +59,6 @@ const DonationSuccessPage: React.FC = () => {
           console.log('Donation found:', donationData);
           setDonation(donationData);
           setLoading(false);
-          
-          // Set auto-redirect timer
-          const timer = setTimeout(() => {
-            navigate('/');
-          }, 5000);
-          setAutoRedirectTimer(timer);
-          
           return true; // Success
         } else if (response.status === 404) {
           console.log(`Donation not found yet (attempt ${attempts + 1}/${maxAttempts})`);
@@ -91,11 +93,8 @@ const DonationSuccessPage: React.FC = () => {
 
     return () => {
       clearInterval(pollInterval);
-      if (autoRedirectTimer) {
-        clearTimeout(autoRedirectTimer);
-      }
     };
-  }, [paymentIntentId, attempts, maxAttempts, navigate, autoRedirectTimer]);
+  }, [paymentIntentId, attempts, maxAttempts, navigate]);
 
   if (error) {
     return (
