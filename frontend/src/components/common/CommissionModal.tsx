@@ -586,7 +586,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const handleSuccess = (paymentIntentId?: string) => {
     onClose();
     if (paymentIntentId) {
-      navigate(`/donation/success?payment_intent_id=${paymentIntentId}`);
+      navigate(`/donation/success?payment_intent=${paymentIntentId}`);
     } else {
       navigate('/', { state: { showToast: true } });
     }
