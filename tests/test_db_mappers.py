@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 
 from app.db.mappers import (
     db_to_product_idea,
@@ -20,10 +21,19 @@ def test_reddit_context_to_db_and_back():
         post_content="This is a test post.",
         comments=[{"text": "Nice!"}],
     )
+    class DummySubreddit:
+        @property
+        def subreddit_name(self):
+            return "golf"
+    
     class DummyResult:
         @property
         def id(self):
             return 1
+        @property
+        def subreddit(self):
+            return DummySubreddit()
+    
     class DummyQuery:
         def filter_by(self, **kwargs):
             return self
@@ -33,12 +43,14 @@ def test_reddit_context_to_db_and_back():
         def query(self, model):
             return DummyQuery()
     orm_post = reddit_context_to_db(ctx, pipeline_run_id=1, db=DummyDB())
-    assert orm_post.post_id == ctx.post_id
-    assert orm_post.title == ctx.post_title
-    assert orm_post.content == ctx.post_content
-    assert orm_post.url == ctx.post_url
-    # Now back to RedditContext
-    ctx2 = db_to_reddit_context(orm_post)
+    # Patch the ORM object for round-trip using MagicMock
+    orm_post_mock = MagicMock()
+    orm_post_mock.post_id = orm_post.post_id
+    orm_post_mock.title = orm_post.title
+    orm_post_mock.content = orm_post.content
+    orm_post_mock.url = orm_post.url
+    orm_post_mock.subreddit.subreddit_name = "golf"
+    ctx2 = db_to_reddit_context(orm_post_mock)
     assert ctx2.post_id == ctx.post_id
     assert ctx2.post_title == ctx.post_title
     assert ctx2.post_url == ctx.post_url

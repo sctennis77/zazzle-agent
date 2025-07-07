@@ -76,6 +76,20 @@ def mock_reddit():
     with patch("praw.Reddit") as mock:
         reddit = MagicMock()
         mock.return_value = reddit
+        
+        # Mock subreddit metadata
+        subreddit_mock = MagicMock()
+        subreddit_mock.id = "test_subreddit_id"
+        subreddit_mock.name = "test_subreddit"
+        subreddit_mock.display_name = "test_subreddit"
+        subreddit_mock.description = "Test subreddit description"
+        subreddit_mock.description_html = "<p>Test subreddit description</p>"
+        subreddit_mock.public_description = "Test public description"
+        subreddit_mock.created_utc = 1234567890.0
+        subreddit_mock.subscribers = 1000
+        subreddit_mock.over18 = False
+        subreddit_mock.spoilers_enabled = False
+        
         # Mock post
         post = MagicMock()
         post.id = "test_post_id"
@@ -83,16 +97,22 @@ def mock_reddit():
         post.selftext = "Test content"
         post.url = "https://reddit.com/r/test/test_post_id"
         post.permalink = "/r/test/test_post_id"
+        post.subreddit = subreddit_mock
+        
         # Mock comment
         comment = MagicMock()
         comment.id = "test_comment_id"
         comment.body = "Test comment"
+        
         # Mock comments as a CommentForest-like object
         comments_mock = MagicMock()
         comments_mock.replace_more.return_value = None
         comments_mock.__iter__.return_value = iter([comment])
         post.comments = comments_mock
-        reddit.subreddit.return_value.hot.return_value = iter([post])
+        
+        reddit.subreddit.return_value = subreddit_mock
+        subreddit_mock.hot.return_value = iter([post])
+        
         yield reddit
 
 

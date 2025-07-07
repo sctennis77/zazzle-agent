@@ -1,11 +1,11 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import PipelineRun, ProductInfo, RedditPost
+from app.db.models import PipelineRun, ProductInfo, RedditPost, Subreddit
 from app.models import GeneratedProductSchema, PipelineRunSchema
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import ProductInfoSchema, RedditContext, RedditPostSchema
@@ -23,9 +23,17 @@ def create_test_data():
 
     session = Session()
 
+    # Create a subreddit first
+    subreddit = Subreddit(
+        id=1,
+        subreddit_name="test",
+        display_name="Test Subreddit"
+    )
+    session.add(subreddit)
+
     # Create a pipeline run
     pipeline_run = PipelineRun(
-        id=1, start_time=datetime.utcnow(), status="completed", retry_count=0
+        id=1, start_time=datetime.now(timezone.utc), status="completed", retry_count=0
     )
     session.add(pipeline_run)
 
@@ -36,7 +44,7 @@ def create_test_data():
         post_id="test123",
         title="Test Post",
         content="Test Content",
-        subreddit="test",
+        subreddit_id=1,  # Use the subreddit ID instead of string
         url="https://reddit.com/test",
         permalink="/r/test/test123",
         author="test_user",

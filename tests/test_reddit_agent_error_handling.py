@@ -23,16 +23,15 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
             zazzle_tracking_code="test_tracking_code",
             prompt_version="1.0.0",
         )
-        # Patch openai at the correct import location
-        self.patcher_openai = patch("app.agents.reddit_agent.openai")
-        self.mock_openai = self.patcher_openai.start()
-        self.mock_openai_instance = MagicMock()
-        self.mock_openai.chat.completions.create = (
-            self.mock_openai_instance.chat.completions.create
-        )
-        self.addCleanup(self.patcher_openai.stop)
-
+        
+        # Create the RedditAgent first
         self.reddit_agent = RedditAgent(self.config)
+        
+        # Mock the openai attribute of the RedditAgent instance
+        self.mock_openai_instance = MagicMock()
+        self.reddit_agent.openai = self.mock_openai_instance
+        
+        # Mock the reddit client
         self.reddit_agent.reddit = MagicMock()
 
         # Mock environment variables
@@ -63,7 +62,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
             subreddit="test_subreddit",
         )
 
-        result = self.reddit_agent._determine_product_idea(reddit_context)
+        result = await self.reddit_agent._determine_product_idea(reddit_context)
         self.assertIsNone(result)
 
     async def test_determine_product_idea_missing_theme(self):
@@ -84,7 +83,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
             subreddit="test_subreddit",
         )
 
-        result = self.reddit_agent._determine_product_idea(reddit_context)
+        result = await self.reddit_agent._determine_product_idea(reddit_context)
         self.assertIsNone(result)
 
     async def test_determine_product_idea_missing_image_description(self):
@@ -102,7 +101,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertRaises(ValueError):
-            self.reddit_agent._determine_product_idea(reddit_context)
+            await self.reddit_agent._determine_product_idea(reddit_context)
 
     async def test_determine_product_idea_openai_error(self):
         """Test handling of OpenAI API error."""
@@ -117,7 +116,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
             subreddit="test_subreddit",
         )
 
-        result = self.reddit_agent._determine_product_idea(reddit_context)
+        result = await self.reddit_agent._determine_product_idea(reddit_context)
         self.assertIsNone(result)
 
     @patch("app.image_generator.ImageGenerator.generate_image", new_callable=AsyncMock)
@@ -229,7 +228,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertRaises(ValueError):
-            self.reddit_agent._determine_product_idea(reddit_context)
+            await self.reddit_agent._determine_product_idea(reddit_context)
 
     async def test_determine_product_idea_empty_image_description(self):
         """Test handling of empty image description in response."""
@@ -250,4 +249,4 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertRaises(ValueError):
-            self.reddit_agent._determine_product_idea(reddit_context)
+            await self.reddit_agent._determine_product_idea(reddit_context)

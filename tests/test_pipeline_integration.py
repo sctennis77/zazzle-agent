@@ -245,7 +245,7 @@ async def test_full_pipeline_success(
         post = reddit_posts[0]
         assert post.post_id == "test_post_id"
         assert post.title == "Test Post Title"
-        assert post.subreddit == "test_subreddit"
+        assert post.subreddit.subreddit_name == "test_subreddit"
         assert post.pipeline_run_id == run.id
 
         # Check product info

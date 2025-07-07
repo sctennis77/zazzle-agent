@@ -33,13 +33,13 @@ def test_create_support_donation(test_data):
         "is_anonymous": False,
     }
     
-    resp = client.post("/api/donations/create-checkout-session", json=donation_data)
+    resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
     
     # Check response structure
     data = resp.json()
-    assert "url" in data
-    assert "session_id" in data
+    assert "client_secret" in data
+    assert "payment_intent_id" in data
 
 
 def test_create_commission_donation(test_data):
@@ -58,17 +58,17 @@ def test_create_commission_donation(test_data):
         "is_anonymous": False,
     }
     
-    resp = client.post("/api/donations/create-checkout-session", json=donation_data)
+    resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
     
     # Check response structure
     data = resp.json()
-    assert "url" in data
-    assert "session_id" in data
+    assert "client_secret" in data
+    assert "payment_intent_id" in data
 
 
 def test_create_random_random_commission_donation(test_data):
-    """Test creating a random_random commission donation."""
+    """Test creating a random_random commission donation with normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
     donation_data = {
@@ -77,22 +77,23 @@ def test_create_random_random_commission_donation(test_data):
         "customer_name": "Random Commissioner",
         "donation_type": "commission",
         "commission_type": "random_random",
-        "subreddit": "",  # Should be empty for random_random
+        "subreddit": subreddit.subreddit_name,  # Now allowed in normalized interface
+        "post_id": reddit_post.post_id,  # Now allowed in normalized interface
         "commission_message": "Surprise me!",
         "is_anonymous": False,
     }
     
-    resp = client.post("/api/donations/create-checkout-session", json=donation_data)
+    resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
     
     # Check response structure
     data = resp.json()
-    assert "url" in data
-    assert "session_id" in data
+    assert "client_secret" in data
+    assert "payment_intent_id" in data
 
 
-def test_random_random_commission_validation_rejects_subreddit(test_data):
-    """Test that random_random commission type rejects subreddit parameter."""
+def test_random_random_commission_validation_accepts_subreddit(test_data):
+    """Test that random_random commission type accepts subreddit parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
     donation_data = {
@@ -101,17 +102,17 @@ def test_random_random_commission_validation_rejects_subreddit(test_data):
         "customer_name": "Test User",
         "donation_type": "commission",
         "commission_type": "random_random",
-        "subreddit": "golf",  # Should be rejected
+        "subreddit": "golf",  # Now accepted in normalized interface
         "commission_message": "Test message",
         "is_anonymous": False,
     }
     
-    resp = client.post("/api/donations/create-checkout-session", json=donation_data)
-    assert resp.status_code == 422  # Validation error
+    resp = client.post("/api/donations/create-payment-intent", json=donation_data)
+    assert resp.status_code == 200  # Should succeed with normalized interface
 
 
-def test_random_random_commission_validation_rejects_post_id(test_data):
-    """Test that random_random commission type rejects post_id parameter."""
+def test_random_random_commission_validation_accepts_post_id(test_data):
+    """Test that random_random commission type accepts post_id parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
     donation_data = {
@@ -120,13 +121,13 @@ def test_random_random_commission_validation_rejects_post_id(test_data):
         "customer_name": "Test User",
         "donation_type": "commission",
         "commission_type": "random_random",
-        "post_id": "abc123",  # Should be rejected
+        "post_id": "abc123",  # Now accepted in normalized interface
         "commission_message": "Test message",
         "is_anonymous": False,
     }
     
-    resp = client.post("/api/donations/create-checkout-session", json=donation_data)
-    assert resp.status_code == 422  # Validation error
+    resp = client.post("/api/donations/create-payment-intent", json=donation_data)
+    assert resp.status_code == 200  # Should succeed with normalized interface
 
 
 def test_donations_endpoint(test_data):

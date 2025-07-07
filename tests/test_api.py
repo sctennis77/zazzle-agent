@@ -89,4 +89,4 @@ def test_get_generated_products_error_handling(monkeypatch):
     assert response.status_code == 500
     data = response.json()
     assert "detail" in data
-    assert "Database error" in data["detail"]
+    assert "Internal server error" in data["detail"]

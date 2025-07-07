@@ -113,10 +113,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         return_value=("https://example.com/image.jpg", "/tmp/image.jpg"),
     )
     @patch(
-        "app.zazzle_product_designer.ZazzleProductDesigner.create_product",
-        new_callable=AsyncMock,
-    )
-    @patch(
         "app.agents.reddit_agent.RedditAgent._determine_product_idea",
         return_value=ProductIdea(
             theme="Test Theme",
@@ -143,7 +139,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self,
         mock_find_trending_post,
         mock_determine_product_idea,
-        mock_create_product,
         mock_generate_image,
     ):
         # Setup
@@ -158,9 +153,10 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_find_trending_post.return_value = mock_post
 
         mock_product_info = MagicMock()
-        mock_create_product.return_value = mock_product_info
+        self.reddit_agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
 
         result = await self.reddit_agent.find_and_create_product()
+        # Compare the return value, not the mock itself
         self.assertEqual(result, mock_product_info)
 
     async def test_create_product(self):

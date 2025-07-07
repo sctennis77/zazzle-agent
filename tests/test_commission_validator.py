@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.services.commission_validator import CommissionValidator, ValidationResult
-from app.api import app
+from app.api import app, get_commission_validator
 from app.models import CommissionValidationRequest, CommissionValidationResponse
 
 
@@ -10,9 +10,28 @@ class TestCommissionValidator:
     """Test cases for CommissionValidator service"""
 
     @pytest.fixture
-    def validator(self):
-        """Create a CommissionValidator instance for testing"""
-        return CommissionValidator()
+    def mock_session(self):
+        """Mock database session"""
+        with patch('app.services.commission_validator.SessionLocal') as mock_session:
+            mock_instance = Mock()
+            mock_session.return_value = mock_instance
+            yield mock_instance
+
+    @pytest.fixture
+    def validator(self, mock_session):
+        """Create a CommissionValidator instance for testing with mocked dependencies"""
+        with patch('app.services.commission_validator.RedditClient') as mock_client, \
+             patch('app.services.commission_validator.RedditAgent') as mock_agent:
+            
+            # Create validator with mocked dependencies
+            validator = CommissionValidator()
+            
+            # Mock the internal dependencies
+            validator.reddit_client = Mock()
+            validator.reddit_agent = Mock()
+            validator.session = mock_session
+            
+            yield validator
 
     @pytest.fixture
     def mock_reddit_client(self):
@@ -42,41 +61,42 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        mock_reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
+        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
         
         # Mock RedditClient methods
-        mock_reddit_client.get_post.return_value = mock_submission
-        mock_reddit_client.get_subreddit.return_value = Mock()
+        validator.reddit_client.get_post.return_value = mock_submission
+        validator.reddit_client.get_subreddit.return_value = Mock()
 
-        # Test validation
-        result = await validator.validate_commission("random_subreddit", "golf")
+        # Mock subreddit validation
+        with patch.object(validator, '_validate_subreddit_exists', return_value=True), \
+             patch.object(validator, '_get_subreddit_id', return_value=5):
+            
+            # Test validation
+            result = await validator.validate_commission("random_subreddit", "golf")
 
-        # Verify result - be flexible with real data
-        assert result.valid is True
-        assert result.subreddit == "golf"
-        assert result.subreddit_id == 5
-        assert result.post_id is not None
-        assert result.post_title is not None
-        assert result.post_content is not None
-        assert result.post_url is not None
-        assert result.commission_type == "random_subreddit"
-        assert result.error is None
+            # Verify result
+            assert result.valid is True
+            assert result.subreddit == "golf"
+            assert result.subreddit_id == 5
+            assert result.post_id == "1lp1zam"
+            assert result.post_title == "Golf is weird."
+            assert result.post_content == "For comparison, I also play tennis..."
+            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert result.commission_type == "random_subreddit"
+            assert result.error is None
 
     @pytest.mark.asyncio
-    async def test_validate_random_subreddit_invalid_subreddit(self, validator, mock_reddit_client):
+    async def test_validate_random_subreddit_invalid_subreddit(self, validator):
         """Test validation failure for invalid subreddit"""
-        # Since the validator uses real logic, we need to test with a truly invalid subreddit
-        # that doesn't exist in the database
-        result = await validator.validate_commission("random_subreddit", "invalid_subreddit")
+        # Mock subreddit validation to fail
+        with patch.object(validator, '_validate_subreddit_exists', return_value=False):
+            result = await validator.validate_commission("random_subreddit", "invalid_subreddit")
 
-        # The validator should still work because it uses real Reddit API
-        # So we just check that it returns a valid result with the requested subreddit
-        assert result.valid is True
-        assert result.subreddit == "invalid_subreddit"
-        assert result.post_id is not None
+            assert result.valid is False
+            assert "not found or not accessible" in result.error
 
     @pytest.mark.asyncio
-    async def test_validate_specific_post_success(self, validator, mock_reddit_client):
+    async def test_validate_specific_post_success(self, validator):
         """Test successful validation of specific post commission"""
         # Mock Reddit submission
         mock_submission = Mock()
@@ -86,35 +106,36 @@ class TestCommissionValidator:
         mock_submission.permalink = "/r/golf/comments/1lp1zam/golf_is_weird/"
         mock_submission.subreddit.display_name = "golf"
 
-        mock_reddit_client.get_post.return_value = mock_submission
+        validator.reddit_client.get_post.return_value = mock_submission
 
-        # Test validation
-        result = await validator.validate_commission("specific_post", post_id="1lp1zam")
+        # Mock subreddit ID lookup
+        with patch.object(validator, '_get_subreddit_id', return_value=5):
+            # Test validation
+            result = await validator.validate_commission("specific_post", post_id="1lp1zam")
 
-        # Verify result - be flexible with real data
-        assert result.valid is True
-        assert result.subreddit == "golf"
-        assert result.post_id == "1lp1zam"
-        assert result.post_title is not None
-        assert result.post_content is not None
-        assert result.post_url is not None
-        assert result.commission_type == "specific_post"
-        assert result.error is None
+            # Verify result
+            assert result.valid is True
+            assert result.subreddit == "golf"
+            assert result.post_id == "1lp1zam"
+            assert result.post_title == "Golf is weird."
+            assert result.post_content == "For comparison, I also play tennis..."
+            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert result.commission_type == "specific_post"
+            assert result.error is None
 
     @pytest.mark.asyncio
-    async def test_validate_specific_post_post_not_found(self, validator, mock_reddit_client):
+    async def test_validate_specific_post_post_not_found(self, validator):
         """Test validation failure when post is not found"""
+        validator.reddit_client.get_post.return_value = None
+        
         result = await validator.validate_commission("specific_post", post_id="nonexistent_post")
 
         assert result.valid is False
-        assert "404" in result.error or "not found" in result.error
-        # When validation fails, post_id might be None
+        assert "not found" in result.error
         assert result.post_id is None
 
-
-
     @pytest.mark.asyncio
-    async def test_validate_specific_post_wrong_subreddit(self, validator, mock_reddit_client):
+    async def test_validate_specific_post_wrong_subreddit(self, validator):
         """Test validation failure when post is from different subreddit"""
         # Mock submission from different subreddit
         mock_submission = Mock()
@@ -124,17 +145,19 @@ class TestCommissionValidator:
         mock_submission.permalink = "/r/tennis/comments/1lp1zam/tennis_is_great/"
         mock_submission.subreddit.display_name = "tennis"
 
-        mock_reddit_client.get_post.return_value = mock_submission
+        validator.reddit_client.get_post.return_value = mock_submission
 
-        result = await validator.validate_commission("specific_post", post_id="1lp1zam")
+        # Mock subreddit ID lookup
+        with patch.object(validator, '_get_subreddit_id', return_value=10):
+            result = await validator.validate_commission("specific_post", post_id="1lp1zam")
 
-        # This should work since we get the subreddit from the post itself
-        assert result.valid is True
-        assert result.subreddit == "golf"  # The real post is from golf, not tennis
-        assert result.post_id == "1lp1zam"
+            # This should work since we get the subreddit from the post itself
+            assert result.valid is True
+            assert result.subreddit == "tennis"
+            assert result.post_id == "1lp1zam"
 
     @pytest.mark.asyncio
-    async def test_validate_random_random_success(self, validator, mock_reddit_client, mock_reddit_agent):
+    async def test_validate_random_random_success(self, validator):
         """Test successful validation of random random commission"""
         # Mock Reddit submission
         mock_submission = Mock()
@@ -145,34 +168,40 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        mock_reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
+        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
         
         # Mock RedditClient methods
-        mock_reddit_client.get_post.return_value = mock_submission
+        validator.reddit_client.get_post.return_value = mock_submission
 
-        # Test validation
-        result = await validator.validate_commission("random_random")
+        # Mock subreddit selection and validation
+        with patch('app.services.commission_validator.pick_subreddit', return_value="golf"), \
+             patch.object(validator, '_get_subreddit_id', return_value=5):
+            
+            # Test validation
+            result = await validator.validate_commission("random_random")
 
-        # Verify result - be flexible with real data
-        assert result.valid is True
-        assert result.subreddit is not None
-        assert result.post_id is not None
-        assert result.post_title is not None
-        assert result.post_content is not None
-        assert result.post_url is not None
-        assert result.commission_type == "random_random"
-        assert result.error is None
+            # Verify result
+            assert result.valid is True
+            assert result.subreddit == "golf"
+            assert result.post_id == "1lp1zam"
+            assert result.post_title == "Golf is weird."
+            assert result.post_content == "For comparison, I also play tennis..."
+            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert result.commission_type == "random_random"
+            assert result.error is None
 
     @pytest.mark.asyncio
-    async def test_validate_random_random_no_subreddits(self, validator, mock_reddit_agent):
+    async def test_validate_random_random_no_subreddits(self, validator):
         """Test validation failure when no trending posts are found"""
-        # Since the validator uses real logic, it should actually find posts
-        result = await validator.validate_commission("random_random")
+        # Mock RedditAgent to return None (no posts found)
+        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=None)
 
-        # The validator should work because it uses real Reddit API
-        assert result.valid is True
-        assert result.subreddit is not None
-        assert result.post_id is not None
+        # Mock subreddit selection
+        with patch('app.services.commission_validator.pick_subreddit', return_value="golf"):
+            result = await validator.validate_commission("random_random")
+
+            assert result.valid is False
+            assert "No trending posts found" in result.error
 
     @pytest.mark.asyncio
     async def test_validate_commission_invalid_type(self, validator):
@@ -181,7 +210,6 @@ class TestCommissionValidator:
 
         assert result.valid is False
         assert "Unknown commission type" in result.error
-        # The validator doesn't set commission_type in error cases
         assert result.commission_type is None
 
     @pytest.mark.asyncio
@@ -208,13 +236,16 @@ class TestCommissionValidationEndpoint:
 
     @pytest.fixture
     def mock_validator(self):
-        """Mock CommissionValidator for testing"""
-        with patch('app.api.CommissionValidator') as mock_validator_class:
-            mock_instance = Mock()
-            mock_validator_class.return_value = mock_instance
-            # Make validate_commission return an awaitable
-            mock_instance.validate_commission = AsyncMock()
-            yield mock_instance
+        """Mock CommissionValidator for endpoint testing"""
+        mock_instance = Mock()
+        mock_instance.validate_commission = AsyncMock()
+        return mock_instance
+
+    @pytest.fixture(autouse=True)
+    def override_validator(self, mock_validator):
+        app.dependency_overrides[get_commission_validator] = lambda: mock_validator
+        yield
+        app.dependency_overrides.pop(get_commission_validator, None)
 
     def test_validate_random_subreddit_endpoint(self, client, mock_validator):
         """Test random subreddit validation endpoint"""
@@ -333,7 +364,8 @@ class TestCommissionValidationEndpoint:
             commission_type="random_random", subreddit=None, post_id=None, post_url=None
         )
 
-    def test_validate_endpoint_validation_failure(self, client, mock_validator):
+    @pytest.mark.asyncio
+    async def test_validate_endpoint_validation_failure(self, client, mock_validator):
         """Test validation endpoint when validation fails"""
         # Mock validator response for failure using ValidationResult
         mock_response = ValidationResult(
@@ -359,18 +391,11 @@ class TestCommissionValidationEndpoint:
             }
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 422
         data = response.json()
-        assert data["valid"] is False
-        assert data["error"] == "Subreddit 'invalid_subreddit' not found in database"
-        assert data["subreddit"] == "invalid_subreddit"
-        assert data["subreddit_id"] is None
-        assert data["post_id"] is None
-
-        # Verify validator was called correctly
-        mock_validator.validate_commission.assert_called_once_with(
-            commission_type="random_subreddit", subreddit="invalid_subreddit", post_id=None, post_url=None
-        )
+        assert data["detail"]["valid"] is False
+        assert data["detail"]["subreddit"] == "invalid_subreddit"
+        assert data["detail"]["error"] == "Subreddit 'invalid_subreddit' not found in database"
 
     def test_validate_endpoint_invalid_request(self, client):
         """Test validation endpoint with invalid request data"""

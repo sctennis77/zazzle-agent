@@ -320,7 +320,9 @@ async def test_run_task_pipeline_specific():
         mock_task = MagicMock()
         mock_task.id = 1
         mock_task.type = "SUBREDDIT_POST"
-        mock_task.subreddit = "test_subreddit"
+        mock_task_subreddit = MagicMock()
+        mock_task_subreddit.subreddit_name = "test_subreddit"
+        mock_task.subreddit = mock_task_subreddit
         mock_session.query.return_value.get.return_value = mock_task
         
         # Mock pipeline run
