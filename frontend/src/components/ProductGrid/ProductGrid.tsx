@@ -276,16 +276,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       {websocketError && (
         <div className="bg-red-100 text-red-700 px-4 py-2 text-center">{websocketError}</div>
       )}
-      {/* Sticky header banner for active commissions */}
-      {hasActiveCommissions && (
-        <CommissionStatusBanner
-          tasks={inProgressTasks}
-          onClose={() => {}}
-          onRefresh={fetchActiveTasks}
-          isStickyHeader={true}
-          onViewProduct={handleViewProduct}
-        />
-      )}
+      {/* Removed sticky header banner for active commissions - will try something different later */}
 
       <div className="max-w-6xl mx-auto p-6">
         {/* Product Grid */}
