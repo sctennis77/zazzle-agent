@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import { FaCrown, FaStar, FaGem, FaHeart, FaArrowLeft, FaHeart as FaSupport } from 'react-icons/fa';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
@@ -19,9 +19,18 @@ const iconMap = {
   heart: FaHeart,
 };
 
-function truncate(str: string, n: number) {
-  return str && str.length > n ? str.slice(0, n - 1) + '…' : str;
+function formatShortDate(date: string | Date | null | undefined) {
+  if (!date) return '-';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
+
+function truncateWithEllipsis(str: string, n: number) {
+  if (!str) return '-';
+  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+}
+
+const MAX_MSG_LEN = 32;
 
 export const DonationCard: React.FC<DonationCardProps> = ({ 
   product, 
@@ -31,6 +40,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
   onSupport 
 }) => {
   const { getTierDisplay } = useDonationTiers();
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   // Commission row data
   const commissionTierName = product.product_info.donation_info?.tier_name || '';
@@ -38,45 +48,52 @@ export const DonationCard: React.FC<DonationCardProps> = ({
   const CommissionIconComponent = commissionTierDisplay && commissionTierDisplay.icon ? 
     iconMap[commissionTierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart : FaHeart;
 
-  // Helper for aligned row - adjusted grid to accommodate 20-char usernames
+  // Helper for aligned row with hover message
   const renderRow = (
     icon: React.ReactNode,
     username: string,
     amount: number | null | undefined,
-    date: string | null | undefined,
+    date: string | Date | null | undefined,
     message: string | null | undefined,
     colorClass: string,
     bgClass: string,
     key: string = ''
-  ) => (
-    <div
-      key={key}
-      className={`grid grid-cols-[28px_140px_70px_80px_1fr] items-center gap-2 px-3 py-2 rounded-lg mb-2 text-gray-800 ${bgClass}`}
-      style={{ minHeight: 0 }}
-    >
-      <span className={`flex-shrink-0 flex items-center justify-center ${colorClass}`}>{icon}</span>
-      <span className="font-semibold text-xs break-all leading-tight" style={{ wordBreak: 'break-all' }}>
-        {username || '-'}
-      </span>
-      <span className="font-mono text-gray-700 text-sm text-right">{amount != null ? `$${amount.toFixed(2)}` : '-'}</span>
-      <span className="text-xs text-gray-500 text-right whitespace-nowrap">{date || '-'}</span>
-      {message ? (
-        <span
-          className="text-xs text-gray-500 truncate max-w-[100px] cursor-help text-right"
-          title={message}
-        >
-          {truncate(message, 15)}
-        </span>
-      ) : (
-        <span className="text-xs text-gray-400 text-right">-</span>
-      )}
-    </div>
-  );
+  ) => {
+    const hasMsg = !!message && message.trim() !== '';
+    const tooltip = hasMsg ? message : '-';
+    return (
+      <div
+        key={key}
+        className={`mb-2 ${bgClass} rounded-lg px-3 pt-2 pb-1`}
+        style={{ minHeight: 0 }}
+        onMouseEnter={() => setHoveredRow(key)}
+        onMouseLeave={() => setHoveredRow(null)}
+      >
+        {/* Main row: icon, username, amount, date */}
+        <div className="grid grid-cols-2 sm:grid-cols-[24px_1fr_70px] md:grid-cols-[24px_1fr_90px] items-center gap-2 pb-0.5">
+          <span className={`flex-shrink-0 flex items-center justify-center ${colorClass}`}>{icon}</span>
+          <span className="font-semibold text-xs max-w-[150px] whitespace-nowrap overflow-hidden" style={{ fontSize: username.length > 16 ? '11px' : '13px' }}>
+            {username || '-'}
+          </span>
+          <span className="flex flex-col items-end">
+            <span className="font-mono text-gray-700 text-xs">{amount != null ? `$${amount.toFixed(2)}` : '-'}</span>
+            <span className="text-[11px] text-gray-400 leading-tight">{formatShortDate(date)}</span>
+          </span>
+        </div>
+        {/* Message row, only on hover */}
+        {hoveredRow === key && (
+          <div className="ml-7 pl-2 text-xs text-gray-400 leading-snug break-words" style={{ minHeight: 18 }}>
+            {tooltip}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Card height: match product card (e.g. min-h-[480px] or h-full if parent is fixed)
   // You may want to adjust min-h to match your actual ProductCard
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full h-full min-h-[480px] relative">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full max-w-2xl mx-auto h-full min-h-[480px] relative">
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <div className="text-xs text-gray-500 mb-1">Commissioned by</div>
@@ -84,7 +101,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
           <CommissionIconComponent size={18} className={commissionTierDisplay.color} />, 
           commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username || '-',
           commissionInfo.donation_amount,
-          new Date(product.pipeline_run.end_time).toLocaleDateString(),
+          product.pipeline_run.end_time,
           commissionInfo.commission_message,
           commissionTierDisplay.color,
           'bg-blue-50 border border-blue-100',
@@ -102,7 +119,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
             <DonationIconComponent size={18} className={donationTierDisplay.color} />, 
             donation.reddit_username || '-',
             donation.donation_amount,
-            donation.created_at ? new Date(donation.created_at).toLocaleDateString() : '-',
+            donation.created_at,
             donation.message,
             donationTierDisplay.color,
             'bg-green-50 border border-green-100',
@@ -116,17 +133,17 @@ export const DonationCard: React.FC<DonationCardProps> = ({
       <div className="absolute left-0 right-0 bottom-0 flex items-center justify-between px-4 py-3 bg-white rounded-b-lg border-t border-gray-100">
         <button
           onClick={onFlipBack}
-          className="flex items-center gap-1 text-gray-600 hover:text-gray-800 transition-colors text-sm px-3 py-2 rounded-md border border-gray-200 bg-gray-50"
+          className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-200 bg-gray-50 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          title="Flip back"
         >
-          <FaArrowLeft size={16} />
-          <span>Back</span>
+          <FaArrowLeft size={18} />
         </button>
         <button
           onClick={onSupport}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-md font-semibold hover:from-pink-600 hover:to-red-600 transition-all duration-200 shadow-md hover:shadow-lg text-sm"
         >
           <FaSupport size={16} />
-          Support this Post
+          Support
         </button>
       </div>
     </div>

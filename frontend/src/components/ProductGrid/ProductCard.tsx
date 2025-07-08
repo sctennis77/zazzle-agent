@@ -155,29 +155,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               >
                 <FaExpand size={16} />
               </button>
-              {/* Commission indicator with task status */}
-              {commissionInfo && (
-                <div className="absolute top-2 left-2 flex items-center gap-2">
-                  <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}
-                    title={`Commissioned by ${commissionInfo.reddit_username}${commissionInfo.commission_message ? `: ${commissionInfo.commission_message}` : ''}`}>
-                    <IconComponent size={14} className={tierDisplay.color} />
-                  </div>
-                  {/* Task status indicator */}
-                  {associatedTask && (
-                    <div className={`ml-1 p-1 rounded-full border ${getTaskStatusColor(associatedTask.status)}`} title={`Task ${associatedTask.status}`}>
-                      {getTaskStatusIcon(associatedTask.status)}
-                    </div>
-                  )}
-                </div>
-              )}
-              {/* Support donation indicator */}
-              {!commissionInfo && product.product_info.donation_info && (
-                <div className="absolute top-2 left-2">
-                  <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}> 
-                    <IconComponent size={14} className={tierDisplay.color} />
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
           <h3 className="text-base font-medium text-gray-800 text-center cursor-pointer leading-relaxed" style={{ minHeight: '2.5em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
