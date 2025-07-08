@@ -21,7 +21,8 @@ const iconMap = {
 export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [] }) => {
   const [showModal, setShowModal] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const { getTierDisplay } = useDonationTiers();
+  const { getTierDisplay, tiers } = useDonationTiers();
+  const [supportDonations, setSupportDonations] = useState<any[]>([]);
 
   // Find associated task for this product by checking if it's a commission product
   // and matching with active tasks
@@ -45,6 +46,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           if (data.commission_info) {
             setCommissionInfo(data.commission_info);
           }
+          if (data.support) {
+            setSupportDonations(data.support);
+          }
         }
       } catch (error) {
         console.error('Error fetching donation info:', error);
@@ -53,6 +57,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
 
     fetchDonationInfo();
   }, [product.pipeline_run.id]);
+
+  // Calculate support donation total and count
+  const supportCount = supportDonations.length;
+  const supportTotal = supportDonations.reduce((sum, d) => sum + (d.donation_amount || 0), 0);
+  // Find the highest tier where supportTotal >= min_amount
+  let supportTierName = '';
+  if (tiers && tiers.length > 0 && supportTotal > 0) {
+    const sortedTiers = [...tiers].sort((a, b) => b.min_amount - a.min_amount);
+    const foundTier = sortedTiers.find(t => supportTotal >= t.min_amount);
+    if (foundTier) supportTierName = foundTier.name;
+  }
+  const supportTierDisplay = getTierDisplay(supportTierName);
+  const SupportIconComponent = supportTierDisplay && supportTierDisplay.icon ? iconMap[supportTierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart : FaHeart;
 
   const getTaskStatusIcon = (status: string) => {
     switch (status) {
@@ -161,21 +178,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           
           {/* Unified footer for commission/support info and date */}
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="text-xs text-center text-gray-600 flex flex-col items-center justify-center gap-0.5">
-              <span className="flex items-center gap-1">
-                <IconComponent size={12} className={tierDisplay.color} />
-                {commissionInfo ? (
-                  commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'
-                ) : product.product_info.donation_info ? (
-                  product.product_info.donation_info.is_anonymous ? 'Anonymous' : product.product_info.donation_info.reddit_username ? `u/${product.product_info.donation_info.reddit_username}` : 'Anonymous'
-                ) : null}
+            <div className="flex items-center justify-between text-xs text-gray-600">
+              <span className="flex items-center gap-1 min-w-0">
+                {commissionInfo && <><IconComponent size={12} className={tierDisplay.color} />{commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'}</>}
               </span>
-              <span className="mt-0.5">
-                {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                })}
+              <span className="truncate text-center flex-1">{new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              <span className="flex items-center gap-1 min-w-0 justify-end">
+                {supportCount > 0 ? <><SupportIconComponent size={12} className={supportTierDisplay.color} />{supportCount}</> : <span className="opacity-40 flex items-center gap-1"><FaHeart size={12} />0</span>}
               </span>
             </div>
           </div>
