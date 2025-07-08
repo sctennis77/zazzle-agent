@@ -124,27 +124,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               <FaExpand size={16} />
             </button>
             
-            {/* Commission indicator with task status */}
-            {commissionInfo && (
-              <div className="absolute top-2 left-2 flex items-center gap-2">
-                <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}
-                  title={`Commissioned by ${commissionInfo.reddit_username}${commissionInfo.commission_message ? `: ${commissionInfo.commission_message}` : ''}`}>
-                  <IconComponent size={14} className={tierDisplay.color} />
-                </div>
-                {/* Task status indicator */}
-                {associatedTask && (
-                  <div className={`ml-1 p-1 rounded-full border ${getTaskStatusColor(associatedTask.status)}`} title={`Task ${associatedTask.status}`}>
-                    {getTaskStatusIcon(associatedTask.status)}
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* Support donation indicator */}
-            {!commissionInfo && product.product_info.donation_info && (
+            {/* Task status indicator for commission products */}
+            {commissionInfo && associatedTask && (
               <div className="absolute top-2 left-2">
-                <div className={`p-1 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}> 
-                  <IconComponent size={14} className={tierDisplay.color} />
+                <div className={`p-1 rounded-full border ${getTaskStatusColor(associatedTask.status)}`} title={`Task ${associatedTask.status}`}>
+                  {getTaskStatusIcon(associatedTask.status)}
                 </div>
               </div>
             )}
@@ -182,6 +166,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               day: 'numeric'
             })}
           </div>
+          
+          {/* Commission info in footer */}
+          {commissionInfo && (
+            <div className="mt-2 text-xs text-center text-gray-600">
+              <div className="inline-flex items-center space-x-1">
+                <IconComponent size={12} className={tierDisplay.color} />
+                <span>by {commissionInfo.reddit_username || 'Anonymous'}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Support donation info in footer */}
+          {!commissionInfo && product.product_info.donation_info && (
+            <div className="mt-2 text-xs text-center text-gray-600">
+              <div className="inline-flex items-center space-x-1">
+                <IconComponent size={12} className={tierDisplay.color} />
+                <span>Supported</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
