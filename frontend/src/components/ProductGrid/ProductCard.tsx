@@ -43,8 +43,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
         const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
         if (response.ok) {
           const data = await response.json();
-          if (data.commission_info) {
-            setCommissionInfo(data.commission_info);
+          if (data.commission) {
+            setCommissionInfo(data.commission);
           }
           if (data.support) {
             setSupportDonations(data.support);
@@ -180,14 +180,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           <div className="mt-3 pt-3 border-t border-gray-100">
             <div className="flex items-center justify-between text-xs text-gray-600">
               <span className="flex items-center gap-1 min-w-0">
-                {commissionInfo ? (
-                  <>
-                    <IconComponent size={12} className={tierDisplay.color} />
-                    {commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'}
-                  </>
-                ) : (
-                  <span className="opacity-30 flex items-center gap-1"><FaHeart size={12} /></span>
-                )}
+                {commissionInfo && <><IconComponent size={12} className={tierDisplay.color} />{commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'}</>}
               </span>
               <span className="truncate text-center flex-1">{new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
               <span className="flex items-center gap-1 min-w-0 justify-end">
