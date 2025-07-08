@@ -159,37 +159,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             </div>
           )}
           
-          <div className="text-sm text-gray-500 text-center mt-auto">
-            {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
-            })}
+          {/* Unified footer for commission/support info and date */}
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="text-xs text-center text-gray-600 flex items-center justify-center gap-1">
+              <IconComponent size={12} className={tierDisplay.color} />
+              {commissionInfo ? (
+                <>
+                  by {commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'}
+                  <span className="mx-1">·</span>
+                  {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </>
+              ) : product.product_info.donation_info ? (
+                <>
+                  Supported
+                  <span className="mx-1">·</span>
+                  {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </>
+              ) : null}
+            </div>
           </div>
-          
-          {/* Commission info in footer */}
-          {commissionInfo && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="text-xs text-center text-gray-600">
-                <div className="inline-flex items-center space-x-1">
-                  <IconComponent size={12} className={tierDisplay.color} />
-                  <span>by {commissionInfo.is_anonymous ? 'Anonymous' : (commissionInfo.reddit_username || 'Anonymous')}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Support donation info in footer */}
-          {!commissionInfo && product.product_info.donation_info && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="text-xs text-center text-gray-600">
-                <div className="inline-flex items-center space-x-1">
-                  <IconComponent size={12} className={tierDisplay.color} />
-                  <span>Supported</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
