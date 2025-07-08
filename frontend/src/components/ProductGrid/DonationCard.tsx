@@ -38,7 +38,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
   const CommissionIconComponent = commissionTierDisplay && commissionTierDisplay.icon ? 
     iconMap[commissionTierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart : FaHeart;
 
-  // Helper for aligned row
+  // Helper for aligned row - adjusted grid to accommodate 20-char usernames
   const renderRow = (
     icon: React.ReactNode,
     username: string,
@@ -51,19 +51,21 @@ export const DonationCard: React.FC<DonationCardProps> = ({
   ) => (
     <div
       key={key}
-      className={`grid grid-cols-[28px_1fr_70px_80px_1fr] items-center gap-2 px-3 py-2 rounded-lg mb-2 text-gray-800 ${bgClass}`}
+      className={`grid grid-cols-[28px_140px_70px_80px_1fr] items-center gap-2 px-3 py-2 rounded-lg mb-2 text-gray-800 ${bgClass}`}
       style={{ minHeight: 0 }}
     >
       <span className={`flex-shrink-0 flex items-center justify-center ${colorClass}`}>{icon}</span>
-      <span className="font-semibold truncate max-w-[100px]">{username || '-'}</span>
+      <span className="font-semibold text-xs break-all leading-tight" style={{ wordBreak: 'break-all' }}>
+        {username || '-'}
+      </span>
       <span className="font-mono text-gray-700 text-sm text-right">{amount != null ? `$${amount.toFixed(2)}` : '-'}</span>
       <span className="text-xs text-gray-500 text-right whitespace-nowrap">{date || '-'}</span>
       {message ? (
         <span
-          className="text-xs text-gray-500 truncate max-w-[120px] cursor-help text-right"
+          className="text-xs text-gray-500 truncate max-w-[100px] cursor-help text-right"
           title={message}
         >
-          {truncate(message, 18)}
+          {truncate(message, 15)}
         </span>
       ) : (
         <span className="text-xs text-gray-400 text-right">-</span>
