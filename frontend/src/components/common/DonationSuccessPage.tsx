@@ -29,14 +29,23 @@ const DonationSuccessPage: React.FC = () => {
   const paymentIntentId = searchParams.get('payment_intent');
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 30; // Increased from 15 to 30 attempts
+  const [secondsLeft, setSecondsLeft] = useState(3); // Initialize to 3 seconds
 
   // Auto-redirect when donation is found
   useEffect(() => {
     if (donation) {
-      const timer = setTimeout(() => {
-        navigate('/');
-      }, 3000); // 3 seconds
-      return () => clearTimeout(timer);
+      setSecondsLeft(3); // Reset timer on new donation
+      const interval = setInterval(() => {
+        setSecondsLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            navigate('/');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
     }
   }, [donation, navigate]);
 
@@ -202,17 +211,15 @@ const DonationSuccessPage: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-3">
-              <Link
-                to="/"
-                className="block w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"
-              >
-                View Gallery
-              </Link>
-              <p className="text-xs text-gray-500">
-                Redirecting automatically in 5 seconds...
-              </p>
-            </div>
+            <Link
+              to="/"
+              className="block w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              View Gallery
+            </Link>
+            <p className="text-xs text-gray-400 mt-4">
+              Redirecting automatically in {secondsLeft} second{secondsLeft !== 1 ? 's' : ''}...
+            </p>
           </div>
         </div>
       </div>
