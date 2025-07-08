@@ -175,7 +175,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
                 </>
               ) : product.product_info.donation_info ? (
                 <>
-                  Supported
+                  by {product.product_info.donation_info.is_anonymous ? 'Anonymous' : product.product_info.donation_info.reddit_username ? `u/${product.product_info.donation_info.reddit_username}` : 'Anonymous'}
                   <span className="mx-1">·</span>
                   {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
                     year: 'numeric',
