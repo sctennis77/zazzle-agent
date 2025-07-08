@@ -161,29 +161,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           
           {/* Unified footer for commission/support info and date */}
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="text-xs text-center text-gray-600 flex items-center justify-center gap-1">
-              <IconComponent size={12} className={tierDisplay.color} />
-              {commissionInfo ? (
-                <>
-                  by {commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'}
-                  <span className="mx-1">·</span>
-                  {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </>
-              ) : product.product_info.donation_info ? (
-                <>
-                  by {product.product_info.donation_info.is_anonymous ? 'Anonymous' : product.product_info.donation_info.reddit_username ? `u/${product.product_info.donation_info.reddit_username}` : 'Anonymous'}
-                  <span className="mx-1">·</span>
-                  {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </>
-              ) : null}
+            <div className="text-xs text-center text-gray-600 flex flex-col items-center justify-center gap-0.5">
+              <span className="flex items-center gap-1">
+                <IconComponent size={12} className={tierDisplay.color} />
+                {commissionInfo ? (
+                  commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username ? `u/${commissionInfo.reddit_username}` : 'Anonymous'
+                ) : product.product_info.donation_info ? (
+                  product.product_info.donation_info.is_anonymous ? 'Anonymous' : product.product_info.donation_info.reddit_username ? `u/${product.product_info.donation_info.reddit_username}` : 'Anonymous'
+                ) : null}
+              </span>
+              <span className="mt-0.5">
+                {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric'
+                })}
+              </span>
             </div>
           </div>
         </div>
