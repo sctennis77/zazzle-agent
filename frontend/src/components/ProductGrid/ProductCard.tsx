@@ -169,20 +169,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           
           {/* Commission info in footer */}
           {commissionInfo && (
-            <div className="mt-2 text-xs text-center text-gray-600">
-              <div className="inline-flex items-center space-x-1">
-                <IconComponent size={12} className={tierDisplay.color} />
-                <span>by {commissionInfo.reddit_username || 'Anonymous'}</span>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-xs text-center text-gray-600">
+                <div className="inline-flex items-center space-x-1">
+                  <IconComponent size={12} className={tierDisplay.color} />
+                  <span>by {commissionInfo.is_anonymous ? 'Anonymous' : (commissionInfo.reddit_username || 'Anonymous')}</span>
+                </div>
               </div>
             </div>
           )}
           
           {/* Support donation info in footer */}
           {!commissionInfo && product.product_info.donation_info && (
-            <div className="mt-2 text-xs text-center text-gray-600">
-              <div className="inline-flex items-center space-x-1">
-                <IconComponent size={12} className={tierDisplay.color} />
-                <span>Supported</span>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-xs text-center text-gray-600">
+                <div className="inline-flex items-center space-x-1">
+                  <IconComponent size={12} className={tierDisplay.color} />
+                  <span>Supported</span>
+                </div>
               </div>
             </div>
           )}
