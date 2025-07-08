@@ -388,54 +388,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
   const isBelowMin = parseFloat(amount) < minAmount;
 
   if (success) {
-    // Redirect to product grid with modal open for support donations
-    if (supportOnly && postId) {
-      setTimeout(() => {
-        window.location.href = `/?product=${postId}`;
-      }, 1200);
-      return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Thank you!">
-          <div className="flex flex-col items-center justify-center p-6">
-            <div className="text-green-600 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Support Successful!</h2>
-            <p className="text-gray-600 text-center mb-6">Thank you for your support! You'll be redirected to your supported product.</p>
-            <div className="bg-white rounded-xl shadow border border-gray-200 p-5 w-full max-w-xs mb-2 flex flex-col gap-2">
-              <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-2">
-                <span className="font-semibold text-gray-700">Amount</span>
-                <span className="text-gray-900 font-bold">${parseFloat(amount).toFixed(2)}</span>
-              </div>
-              {message && (
-                <div className="flex flex-col gap-1 border-b border-gray-100 pb-2 mb-2">
-                  <span className="font-semibold text-gray-700">Your message</span>
-                  <span className="text-gray-600 italic">{message}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-gray-700">Reddit</span>
-                <span className="text-gray-900">{isAnonymous ? 'Anonymous' : redditUsername ? `u/${redditUsername}` : 'Anonymous'}</span>
-              </div>
-              {subreddit && (
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-gray-700">Subreddit</span>
-                  <span className="text-gray-900">r/{subreddit}</span>
-                </div>
-              )}
-              {postId && (
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-gray-700">Post ID</span>
-                  <span className="text-gray-900">{postId}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-    // For commissions, redirect to task dashboard to see commission status updates
+    // Redirect to task dashboard to see commission status updates
     setTimeout(() => {
       window.location.href = '/tasks';
     }, 1200);
