@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from app.api import handle_payment_intent_succeeded
 from app.db.database import Base, SessionLocal, engine
 from app.db.models import Donation, PipelineTask, Subreddit, PipelineRun
-from app.models import DonationStatus
+from app.models import DonationStatus, DonationTier
 from app.services.stripe_service import StripeService
 from app.task_manager import TaskManager
 
@@ -447,7 +447,7 @@ class TestCommissionWorkflowIntegration:
                 amount_usd=Decimal('25.00'),
                 currency="usd",
                 status=DonationStatus.SUCCEEDED.value,
-                tier="platinum",
+                tier=DonationTier.PLATINUM,
                 customer_email="stripe@test.com",
                 customer_name="Stripe Test",
                 subreddit_id=sample_subreddit.id,
@@ -481,7 +481,7 @@ class TestCommissionWorkflowIntegration:
                 amount_usd=Decimal('25.00'),
                 currency="usd",
                 status=DonationStatus.SUCCEEDED.value,
-                tier="platinum",
+                tier=DonationTier.PLATINUM,
                 customer_email="manager@test.com",
                 customer_name="Manager Test",
                 subreddit_id=sample_subreddit.id,
