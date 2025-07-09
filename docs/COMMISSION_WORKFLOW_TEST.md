@@ -1,5 +1,15 @@
 # Commission Workflow End-to-End Test Documentation
 
+**IMPORTANT:**
+
+- After any backend refactor or before deployment, you MUST run `tests/test_commission_workflow_e2e.py` to ensure you have not broken the core commission or pipeline workflow.
+- This test suite is the canonical end-to-end validator for the commission flow.
+- Run it with:
+
+```sh
+python3 -m pytest tests/test_commission_workflow_e2e.py -v
+```
+
 ## Test Overview
 This document outlines the successful end-to-end test of the commission workflow for the Zazzle Agent system. The test simulates a real user donating to commission a product from a specific subreddit.
 
@@ -21,6 +31,15 @@ This document outlines the successful end-to-end test of the commission workflow
 - `ZAZZLE_AFFILIATE_ID`: Zazzle affiliate ID
 
 ## Test Execution Steps
+
+**To validate your backend is not broken, always run:**
+
+```sh
+python3 -m pytest tests/test_commission_workflow_e2e.py -v
+```
+
+- This will run the canonical end-to-end test suite for the commission workflow.
+- If any test fails, you must fix the backend before deploying or merging changes.
 
 ### 1. Environment Preparation
 ```bash
@@ -232,4 +251,4 @@ The commission workflow test was successful, demonstrating that:
 - Task processing generates products as expected
 - API and frontend integration is functional
 
-This provides a solid foundation for production deployment and further feature development. 
+**Always run `tests/test_commission_workflow_e2e.py` before merging or deploying backend changes!** 
