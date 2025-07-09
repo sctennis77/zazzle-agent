@@ -214,7 +214,7 @@ class CommissionWorker:
             logger.info(f"Updated pipeline task {self.pipeline_task.id} status to {status}")
             update = self._build_update_dict(status, error_message, progress, stage, message)
             if update is not None:
-                logger.info(f"Task update for {self.pipeline_task.id}: {update}")
+                logger.info(f"[PROGRESS UPDATE] Task {self.pipeline_task.id}: {update}")
                 # Use simple Redis publishing to avoid event loop conflicts
                 self._publish_task_update_simple(self.pipeline_task.id, update)
         except Exception as e:
