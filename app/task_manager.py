@@ -213,7 +213,7 @@ class TaskManager:
                 message = "Task created"
                 
                 if task.status == "in_progress":
-                    progress = 25
+                    progress = 10
                     stage = "post_fetching"
                     message = "Processing commission..."
                 elif task.status == "completed":
@@ -264,7 +264,7 @@ class TaskManager:
                 message = "Task created"
                 
                 if task.status == "in_progress":
-                    progress = 25
+                    progress = 10
                     stage = "post_fetching"
                     message = "Processing commission..."
                 elif task.status == "completed":

@@ -30,6 +30,7 @@ const DonationSuccessPage: React.FC = () => {
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 30; // Increased from 15 to 30 attempts
   const [countdown, setCountdown] = useState(3);
+  const attemptsRef = useRef(0);
 
   // Start countdown when donation is found
   useEffect(() => {
@@ -56,10 +57,11 @@ const DonationSuccessPage: React.FC = () => {
     }
 
     console.log('Starting donation polling for payment intent:', paymentIntentId);
+    attemptsRef.current = 0;
 
     const pollForDonation = async () => {
       try {
-        console.log(`Polling attempt ${attempts + 1}/${maxAttempts} for payment intent: ${paymentIntentId}`);
+        console.log(`Polling attempt ${attemptsRef.current + 1}/${maxAttempts} for payment intent: ${paymentIntentId}`);
         const response = await fetch(`/api/donations/${paymentIntentId}`);
         
         if (response.ok) {
@@ -69,7 +71,7 @@ const DonationSuccessPage: React.FC = () => {
           setLoading(false);
           return true; // Success
         } else if (response.status === 404) {
-          console.log(`Donation not found yet (attempt ${attempts + 1}/${maxAttempts})`);
+          console.log(`Donation not found yet (attempt ${attemptsRef.current + 1}/${maxAttempts})`);
           return false; // Continue polling
         } else {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -81,9 +83,10 @@ const DonationSuccessPage: React.FC = () => {
     };
 
     const pollInterval = setInterval(async () => {
-      setAttempts(prev => prev + 1);
+      attemptsRef.current += 1;
+      setAttempts(attemptsRef.current);
       
-      if (attempts >= maxAttempts) {
+      if (attemptsRef.current >= maxAttempts) {
         clearInterval(pollInterval);
         setError('Unable to find donation after multiple attempts. Please contact support if this persists.');
         setLoading(false);
@@ -102,7 +105,7 @@ const DonationSuccessPage: React.FC = () => {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [paymentIntentId, attempts, maxAttempts, navigate]);
+  }, [paymentIntentId, maxAttempts, navigate]);
 
   if (error) {
     return (
