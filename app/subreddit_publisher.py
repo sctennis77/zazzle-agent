@@ -211,7 +211,7 @@ class SubredditPublisher:
             
             # Create content for the image post
             content = f"""
-**Commissioned Artwork: {post_title}**
+**Commissioned Artwork: {product.theme}**
 
 This piece was commissioned by u/{reddit_post.author or 'Anonymous'} from r/{reddit_post.subreddit} and brought to life by Clouvel, the mythic golden retriever who illustrates Reddit stories! 🐕✨
 
