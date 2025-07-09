@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface DonationData {
   reddit_username: string;
@@ -81,12 +81,41 @@ interface Props {
 }
 
 const DonationsLeaderboardTable: React.FC<Props> = ({ data }) => {
+  const [mode, setMode] = useState<'count' | 'amount'>('amount');
   const rows = summarizeLeaderboard(data);
   // Find which tiers are present in the data
   const presentTiers = TIER_ORDER.filter(tier => rows.some(row => row.tiers[tier]));
 
+  // Compute max total for scaling bar widths
+  const maxTotal = Math.max(
+    ...rows.map(row =>
+      mode === 'amount'
+        ? row.total
+        : presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0)
+    ),
+    1 // avoid division by zero
+  );
+  const MAX_BAR_WIDTH = 192; // px (12rem, matches w-48)
+  const BAR_HEIGHT = 16; // px
+
   return (
     <div className="overflow-x-auto bg-white rounded-xl shadow-lg p-6">
+      {/* Toggle */}
+      <div className="flex items-center mb-4">
+        <span className="mr-3 font-medium text-gray-700">Show:</span>
+        <button
+          className={`px-3 py-1 rounded-l border border-gray-300 font-semibold transition-colors ${mode === 'amount' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+          onClick={() => setMode('amount')}
+        >
+          $
+        </button>
+        <button
+          className={`px-3 py-1 rounded-r border-t border-b border-r border-gray-300 font-semibold transition-colors ${mode === 'count' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+          onClick={() => setMode('count')}
+        >
+          #
+        </button>
+      </div>
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b">
@@ -95,55 +124,78 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data }) => {
             {presentTiers.map(tier => (
               <th key={tier} className="text-center px-2 py-2 font-semibold" style={{ color: TIER_COLORS[tier] }}>{TIER_NAMES[tier]}</th>
             ))}
-            <th className="text-right px-2 py-2 font-semibold text-gray-700">Total ($)</th>
+            <th className="text-right px-2 py-2 font-semibold text-gray-700">Total {mode === 'amount' ? '($)' : '(#)'}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(row => {
-            // For the stacked bar
-            const total = row.total || 1; // avoid div by zero
-            let acc = 0;
+            // For the stacked bar: sum all donation counts or amounts per tier
+            const totalValue = mode === 'count'
+              ? presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0) || 1
+              : presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.amount || 0), 0) || 1;
+            const totalDisplay = mode === 'count'
+              ? presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0)
+              : row.total;
+            // Calculate bar width
+            const barWidth = Math.max(8, (totalDisplay / maxTotal) * MAX_BAR_WIDTH);
             return (
               <tr key={row.subreddit} className="border-b hover:bg-gray-50">
                 <td className="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">r/{row.subreddit}</td>
                 <td className="px-2 py-2">
-                  <div className="flex h-6 w-48 rounded overflow-hidden bg-gray-100 border border-gray-200">
-                    {presentTiers.map(tier => {
-                      const tierData = row.tiers[tier];
-                      if (!tierData) return null;
-                      const width = (tierData.amount / total) * 100;
-                      acc += width;
-                      return (
-                        <div
-                          key={tier}
-                          style={{
-                            width: `${width}%`,
-                            background: TIER_COLORS[tier],
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#fff',
-                            fontWeight: 600,
-                            fontSize: '0.85em',
-                            borderRight: '1px solid #fff',
-                          }}
-                          title={`${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)} (${tierData.count})`}
-                        >
-                          {tierData.count}
-                        </div>
-                      );
-                    })}
+                  <div
+                    className="relative rounded overflow-hidden border border-gray-200"
+                    style={{ width: `${MAX_BAR_WIDTH}px`, height: `${BAR_HEIGHT}px` }}
+                  >
+                    {/* Unfilled bar (track) */}
+                    <div
+                      className="absolute left-0 top-0 h-full w-full bg-gray-200"
+                      style={{ zIndex: 0 }}
+                    />
+                    {/* Filled stacked bar */}
+                    <div
+                      className="absolute left-0 top-0 h-full flex"
+                      style={{ width: `${barWidth}px`, zIndex: 1, transition: 'width 0.3s' }}
+                    >
+                      {presentTiers.map(tier => {
+                        const tierData = row.tiers[tier];
+                        if (!tierData) return null;
+                        const value = mode === 'count' ? tierData.count : tierData.amount;
+                        const width = (value / totalValue) * 100;
+                        return (
+                          <div
+                            key={tier}
+                            style={{
+                              width: `${width}%`,
+                              background: TIER_COLORS[tier],
+                              borderRight: '1px solid #fff',
+                              transition: 'width 0.3s',
+                            }}
+                            title={
+                              mode === 'count'
+                                ? `${TIER_NAMES[tier]}: ${tierData.count} donation${tierData.count > 1 ? 's' : ''}`
+                                : `${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)}`
+                            }
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 </td>
                 {presentTiers.map(tier => {
                   const tierData = row.tiers[tier];
                   return (
                     <td key={tier} className="text-center px-2 py-2 font-mono">
-                      {tierData ? `${tierData.count} ($${tierData.amount.toFixed(2)})` : <span className="text-gray-300">–</span>}
+                      {tierData
+                        ? mode === 'count'
+                          ? tierData.count
+                          : `$${tierData.amount.toFixed(2)}`
+                        : <span className="text-gray-300">–</span>}
                     </td>
                   );
                 })}
-                <td className="text-right px-2 py-2 font-bold text-gray-900">${row.total.toFixed(2)}</td>
+                <td className="text-right px-2 py-2 font-bold text-gray-900">
+                  {mode === 'count' ? totalDisplay : `$${totalDisplay.toFixed(2)}`}
+                </td>
               </tr>
             );
           })}
