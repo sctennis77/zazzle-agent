@@ -1,7 +1,7 @@
 VENV_NAME=zam
 PYTHON=python3
 PIP=pip3
-POETRY=poetry
+POETRY=export PATH="$$HOME/.local/bin:$$PATH" && poetry
 
 .PHONY: help test venv install run run-full run-test-voting clean docker-build docker-run scrape run-generate-image test-pattern run-api stop-api frontend-dev frontend-build frontend-preview frontend-install frontend-lint frontend-clean alembic-init alembic-revision alembic-upgrade alembic-downgrade check-db check-pipeline-db get-last-run run-pipeline-debug run-pipeline-dry-run run-pipeline-single run-pipeline-batch monitor-pipeline logs-tail logs-clear backup-db restore-db reset-db health-check test-interaction-agent create-test-db full_from_fresh_env dev_setup start-services stop-services restart-services status docker-build-all docker-run-local docker-stop-local docker-logs docker-clean k8s-deploy k8s-status k8s-logs k8s-delete deploy-production format lint type-check install-poetry install-deps export-requirements deploy deploy-clean deploy-quick validate-deployment deployment-status run-pipeline show-logs show-logs-api show-logs-pipeline show-logs-frontend setup-dev setup-prod setup-quick health-check health-logs backup-db restore-db check-db cleanup restart
 
