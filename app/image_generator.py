@@ -48,7 +48,8 @@ IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-3": {
         # "prompt": "You are a incredibly talented designer and illustrator with a passion for stickers. You are inspired by impressionist painters and the style of their paintings. Your designs must be beautiful and creative. Design an image optimized for a 3 inch diameter round image on Zazzle.",
         # "version": "1.0.0"
-        "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful image based on the following description. ",
+        # "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful impressionistic image based on the following description. ",
+        "prompt": "Create a square (1:1) image designed for clear, engaging visual storytelling on a webpage. and your 1024x1024 image size. Create a beautiful illustration based on the following scene description. Use a combined impasto and pointillism style, inspired by painters like Van Gogh and Seurat. Focus on visible brushstrokes, rich texture, and vibrant, light-filled color with a strong emphasis on nature. Highlight mood, setting, and symbolic details rather than realism. Do not include any text or representations of text.", 
         "version": "1.0.1",
     },
 }
