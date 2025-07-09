@@ -582,18 +582,20 @@ class RedditAgent:
         try:
             # Use OpenAI to analyze post and generate product idea
             # TODO: need to version these too
+            log_cnt = f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content if reddit_context.post_content else 'No content'}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Title: [A concise, witty and insightful title reflecting the theme and comment summary]\nImage Description: [A vivid, specific visual scene for DALL-E-3]"
+            logger.info(f"Generating product idea for Reddit post: {log_cnt}")
             messages = [
                 {
                     "role": "system",
-                    "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract the most compelling story, emotion, or moment from the post title, content, and comment summary (audiance's reaction to the post so integrate accordingly), then create a vivid image description for DALL-E-3.  Focus on the core message, whether it's human experience, animal behavior, nature, objects, symbolism, or abstract concepts. Make the idea and story compelling, leave some creative freedom to the illustrator, it's as if you're working together to illustrate reddit. Keep image descriptions concise ( < 5 sentences). The illustrator does not render text well. Also create a concise, witty and insightful title (one sentence max) that captures the essence of the theme and comment summary.",
+                    "content": "You are a creative storyteller who creates visual narratives from Reddit posts. Extract and set the beautiful scene for a captivating story(emotion, conflict, symbolism, abstract concepts, dreams, etc. are all good. Be really creative and imaginative.) from the post title, post content (if available) and especially leverage the comment summary. Next take this idea and revise it into an image description that will be passed to a reddit illustrator using DALL-E-3 to generate images.  The illustrator loves drawing nature and animals with an impressionistic style. Keep image descriptions concise ( < 7 sentences). The illustrator does not render text well. Also create a concise, witty and insightful title (one sentence max) that captures the essence of the theme and comment summary.",
                 },
                 {
                     "role": "user",
-                    "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Title: [A concise, witty and insightful title reflecting the theme and comment summary]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
+                    "content": f"Reddit Post:\nTitle: {reddit_context.post_title}\nContent: {reddit_context.post_content if reddit_context.post_content else 'No content'}\nComment Summary: {reddit_context.comments[0]['text'] if reddit_context.comments and reddit_context.comments[0].get('text') else 'No comments'}\n\nExtract the core story and create:\nTheme: [The essence or key moment]\nImage Title: [A concise, witty and insightful title reflecting the theme and comment summary]\nImage Description: [A vivid, specific visual scene for DALL-E-3]",
                 },
             ]
 
-            logger.info(f"Generating product idea for Reddit post: {reddit_context.post_title}")
+           
             content = self._make_openai_call(messages)
 
             # Log the raw response for debugging
@@ -1204,7 +1206,7 @@ class RedditAgent:
             submission.comments.replace_more(
                 limit=0
             )  # Load top-level comments only
-            top_comments = submission.comments.list()[:5]  # Get top 5 comments
+            top_comments = submission.comments.list()[:10]  # Get top 10 comments
             comment_texts = [
                 comment.body
                 for comment in top_comments
@@ -1214,6 +1216,7 @@ class RedditAgent:
                 # Use GPT to summarize comments
                 response = self.openai.chat.completions.create(
                     model="gpt-4",
+                    
                     messages=[
                         {
                             "role": "system",
@@ -1235,7 +1238,7 @@ class RedditAgent:
             logger.error(f"Error generating comment summary: {str(e)}")
             return "Error generating comment summary."
 
-    async def find_top_post_from_subreddit(self, tries: int = 3, limit: int = 100, subreddit_name: str = None, time_filter: str = "week"):
+    async def find_top_post_from_subreddit(self, tries: int = 3, limit: int = 100, subreddit_name: str = None, time_filter: str = "month"):
         """
         Find a top Reddit post from a subreddit using Reddit's top method.
         This method uses the top() method instead of hot() to find the highest-scoring posts.
@@ -1289,20 +1292,34 @@ class RedditAgent:
         # Otherwise, find a top post using the top method
         try:
             for attempt in range(tries):
+                logger.info(f"Starting attempt {attempt + 1}/{tries} with limit {limit}")
+                processed_count = 0
+                skipped_stickied = 0
+                skipped_old = 0
+                skipped_no_selftext = 0
+                skipped_already_processed = 0
+                # TODO add smarter time filter fallback logic, we should really just curate posts outside of the commision loops and serve them from the db
                 # Use the existing subreddit object (works for "all" and specific subreddits)
                 for submission in self.reddit_client.reddit.subreddit(subreddit_name or self.subreddit_name).top(time_filter=time_filter, limit=limit):
+                    processed_count += 1
                     logger.info(
-                        f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
+                        f"Processing submission {processed_count}: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days, num_comments: {submission.num_comments}, stickied: {submission.stickied})"
                     )
                     if submission.stickied:
+                        skipped_stickied += 1
                         continue
                     if (
                         datetime.now(timezone.utc)
                         - datetime.fromtimestamp(submission.created_utc, timezone.utc)
-                    ).days > 30:
+                    ).days > 60:
+                        skipped_old += 1
                         continue
                     if not submission.selftext:
-                        continue
+                        if submission.num_comments > 20 and submission.score > 20:
+                            pass
+                        else:
+                            skipped_no_selftext += 1
+                            continue
 
                     # Check if already processed
                     if self.session:
@@ -1312,18 +1329,17 @@ class RedditAgent:
                             .first()
                         )
                         if existing_post:
-                            logger.info(
-                                f"Skipping post {submission.id}: already processed"
-                            )
+                            skipped_already_processed += 1
                             continue
 
-                    # Generate comment summary and add to submission
-                    comment_summary = self._generate_comment_summary(submission)
-                    submission.comment_summary = comment_summary
+                    # Return the submission without generating comment summary
+                    # Comment summary will be generated when needed in the actual pipeline
+                    logger.info(f"Found suitable post {submission.id} after processing {processed_count} submissions")
                     return submission
                 # If we reach here, no suitable post was found in this attempt
                 logger.info(
-                    f"No suitable top post found on attempt {attempt + 1}/{tries}"
+                    f"Attempt {attempt + 1}/{tries} summary: processed {processed_count} submissions, "
+                    f"skipped {skipped_stickied} stickied, {skipped_old} old, {skipped_no_selftext} no selftext, {skipped_already_processed} already processed"
                 )
             return None
         except Exception as e:
