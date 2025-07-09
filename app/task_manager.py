@@ -160,7 +160,6 @@ class TaskManager:
                 if error_message:
                     task.error_message = error_message
                 db.commit()
-                
                 # Fetch related donation and subreddit for extra info
                 donation = task.donation
                 subreddit = task.subreddit
@@ -174,21 +173,14 @@ class TaskManager:
                     "amount_usd": float(donation.amount_usd) if donation else None,
                     "is_anonymous": donation.is_anonymous if donation else None,
                 }
-                
-                # Log task status update (this is the single source of truth for task status logging)
-                if status in ["completed", "failed"]:
-                    logger.info(f"Task {task_id} {status} (donation_id={task.donation_id}, user: {donation.customer_name if donation else 'Unknown'})")
-                else:
-                    logger.debug(f"Task {task_id} status updated to {status} (donation_id={task.donation_id})")
-                
+                # Log every status update at INFO level, with context
+                logger.info(f"Task {task_id} status updated to {status} (donation_id={task.donation_id}, user: {donation.customer_name if donation else 'Unknown'})")
                 # Use simple Redis publishing to avoid event loop conflicts
                 try:
                     import redis
                     import json
-                    
                     # Create a simple Redis client for this operation
                     r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-                    
                     # Create the message
                     message = {
                         "type": "task_update",
@@ -196,14 +188,11 @@ class TaskManager:
                         "data": update,
                         "timestamp": datetime.now().isoformat()
                     }
-                    
                     # Publish to Redis
                     r.publish("task_updates", json.dumps(message))
                     logger.debug(f"[TASK MANAGER] Published task update for {task.id}: {update}")
-                    
                 except Exception as e:
                     logger.error(f"[TASK MANAGER] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
-                    
         except Exception as e:
             logger.error(f"Failed to update task status for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
         finally:
