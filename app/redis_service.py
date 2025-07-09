@@ -155,7 +155,7 @@ class RedisService:
                 if not self._running:
                     break
                 
-                logger.info(f"Redis received message: {message}")
+                logger.debug(f"Redis received message: {message}")
                 
                 if message["type"] == "message":
                     channel = message["channel"]
@@ -167,7 +167,7 @@ class RedisService:
                         try:
                             # Parse the JSON message
                             parsed_data = json.loads(data)
-                            logger.info(f"Parsed Redis message: {parsed_data}")
+                            logger.debug(f"Parsed Redis message: {parsed_data}")
                             callback = self._subscribers[channel]
                             if asyncio.iscoroutinefunction(callback):
                                 await callback(parsed_data)
