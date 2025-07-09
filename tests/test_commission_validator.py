@@ -61,7 +61,7 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=mock_submission)
         
         # Mock RedditClient methods
         validator.reddit_client.get_post.return_value = mock_submission
@@ -168,7 +168,7 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=mock_submission)
         
         # Mock RedditClient methods
         validator.reddit_client.get_post.return_value = mock_submission
@@ -192,16 +192,20 @@ class TestCommissionValidator:
 
     @pytest.mark.asyncio
     async def test_validate_random_random_no_subreddits(self, validator):
-        """Test validation failure when no trending posts are found"""
+        """Test validation failure when no top posts are found"""
         # Mock RedditAgent to return None (no posts found)
-        validator.reddit_agent._find_trending_post_for_task = AsyncMock(return_value=None)
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=None)
 
         # Mock subreddit selection
         with patch('app.services.commission_validator.pick_subreddit', return_value="golf"):
+            # Test validation
             result = await validator.validate_commission("random_random")
 
+            # Verify result
             assert result.valid is False
-            assert "No trending posts found" in result.error
+            assert "No top or trending posts found in r/golf" in result.error
+            assert result.subreddit is None
+            assert result.post_id is None
 
     @pytest.mark.asyncio
     async def test_validate_commission_invalid_type(self, validator):

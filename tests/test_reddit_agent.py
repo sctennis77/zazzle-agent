@@ -531,9 +531,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_subreddit.top.return_value = [mock_submission]
         agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
         
-        # Mock the comment summary generation
-        agent._generate_comment_summary = MagicMock(return_value="Test comment summary for top post")
-        
         # Test the method with default parameters
         result = await agent.find_top_post_from_subreddit()
         
@@ -541,10 +538,10 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.id, "test_post_id")
         self.assertEqual(result.title, "Test Top Post")
-        self.assertEqual(result.comment_summary, "Test comment summary for top post")
+        # Note: comment_summary is no longer generated in this method
         
-        # Verify the top method was called with correct parameters
-        mock_subreddit.top.assert_called_once_with(time_filter="week", limit=100)
+        # Verify the top method was called with correct parameters (updated to "month")
+        mock_subreddit.top.assert_called_once_with(time_filter="month", limit=100)
 
     async def test_find_top_post_from_subreddit_with_custom_parameters(self):
         """Test find_top_post_from_subreddit with custom parameters."""
@@ -624,12 +621,12 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertEqual(result.title, "Valid Post")
 
     async def test_find_top_post_from_subreddit_skips_old_posts(self):
-        """Test that find_top_post_from_subreddit skips posts older than 30 days."""
+        """Test that find_top_post_from_subreddit skips posts older than 60 days."""
         agent = RedditAgent(subreddit_name="test_subreddit")
         
         # Create mock submissions - first one old, second one recent
-        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=35)).timestamp()
-        recent_timestamp = (datetime.now(timezone.utc) - timedelta(days=5)).timestamp()
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=65)).timestamp()  # 65 days old (should be skipped)
+        recent_timestamp = (datetime.now(timezone.utc) - timedelta(days=5)).timestamp()  # 5 days old
         
         mock_old_submission = MagicMock()
         mock_old_submission.id = "old_post_id"
@@ -637,7 +634,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_old_submission.score = 1000
         mock_old_submission.is_self = True
         mock_old_submission.selftext = "Old content"
-        mock_old_submission.created_utc = old_timestamp  # 35 days old
+        mock_old_submission.created_utc = old_timestamp  # 65 days old
         mock_old_submission.stickied = False
         mock_old_submission.subreddit.display_name = "test_subreddit"
         
@@ -656,8 +653,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_subreddit.top.return_value = [mock_old_submission, mock_recent_submission]
         agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
         
-        agent._generate_comment_summary = MagicMock(return_value="Recent comment summary")
-        
         # Test the method
         result = await agent.find_top_post_from_subreddit()
         
@@ -667,24 +662,26 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertEqual(result.title, "Recent Post")
 
     async def test_find_top_post_from_subreddit_skips_posts_without_selftext(self):
-        """Test that find_top_post_from_subreddit skips posts without selftext."""
+        """Test that find_top_post_from_subreddit handles posts without selftext based on engagement."""
         agent = RedditAgent(subreddit_name="test_subreddit")
         
-        # Create mock submissions - first one without selftext, second one with selftext
-        mock_no_selftext_submission = MagicMock()
-        mock_no_selftext_submission.id = "no_selftext_post_id"
-        mock_no_selftext_submission.title = "No Selftext Post"
-        mock_no_selftext_submission.score = 1000
-        mock_no_selftext_submission.is_self = True
-        mock_no_selftext_submission.selftext = ""  # Empty selftext
-        mock_no_selftext_submission.created_utc = datetime.now(timezone.utc).timestamp()
-        mock_no_selftext_submission.stickied = False
-        mock_no_selftext_submission.subreddit.display_name = "test_subreddit"
+        # Create mock submissions - first one without selftext but low engagement, second one with selftext
+        mock_no_selftext_low_engagement = MagicMock()
+        mock_no_selftext_low_engagement.id = "no_selftext_low_engagement_id"
+        mock_no_selftext_low_engagement.title = "No Selftext Low Engagement Post"
+        mock_no_selftext_low_engagement.score = 20  # Below threshold
+        mock_no_selftext_low_engagement.num_comments = 15  # Below threshold
+        mock_no_selftext_low_engagement.is_self = True
+        mock_no_selftext_low_engagement.selftext = ""  # Empty selftext
+        mock_no_selftext_low_engagement.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_no_selftext_low_engagement.stickied = False
+        mock_no_selftext_low_engagement.subreddit.display_name = "test_subreddit"
         
         mock_with_selftext_submission = MagicMock()
         mock_with_selftext_submission.id = "with_selftext_post_id"
         mock_with_selftext_submission.title = "With Selftext Post"
         mock_with_selftext_submission.score = 500
+        mock_with_selftext_submission.num_comments = 50
         mock_with_selftext_submission.is_self = True
         mock_with_selftext_submission.selftext = "Has selftext content"  # Has selftext
         mock_with_selftext_submission.created_utc = datetime.now(timezone.utc).timestamp()
@@ -693,18 +690,45 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         
         # Mock the subreddit.top method to return both submissions
         mock_subreddit = MagicMock()
-        mock_subreddit.top.return_value = [mock_no_selftext_submission, mock_with_selftext_submission]
+        mock_subreddit.top.return_value = [mock_no_selftext_low_engagement, mock_with_selftext_submission]
         agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
-        
-        agent._generate_comment_summary = MagicMock(return_value="With selftext comment summary")
         
         # Test the method
         result = await agent.find_top_post_from_subreddit()
         
-        # Verify the result is the submission with selftext
+        # Verify the result is the submission with selftext (low engagement post without selftext should be skipped)
         self.assertIsNotNone(result)
         self.assertEqual(result.id, "with_selftext_post_id")
         self.assertEqual(result.title, "With Selftext Post")
+
+    async def test_find_top_post_from_subreddit_keeps_high_engagement_posts_without_selftext(self):
+        """Test that find_top_post_from_subreddit keeps posts without selftext if they have high engagement."""
+        agent = RedditAgent(subreddit_name="test_subreddit")
+        
+        # Create mock submission without selftext but with high engagement
+        mock_high_engagement_no_selftext = MagicMock()
+        mock_high_engagement_no_selftext.id = "high_engagement_no_selftext_id"
+        mock_high_engagement_no_selftext.title = "High Engagement No Selftext Post"
+        mock_high_engagement_no_selftext.score = 100  # Above threshold (30+)
+        mock_high_engagement_no_selftext.num_comments = 50  # Above threshold (30+)
+        mock_high_engagement_no_selftext.is_self = True
+        mock_high_engagement_no_selftext.selftext = ""  # Empty selftext
+        mock_high_engagement_no_selftext.created_utc = datetime.now(timezone.utc).timestamp()
+        mock_high_engagement_no_selftext.stickied = False
+        mock_high_engagement_no_selftext.subreddit.display_name = "test_subreddit"
+        
+        # Mock the subreddit.top method to return the submission
+        mock_subreddit = MagicMock()
+        mock_subreddit.top.return_value = [mock_high_engagement_no_selftext]
+        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
+        
+        # Test the method
+        result = await agent.find_top_post_from_subreddit()
+        
+        # Verify the result is the high engagement post without selftext (should be kept)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.id, "high_engagement_no_selftext_id")
+        self.assertEqual(result.title, "High Engagement No Selftext Post")
 
     async def test_find_top_post_from_subreddit_skips_processed_posts(self):
         """Test that find_top_post_from_subreddit skips posts that have already been processed."""
