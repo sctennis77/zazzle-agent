@@ -275,6 +275,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
   
   const isMounted = useRef(false);
 
@@ -330,6 +332,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setValidationError('');
       setClientSecret(null);
       setPaymentIntentId(null);
+      setUsernameError(null);
+      setMessageError(null);
     }
   }, [isOpen]);
 
@@ -596,6 +600,34 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     setError(errorMessage);
   };
 
+  const validate = () => {
+    let valid = true;
+    // Reddit username validation
+    if (redditUsername.length > 20) {
+      setUsernameError('Reddit username must be at most 20 characters.');
+      valid = false;
+    } else if (/^u\//i.test(redditUsername)) {
+      setUsernameError("Do not include 'u/'—just your username.");
+      valid = false;
+    } else {
+      setUsernameError(null);
+    }
+    // Commission message validation
+    if (commissionMessage.length > 100) {
+      setMessageError('Commission message must be at most 100 characters.');
+      valid = false;
+    } else {
+      setMessageError(null);
+    }
+    return valid;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    // ... existing submit logic ...
+  };
+
   if (success) {
     return (
       <Modal isOpen={isOpen} onClose={() => { setSuccess(false); onClose(); }} title="Commission Submitted!">
@@ -791,18 +823,34 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
               Reddit Username
               {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
             </label>
-            <input
-              type="text"
-              value={redditUsername}
-              onChange={(e) => setRedditUsername(e.target.value)}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-              placeholder="u/username"
-              disabled={isAnonymous}
-              required={!isAnonymous}
-            />
+            <div className="flex items-center">
+              <span className="px-2 py-2 bg-gray-100 border border-gray-300 rounded-l text-gray-500 select-none">u/</span>
+              <input
+                type="text"
+                value={redditUsername}
+                onChange={e => {
+                  // Remove any leading u/ and enforce max length
+                  let val = e.target.value.replace(/^u\//i, '');
+                  if (val.length > 20) {
+                    setUsernameError('Reddit username must be at most 20 characters.');
+                  } else {
+                    setUsernameError(null);
+                  }
+                  setRedditUsername(val.slice(0, 20));
+                }}
+                className={`flex-1 px-3 py-2 border-t border-b border-r border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                placeholder="yourusername"
+                disabled={isAnonymous}
+                required={!isAnonymous}
+                maxLength={20}
+                autoComplete="off"
+              />
+            </div>
+            <div className="text-xs text-gray-500 mb-1">Do not include <span className="font-mono">u/</span>—just your username.</div>
             {!isAnonymous && !redditUsername.trim() && (
               <p className="text-xs text-red-500 mt-1">Reddit username is required unless you select Anonymous.</p>
             )}
+            {usernameError && <div className="text-xs text-red-600 mb-1">{usernameError}</div>}
           </div>
           <div className="flex flex-col items-center justify-end h-full">
             <label className="text-xs text-gray-600 mb-1">Anonymous</label>
@@ -829,38 +877,24 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
           </div>
         </div>
         {/* Commission Message */}
-        <div>
-          {!showMessage && (
-            <button
-              type="button"
-              className="text-xs text-purple-500 underline mb-2"
-              onClick={() => setShowMessage(true)}
-            >
-              + Add a commission message
-            </button>
-          )}
-          {showMessage && (
-            <>
-              <button
-                type="button"
-                className="text-xs text-purple-500 underline mb-2"
-                onClick={() => setShowMessage(false)}
-              >
-                – Hide commission message
-              </button>
-              <label className="block text-sm font-medium text-gray-700 mb-2 mt-2">Commission Message</label>
-              <textarea
-                value={commissionMessage}
-                onChange={(e) => setCommissionMessage(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                rows={3}
-                placeholder="Leave a message to display with your commission..."
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                This message will be displayed alongside your commission for recognition purposes.
-              </p>
-            </>
-          )}
+        <div className="mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Commission Message <span className="text-gray-400 font-normal">(optional)</span></label>
+          <textarea
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+            placeholder="Describe your commission (max 100 characters)"
+            value={commissionMessage}
+            maxLength={100}
+            onChange={e => {
+              if (e.target.value.length <= 100) {
+                setCommissionMessage(e.target.value);
+                if (messageError) setMessageError(null);
+              }
+            }}
+          />
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>{commissionMessage.length}/100</span>
+            {messageError && <span className="text-red-600">{messageError}</span>}
+          </div>
         </div>
         {/* Customer Information */}
         <div className="space-y-4 mt-4">

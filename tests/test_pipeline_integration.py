@@ -37,12 +37,9 @@ logging.basicConfig(level=logging.DEBUG)
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
     """Drop and recreate all tables before each test."""
-    logging.debug("Dropping all tables...")
     Base.metadata.drop_all(bind=engine)
-    logging.debug("Creating all tables...")
     Base.metadata.create_all(bind=engine)
     yield
-    logging.debug("Dropping all tables after test...")
     Base.metadata.drop_all(bind=engine)
 
 

@@ -31,6 +31,8 @@ def patch_database():
         patch("app.db.database.get_database_url", return_value=f"sqlite:///{test_db_path}"),
         patch("app.db.database.engine", test_engine),
         patch("app.db.database.SessionLocal", TestSessionLocal),
+        # Also patch the get_db function to use our test session
+        patch("app.db.database.get_db", lambda: TestSessionLocal()),
     ):
         # Store the test session for use in other fixtures
         patch_database.test_session = TestSessionLocal

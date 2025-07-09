@@ -388,27 +388,28 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
         Dict: Donations grouped by subreddit with the same structure as product donations
     """
     try:
-        # Query all donations grouped by subreddit
+        from app.db.models import RedditPost
         subreddit_donations = {}
-        
-        # Get all donations with subreddit information
         donations = (
             db.query(Donation)
             .filter_by(status=DonationStatus.SUCCEEDED.value)
             .order_by(Donation.created_at.desc())
             .all()
         )
-        
         for donation in donations:
-            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
-            
+            # Prefer the subreddit of the associated RedditPost if post_id is present
+            subreddit_name = None
+            if donation.post_id:
+                reddit_post = db.query(RedditPost).filter_by(post_id=donation.post_id).first()
+                if reddit_post and reddit_post.subreddit:
+                    subreddit_name = reddit_post.subreddit.subreddit_name
+            if not subreddit_name:
+                subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
             if subreddit_name not in subreddit_donations:
                 subreddit_donations[subreddit_name] = {
                     "commission": None,
                     "support": []
                 }
-            
-            # Structure donation data similar to product donations route
             donation_data = {
                 "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
                 "tier_name": donation.tier,
@@ -419,22 +420,16 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
                 "created_at": donation.created_at.isoformat(),
                 "donation_id": donation.id,
             }
-            
             if donation.donation_type == "commission":
-                # For commission donations, add commission-specific fields
                 donation_data.update({
                     "commission_message": donation.commission_message,
                     "commission_type": donation.commission_type,
                 })
-                # Only keep the most recent commission per subreddit
                 if not subreddit_donations[subreddit_name]["commission"]:
                     subreddit_donations[subreddit_name]["commission"] = donation_data
             else:
-                # For support donations, add to the support list
                 subreddit_donations[subreddit_name]["support"].append(donation_data)
-        
         return subreddit_donations
-        
     except Exception as e:
         logger.error(f"Error getting donations by subreddit: {str(e)}")
         logger.error(traceback.format_exc())

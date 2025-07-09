@@ -193,6 +193,8 @@ const DonationModal: React.FC<DonationModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
   const [countdown, setCountdown] = React.useState(3);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
 
   // Use dynamic tiers from API
   const { tiers, getTierDisplay } = useDonationTiers();
@@ -222,6 +224,8 @@ const DonationModal: React.FC<DonationModalProps> = ({
       setError('');
       setSuccess(false);
       setShowMessage(false);
+      setUsernameError(null);
+      setMessageError(null);
       // Don't reset clientSecret and paymentIntentId here - let createPaymentIntent handle it
     } else {
       // Only reset when closing
@@ -511,8 +515,93 @@ const DonationModal: React.FC<DonationModalProps> = ({
           )}
         </div>
 
-        {/* Customer Information - Email and Name */}
-        <div className="space-y-4">
+        {/* Reddit Username and Anonymous Toggle */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reddit Username
+              {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <div className="flex items-center">
+              <span className="px-2 py-2 bg-gray-100 border border-gray-300 rounded-l text-gray-500 select-none">u/</span>
+              <input
+                type="text"
+                value={redditUsername}
+                onChange={e => {
+                  let val = e.target.value.replace(/^u\//i, '');
+                  if (val.length > 20) {
+                    setUsernameError('Reddit username must be at most 20 characters.');
+                  } else {
+                    setUsernameError(null);
+                  }
+                  setRedditUsername(val.slice(0, 20));
+                  if (paymentIntentId && !isAnonymous) {
+                    setTimeout(() => updatePaymentIntent(), 100);
+                  }
+                }}
+                disabled={isAnonymous}
+                className={`flex-1 px-3 py-2 border-t border-b border-r border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-pink-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                placeholder="yourusername"
+                required={!isAnonymous}
+                maxLength={20}
+                autoComplete="off"
+              />
+            </div>
+            <div className="text-xs text-gray-500 mb-1">Do not include <span className="font-mono">u/</span>—just your username.</div>
+            {!isAnonymous && !redditUsername.trim() && (
+              <p className="text-red-500 text-xs mt-1">Reddit username is required when not anonymous</p>
+            )}
+            {usernameError && <div className="text-xs text-red-600 mb-1">{usernameError}</div>}
+          </div>
+          <div className="flex flex-col items-center justify-end h-full">
+            <label className="text-xs text-gray-600 mb-1">Anonymous</label>
+            <button
+              type="button"
+              onClick={() => {
+                const newAnonymousState = !isAnonymous;
+                setIsAnonymous(newAnonymousState);
+                if (newAnonymousState) {
+                  setPreviousRedditUsername(redditUsername);
+                  setRedditUsername('');
+                } else {
+                  setRedditUsername(previousRedditUsername);
+                }
+                if (paymentIntentId) {
+                  setTimeout(() => updatePaymentIntent(), 100);
+                }
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-pink-500' : 'bg-gray-300'}`}
+              aria-pressed={isAnonymous}
+              aria-label="Toggle anonymous donation"
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
+              />
+            </button>
+          </div>
+        </div>
+        {/* Support Message */}
+        <div className="mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Support Message <span className="text-gray-400 font-normal">(optional)</span></label>
+          <textarea
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-pink-500"
+            placeholder="Leave a message of support (max 100 characters)"
+            value={message}
+            maxLength={100}
+            onChange={e => {
+              if (e.target.value.length <= 100) {
+                setMessage(e.target.value);
+                if (messageError) setMessageError(null);
+              }
+            }}
+          />
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>{message.length}/100</span>
+            {messageError && <span className="text-red-600">{messageError}</span>}
+          </div>
+        </div>
+        {/* Name and Email fields moved below for consistency */}
+        <div className="space-y-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
             <input
@@ -541,103 +630,6 @@ const DonationModal: React.FC<DonationModalProps> = ({
               Required for card payments, optional for Apple Pay/Google Pay/PayPal
             </p>
           </div>
-        </div>
-
-        {/* Customer Information - Only for Reddit Username */}
-        <div className="space-y-4">
-          {/* Reddit Username and Anonymous Toggle */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reddit Username
-                {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
-              </label>
-              <input
-                type="text"
-                value={redditUsername}
-                onChange={(e) => {
-                  setRedditUsername(e.target.value);
-                  // Update payment intent when username changes
-                  if (paymentIntentId && !isAnonymous) {
-                    setTimeout(() => updatePaymentIntent(), 100);
-                  }
-                }}
-                disabled={isAnonymous}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                placeholder={isAnonymous ? "Anonymous donation" : "u/username"}
-              />
-              {!isAnonymous && !redditUsername.trim() && (
-                <p className="text-red-500 text-xs mt-1">Reddit username is required when not anonymous</p>
-              )}
-            </div>
-            <div className="flex flex-col items-center justify-end h-full">
-              <label className="text-xs text-gray-600 mb-1">Anonymous</label>
-              <button
-                type="button"
-                onClick={() => {
-                  const newAnonymousState = !isAnonymous;
-                  setIsAnonymous(newAnonymousState);
-                  
-                  // Handle reddit username when toggling anonymous
-                  if (newAnonymousState) {
-                    // Switching to anonymous - save current username and clear it
-                    setPreviousRedditUsername(redditUsername);
-                    setRedditUsername('');
-                  } else {
-                    // Switching from anonymous - restore previous username if any
-                    setRedditUsername(previousRedditUsername);
-                  }
-                  
-                  // Immediately update payment intent when toggling anonymous
-                  if (paymentIntentId) {
-                    setTimeout(() => updatePaymentIntent(), 100);
-                  }
-                }}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-pink-500' : 'bg-gray-300'}`}
-                aria-pressed={isAnonymous}
-                aria-label="Toggle anonymous donation"
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Message */}
-        <div>
-          {!showMessage && (
-            <button
-              type="button"
-              className="text-xs text-pink-500 underline mb-2"
-              onClick={() => setShowMessage(true)}
-            >
-              + Add a support message
-            </button>
-          )}
-          {showMessage && (
-            <>
-              <button
-                type="button"
-                className="text-xs text-pink-500 underline mb-2"
-                onClick={() => setShowMessage(false)}
-              >
-                – Hide support message
-              </button>
-              <label className="block text-sm font-medium text-gray-700 mb-2 mt-2">Support Message</label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
-                rows={3}
-                placeholder="Leave a message of support..."
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                This message will be displayed alongside your donation for recognition purposes.
-              </p>
-            </>
-          )}
         </div>
 
         {/* Error Display */}
