@@ -31,14 +31,18 @@ const DonationSuccessPage: React.FC = () => {
   const maxAttempts = 30; // Increased from 15 to 30 attempts
   const [countdown, setCountdown] = useState(3);
   const countdownStartedRef = useRef(false);
+  const [lastDonationId, setLastDonationId] = useState<number | null>(null);
 
-  // Reset countdownStartedRef when donation changes
+  // Reset countdown only when a new donation is loaded
   useEffect(() => {
-    countdownStartedRef.current = false;
-    setCountdown(3); // Reset countdown to 3 seconds for each new donation
-  }, [donation]);
+    if (donation && donation.id !== lastDonationId) {
+      countdownStartedRef.current = false;
+      setCountdown(3);
+      setLastDonationId(donation.id);
+    }
+  }, [donation, lastDonationId]);
 
-  // Auto-redirect when donation is found
+  // Auto-redirect when donation is found and countdown hasn't started
   useEffect(() => {
     if (donation && !countdownStartedRef.current) {
       countdownStartedRef.current = true;
