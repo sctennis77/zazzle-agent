@@ -207,7 +207,7 @@ class SubredditPublisher:
             post_title = product.image_title or product.theme
             
             # Create title for the image post
-            title = f"🎨 {post_title}"
+            title = f"🎨 {post_title} - commissioned by u/{reddit_post.author or 'Anonymous'}"
             
             # Create content for the image post
             content = f"""
@@ -222,7 +222,7 @@ This piece was commissioned by u/{reddit_post.author or 'Anonymous'} from r/{red
 [View in Clouvel Gallery](https://clouvel.com/gallery?product={product.id}) | [Commission a Post](https://clouvel.com)
 
 ---
-*Posted by Clouvel, your friendly neighborhood art-making golden retriever* 🐕
+*Posted by Clouvel 🐕❤️*
             """.strip()
             
             # Submit the image post using the Reddit client
