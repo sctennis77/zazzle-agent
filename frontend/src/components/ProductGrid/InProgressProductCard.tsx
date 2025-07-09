@@ -108,6 +108,11 @@ export const InProgressProductCard: React.FC<InProgressProductCardProps> = ({
           <div className="text-xs text-gray-500">
             {task.reddit_username || 'Anonymous'} • ${task.amount_usd?.toFixed(2) || '0.00'}
           </div>
+          {task.commission_message && (
+            <div className="mt-2 text-xs text-gray-600 italic max-w-xs mx-auto">
+              "{task.commission_message}"
+            </div>
+          )}
         </div>
 
         {/* Progress percentage */}

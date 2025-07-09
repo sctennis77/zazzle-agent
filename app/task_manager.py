@@ -247,19 +247,64 @@ class TaskManager:
             db.close()
     
     def list_tasks(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """List recent tasks."""
+        """List recent tasks with donation information."""
         db = SessionLocal()
         try:
             tasks = db.query(PipelineTask).order_by(PipelineTask.created_at.desc()).limit(limit).all()
-            return [
-                {
+            result = []
+            
+            for task in tasks:
+                # Get donation information
+                donation = task.donation
+                subreddit = task.subreddit
+                
+                # Calculate progress and stage based on status
+                progress = 0
+                stage = "pending"
+                message = "Task created"
+                
+                if task.status == "in_progress":
+                    progress = 25
+                    stage = "post_fetching"
+                    message = "Processing commission..."
+                elif task.status == "completed":
+                    progress = 100
+                    stage = "commission_complete"
+                    message = "Commission completed successfully"
+                elif task.status == "failed":
+                    progress = 0
+                    stage = "failed"
+                    message = f"Commission failed: {task.error_message or 'Unknown error'}"
+                
+                task_data = {
                     "task_id": str(task.id),
                     "status": task.status,
                     "created_at": task.created_at.isoformat() if task.created_at else None,
                     "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-                    "donation_id": task.donation_id
+                    "donation_id": task.donation_id,
+                    "error": task.error_message,
+                    "stage": stage,
+                    "message": message,
+                    "progress": progress,
+                    "timestamp": task.created_at.timestamp() if task.created_at else None
                 }
-                for task in tasks
-            ]
+                
+                # Add donation information if available
+                if donation:
+                    task_data.update({
+                        "reddit_username": donation.reddit_username if donation.reddit_username and not donation.is_anonymous else "Anonymous",
+                        "tier": donation.tier,
+                        "amount_usd": float(donation.amount_usd),
+                        "is_anonymous": donation.is_anonymous,
+                        "commission_message": donation.commission_message,
+                    })
+                
+                # Add subreddit information if available
+                if subreddit:
+                    task_data["subreddit"] = subreddit.subreddit_name
+                
+                result.append(task_data)
+            
+            return result
         finally:
             db.close() 

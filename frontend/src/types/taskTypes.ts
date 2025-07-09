@@ -16,6 +16,7 @@ export interface Task {
   message?: string;
   progress?: number;
   timestamp?: number;
+  commission_message?: string;
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
