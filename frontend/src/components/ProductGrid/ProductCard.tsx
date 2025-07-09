@@ -5,6 +5,7 @@ import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, Fa
 import { ProductModal } from './ProductModal';
 import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
+import DonationModal from '../common/DonationModal';
 
 interface ProductCardProps {
   product: GeneratedProduct;
@@ -24,6 +25,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [showDonationModal, setShowDonationModal] = useState(false);
   const { getTierDisplay, tiers } = useDonationTiers();
 
   // Find associated task for this product by checking if it's a commission product
@@ -45,8 +47,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   };
 
   const handleSupport = () => {
-    // TODO: Implement support donation flow
-    console.log('Support this post clicked');
+    setShowDonationModal(true);
   };
 
   // Fetch donation information when component mounts
@@ -214,6 +215,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             supportDonations={supportDonations}
             onFlipBack={handleFlipBack}
             onSupport={handleSupport}
+          />
+          <DonationModal
+            isOpen={showDonationModal}
+            onClose={() => setShowDonationModal(false)}
+            subreddit={product.reddit_post.subreddit}
+            postId={product.reddit_post.post_id}
+            supportOnly={true}
           />
         </div>
       )}

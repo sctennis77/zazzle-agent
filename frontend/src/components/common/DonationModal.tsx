@@ -192,6 +192,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
+  const [countdown, setCountdown] = React.useState(3);
 
   // Use dynamic tiers from API
   const { tiers, getTierDisplay } = useDonationTiers();
@@ -385,11 +386,21 @@ const DonationModal: React.FC<DonationModalProps> = ({
   const minAmount = currentTier?.min_amount || 1;
   const isBelowMin = parseFloat(amount) < minAmount;
 
+  // Countdown/redirect effect for support donations only
+  React.useEffect(() => {
+    if (success && supportOnly) {
+      if (countdown <= 0) {
+        navigate(`/?product=${postId}`);
+        return;
+      }
+      const timer = setTimeout(() => {
+        setCountdown((c) => c - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, supportOnly, countdown, navigate, postId]);
+
   if (success) {
-    // Redirect to task dashboard to see commission status updates
-    setTimeout(() => {
-      navigate('/');
-    }, 1200);
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Thank you!">
         <div className="flex flex-col items-center justify-center p-6">
@@ -399,7 +410,26 @@ const DonationModal: React.FC<DonationModalProps> = ({
             </svg>
           </div>
           <p className="text-lg text-green-600 font-semibold mb-2">Thank you for your support!</p>
-          <p className="text-gray-600 text-center">Your donation helps keep this project running. You'll be redirected to see your commission progress.</p>
+          <p className="text-gray-600 text-center mb-4">Your donation helps keep this project running. You’ll see your support listed on the product card.</p>
+          {supportOnly && (
+            <div className="flex flex-col items-center gap-2 w-full">
+              <p className="text-sm text-gray-500">Redirecting in {countdown} seconds...</p>
+              <div className="flex gap-3 mt-2">
+                <button
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
+                  onClick={() => navigate(`/?product=${postId}`)}
+                >
+                  Continue
+                </button>
+                <button
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-semibold"
+                  onClick={onClose}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     );
