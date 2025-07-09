@@ -6,6 +6,7 @@ import CommissionModal from './components/common/CommissionModal';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationSuccessPage from './components/common/DonationSuccessPage';
+import FundraisingPage from './components/Fundraising/FundraisingPage';
 
 function App() {
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
@@ -31,6 +32,7 @@ function App() {
         <Routes>
           <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
           <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
+          <Route path="/fundraising" element={<FundraisingPage />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
         </Routes>
         <CommissionModal 

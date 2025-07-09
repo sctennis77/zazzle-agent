@@ -376,6 +376,71 @@ async def get_donation_summary(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/donations/by-subreddit")
+async def get_donations_by_subreddit(db: Session = Depends(get_db)):
+    """
+    Get donations grouped by subreddit for the fundraising/leaderboard page.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        Dict: Donations grouped by subreddit with the same structure as product donations
+    """
+    try:
+        # Query all donations grouped by subreddit
+        subreddit_donations = {}
+        
+        # Get all donations with subreddit information
+        donations = (
+            db.query(Donation)
+            .filter_by(status=DonationStatus.SUCCEEDED.value)
+            .order_by(Donation.created_at.desc())
+            .all()
+        )
+        
+        for donation in donations:
+            subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
+            
+            if subreddit_name not in subreddit_donations:
+                subreddit_donations[subreddit_name] = {
+                    "commission": None,
+                    "support": []
+                }
+            
+            # Structure donation data similar to product donations route
+            donation_data = {
+                "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                "tier_name": donation.tier,
+                "tier_min_amount": float(donation.amount_usd),
+                "donation_amount": float(donation.amount_usd),
+                "is_anonymous": donation.is_anonymous,
+                "message": donation.message,
+                "created_at": donation.created_at.isoformat(),
+                "donation_id": donation.id,
+            }
+            
+            if donation.donation_type == "commission":
+                # For commission donations, add commission-specific fields
+                donation_data.update({
+                    "commission_message": donation.commission_message,
+                    "commission_type": donation.commission_type,
+                })
+                # Only keep the most recent commission per subreddit
+                if not subreddit_donations[subreddit_name]["commission"]:
+                    subreddit_donations[subreddit_name]["commission"] = donation_data
+            else:
+                # For support donations, add to the support list
+                subreddit_donations[subreddit_name]["support"].append(donation_data)
+        
+        return subreddit_donations
+        
+    except Exception as e:
+        logger.error(f"Error getting donations by subreddit: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/donations/{payment_intent_id}", response_model=DonationSchema)
 async def get_donation_by_payment_intent(
     payment_intent_id: str,

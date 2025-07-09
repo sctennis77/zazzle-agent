@@ -146,3 +146,27 @@ def test_post_donations_endpoint(test_data):
     assert resp.status_code == 200
     donations = resp.json()
     assert isinstance(donations, list) 
+
+
+def test_donations_by_subreddit_endpoint(test_data):
+    """Test retrieving donations grouped by subreddit."""
+    resp = client.get("/api/donations/by-subreddit")
+    assert resp.status_code == 200
+    donations_by_subreddit = resp.json()
+    assert isinstance(donations_by_subreddit, dict)
+    
+    # Check that each subreddit has the expected structure
+    for subreddit_name, donations in donations_by_subreddit.items():
+        assert "commission" in donations
+        assert "support" in donations
+        assert isinstance(donations["support"], list)
+        
+        # Check support donations structure
+        for donation in donations["support"]:
+            assert "reddit_username" in donation
+            assert "tier_name" in donation
+            assert "tier_min_amount" in donation
+            assert "donation_amount" in donation
+            assert "is_anonymous" in donation
+            assert "created_at" in donation
+            assert "donation_id" in donation 

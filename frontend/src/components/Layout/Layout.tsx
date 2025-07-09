@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import logo from '../../assets/logo.png';
 
 interface LayoutProps {
@@ -8,8 +9,40 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isCommissionInProgress }) => {
+  const location = useLocation();
+  
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      {/* Navigation Bar */}
+      <nav className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-8">
+              <Link 
+                to="/" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  location.pathname === '/' 
+                    ? 'bg-indigo-100 text-indigo-700' 
+                    : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                Gallery
+              </Link>
+              <Link 
+                to="/fundraising" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  location.pathname === '/fundraising' 
+                    ? 'bg-indigo-100 text-indigo-700' 
+                    : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                Fundraising
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+      
       <header className="group relative py-8 px-4 bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 shadow-lg overflow-hidden">
         {/* Starry sky overlay - only on hover */}
         <div
