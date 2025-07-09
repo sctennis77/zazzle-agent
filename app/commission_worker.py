@@ -16,6 +16,7 @@ import asyncio
 import time
 import redis.asyncio as redis
 import threading
+import traceback
 
 from app.agents.reddit_agent import RedditAgent
 from app.content_generator import ContentGenerator
@@ -106,7 +107,7 @@ class CommissionWorker:
             # Step 2: Get or create pipeline task
             self.pipeline_task = self._get_or_create_pipeline_task(donation)
             if not self.pipeline_task:
-                logger.error("Failed to get or create pipeline task")
+                logger.error(f"Failed to get or create pipeline task for donation {self.donation_id}")
                 return False
             
             # Step 3: Mark task as in progress
@@ -124,12 +125,13 @@ class CommissionWorker:
             self._update_donation_status(donation, success)
             
             # Step 6: Log session summary
+            logger.info(f"Commission processing complete for donation {self.donation_id} (user: {donation.customer_name}, tier: {donation.tier}, success: {success})")
             log_session_summary()
             
             return success
             
         except Exception as e:
-            logger.error(f"Commission processing failed: {e}")
+            logger.error(f"Commission processing failed for donation_id={self.donation_id}: {str(e)}\n{traceback.format_exc()}")
             self._update_task_status("failed", str(e))
             self._update_donation_status(None, False, error=str(e))
             return False
@@ -144,11 +146,11 @@ class CommissionWorker:
                 logger.error(f"Donation {self.donation_id} not found in database")
                 return None
             
-            logger.info(f"Found donation: {donation.customer_name} - ${donation.amount_usd}")
+            logger.debug(f"Found donation: {donation.customer_name} - ${donation.amount_usd}")
             return donation
             
         except Exception as e:
-            logger.error(f"Error getting donation: {e}")
+            logger.error(f"Error getting donation for donation_id={self.donation_id}: {str(e)}\n{traceback.format_exc()}")
             return None
     
     def _get_or_create_pipeline_task(self, donation: Donation) -> Optional[PipelineTask]:
@@ -181,14 +183,14 @@ class CommissionWorker:
                 
                 self.db.add(task)
                 self.db.commit()
-                logger.info(f"Created new pipeline task {task.id} for donation {donation.id}")
+                logger.debug(f"Created new pipeline task {task.id} for donation {donation.id}")
             else:
-                logger.info(f"Found existing pipeline task {task.id} for donation {donation.id}")
+                logger.debug(f"Found existing pipeline task {task.id} for donation {donation.id}")
             
             return task
             
         except Exception as e:
-            logger.error(f"Error getting or creating pipeline task: {e}")
+            logger.error(f"Error getting or creating pipeline task for donation_id={donation.id}: {str(e)}\n{traceback.format_exc()}")
             self.db.rollback()
             return None
     
@@ -196,14 +198,14 @@ class CommissionWorker:
         """Publish task update using the async Redis service."""
         try:
             await redis_service.publish_task_update(task_id, update)
-            logger.info(f"[ASYNC REDIS] Published task update for {task_id}: {update}")
+            logger.debug(f"[ASYNC REDIS] Published task update for {task_id}: {update}")
         except Exception as e:
-            logger.error(f"[ASYNC REDIS] Failed to publish task update: {e}")
+            logger.error(f"[ASYNC REDIS] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
 
     def _update_task_status(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None):
         try:
             if not self.pipeline_task:
-                logger.warning("No pipeline task to update")
+                logger.warning(f"No pipeline task to update for donation_id={self.donation_id}")
                 return
             self.pipeline_task.status = status
             if status in ["completed", "failed"]:
@@ -211,14 +213,14 @@ class CommissionWorker:
             if error_message:
                 self.pipeline_task.error_message = error_message
             self.db.commit()
-            logger.info(f"Updated pipeline task {self.pipeline_task.id} status to {status}")
+            # Task status logging is now handled in TaskManager; demote here to DEBUG for local trace
+            logger.debug(f"Updated pipeline task {self.pipeline_task.id} status to {status} (donation_id={self.donation_id})")
             update = self._build_update_dict(status, error_message, progress, stage, message)
             if update is not None:
-                logger.info(f"[PROGRESS UPDATE] Task {self.pipeline_task.id}: {update}")
-                # Use simple Redis publishing to avoid event loop conflicts
+                logger.debug(f"[PROGRESS UPDATE] Task {self.pipeline_task.id}: {update}")
                 self._publish_task_update_simple(self.pipeline_task.id, update)
         except Exception as e:
-            logger.error(f"Error updating task status: {e}")
+            logger.error(f"Error updating task status for pipeline_task_id={getattr(self.pipeline_task, 'id', None)}: {str(e)}\n{traceback.format_exc()}")
             self.db.rollback()
 
     def _publish_task_update_simple(self, task_id: str, update: dict):
@@ -240,10 +242,10 @@ class CommissionWorker:
             
             # Publish to Redis
             r.publish("task_updates", json.dumps(message))
-            logger.info(f"[SIMPLE REDIS] Published task update for {task_id}: {update}")
+            logger.debug(f"[SIMPLE REDIS] Published task update for {task_id}: {update}")
             
         except Exception as e:
-            logger.error(f"[SIMPLE REDIS] Failed to publish task update: {e}")
+            logger.error(f"[SIMPLE REDIS] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
 
     def _build_update_dict(self, status: str, error_message: str = None, progress: int = None, stage: str = None, message: str = None) -> Optional[dict]:
         """Build the update dictionary for Redis publishing."""
@@ -268,18 +270,18 @@ class CommissionWorker:
     async def _process_commission(self, donation: Donation) -> bool:
         """Process the commission workflow."""
         try:
-            logger.info("Processing commission workflow")
+            logger.info(f"Processing commission workflow for donation_id={donation.id}, user={donation.customer_name}, tier={donation.tier}")
             
             # Step 1: Find trending post and generate product
             product_info = await self._generate_product(donation)
             if not product_info:
-                logger.error("Failed to generate product")
+                logger.error(f"Failed to generate product for donation_id={donation.id}")
                 return False
             
             # Step 2: Create Zazzle product
             zazzle_result = await self._create_zazzle_product(product_info, donation)
             if not zazzle_result:
-                logger.error("Failed to create Zazzle product")
+                logger.error(f"Failed to create Zazzle product for donation_id={donation.id}")
                 return False
             
             # Step 3: Save product to database
@@ -288,11 +290,11 @@ class CommissionWorker:
             # Step 4: Broadcast commission completion (100%)
             await self._broadcast_commission_complete(donation, product_info)
             
-            logger.info("Commission processing completed successfully")
+            logger.info(f"Commission processing completed successfully for donation_id={donation.id}")
             return True
             
         except Exception as e:
-            logger.error(f"Error processing commission: {e}")
+            logger.error(f"Error processing commission for donation_id={donation.id}: {str(e)}\n{traceback.format_exc()}")
             return False
     
     async def _generate_product(self, donation: Donation) -> Optional[ProductInfo]:
