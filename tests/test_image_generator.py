@@ -125,11 +125,11 @@ class TestImageGenerator(IsolatedAsyncioTestCase):
         prompt_info = image_generator.get_prompt_info()
         assert prompt_info["version"] == "1.0.1"
         assert (
-            "image optimized for picture books and your 1024x1024 image size"
+            "Create a square (1:1) image designed for clear, engaging visual storytelling on a webpage."
             in prompt_info["prompt"]
         )
         assert (
-            "Style and composition inspired by impressionist painters"
+            "Use a combined impasto and pointillism style, inspired by painters like Van Gogh and Seurat."
             in prompt_info["prompt"]
         )
 
