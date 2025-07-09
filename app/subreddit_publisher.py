@@ -217,7 +217,13 @@ This piece was commissioned by u/{reddit_post.author or 'Anonymous'} from r/{red
 
 **Original Post:** [{reddit_post.title}]({reddit_post.url})
 
+Clouvel's summary of the comments:
+
+> {reddit_post.comment_summary}
+
+
 *Commissioned content - supporting the Reddit community through art! 🎨*
+
 
 [View in Clouvel Gallery](https://clouvel.com/gallery?product={product.id}) | [Commission a Post](https://clouvel.com)
 
