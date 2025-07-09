@@ -17,11 +17,11 @@ from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask, ProductSubredditPost
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus,
-    CheckoutSessionResponse, ProductInfoSchema, RedditContext
+    CheckoutSessionResponse, ProductInfoSchema, RedditContext, ProductSubredditPostSchema
 )
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import RedditPostSchema
@@ -35,6 +35,7 @@ from app.utils.logging_config import setup_logging
 from app.utils.reddit_utils import extract_post_id
 from app.task_manager import TaskManager
 from app.websocket_manager import websocket_manager
+from app.subreddit_publisher import SubredditPublisher
 
 # Setup logging
 setup_logging()
@@ -1449,6 +1450,150 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
         logger.error(f"Error getting commission product: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/publish/product/{product_id}", response_model=ProductSubredditPostSchema)
+async def publish_product_to_subreddit(
+    product_id: str,
+    dry_run: bool = Query(True, description="Whether to run in dry run mode"),
+    db: Session = Depends(get_db)
+):
+    """
+    Publish a product to the clouvel subreddit.
+    
+    Args:
+        product_id: The ID of the product to publish
+        dry_run: Whether to run in dry run mode (default: True)
+        db: Database session
+        
+    Returns:
+        ProductSubredditPostSchema: The published post data
+    """
+    try:
+        logger.info(f"Publishing product {product_id} to clouvel subreddit (dry_run: {dry_run})")
+        
+        # Create publisher
+        publisher = SubredditPublisher(dry_run=dry_run, session=db)
+        
+        try:
+            # Publish the product
+            result = publisher.publish_product(product_id)
+            
+            logger.info(f"Publication result: {result}")
+            
+            if not result["success"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Failed to publish product: {result.get('error', 'Unknown error')}"
+                )
+            
+            # Map the saved post data to match the schema
+            saved_post_data = result["saved_post"]
+            schema_data = {
+                "id": 0,  # This will be set by the database
+                "product_info_id": int(saved_post_data["product_id"]),
+                "subreddit_name": saved_post_data["subreddit"],
+                "reddit_post_id": saved_post_data["reddit_post_id"],
+                "reddit_post_url": saved_post_data["reddit_post_url"],
+                "reddit_post_title": saved_post_data.get("reddit_post_title"),
+                "submitted_at": saved_post_data["submitted_at"],
+                "dry_run": saved_post_data["dry_run"],
+                "status": saved_post_data["status"],
+                "error_message": saved_post_data.get("error_message"),
+                "engagement_data": saved_post_data.get("engagement_data")
+            }
+            
+            return ProductSubredditPostSchema.model_validate(schema_data)
+            
+        finally:
+            publisher.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error publishing product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to publish product: {str(e)}")
+
+
+@app.get("/api/publish/product/{product_id}", response_model=ProductSubredditPostSchema)
+async def get_product_subreddit_post(product_id: str, db: Session = Depends(get_db)):
+    """
+    Get the ProductSubredditPost for a given product.
+    
+    Args:
+        product_id: The ID of the product
+        db: Database session
+        
+    Returns:
+        ProductSubredditPostSchema: The subreddit post data if found, 404 if not found
+    """
+    try:
+        logger.info(f"Fetching ProductSubredditPost for product {product_id}")
+        
+        # Find the ProductSubredditPost for this product
+        post = (
+            db.query(ProductSubredditPost)
+            .filter(ProductSubredditPost.product_info_id == product_id)
+            .first()
+        )
+        
+        if not post:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No ProductSubredditPost found for product {product_id}"
+            )
+        
+        # Convert to schema
+        return ProductSubredditPostSchema.model_validate(post)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching ProductSubredditPost for product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/publish/available-products")
+async def get_available_products_for_publishing(db: Session = Depends(get_db)):
+    """
+    Get a list of available products that can be published to the clouvel subreddit.
+    
+    Returns:
+        List of products with basic information for publishing
+    """
+    try:
+        # Get all products with their basic info
+        products = (
+            db.query(ProductInfo)
+            .join(RedditPost, ProductInfo.reddit_post_id == RedditPost.id)
+            .join(PipelineRun, ProductInfo.pipeline_run_id == PipelineRun.id)
+            .filter(PipelineRun.status == PipelineStatus.COMPLETED.value)
+            .all()
+        )
+        
+        available_products = []
+        for product in products:
+            reddit_post = product.reddit_post
+            available_products.append({
+                "id": product.id,
+                "theme": product.theme,
+                "product_type": product.product_type,
+                "image_url": product.image_url,
+                "affiliate_link": product.affiliate_link,
+                "original_subreddit": reddit_post.subreddit.subreddit_name if reddit_post.subreddit else "unknown",
+                "original_post_title": reddit_post.title,
+                "original_post_url": reddit_post.url,
+                "created_at": product.pipeline_run.start_time.isoformat() if product.pipeline_run else None
+            })
+        
+        return {
+            "available_products": available_products,
+            "count": len(available_products)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting available products: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get available products")
 
 
 if __name__ == "__main__":

@@ -693,3 +693,120 @@ class RedditClient:
         raise NotImplementedError(
             "Product posting is only implemented for dry run mode in this example."
         )
+
+    def submit_image_post(self, subreddit_name: str, title: str, content: str, image_url: str) -> dict:
+        """
+        Submit an image post to a subreddit using PRAW's InlineImage.
+        
+        Args:
+            subreddit_name: The subreddit to post to
+            title: The post title
+            content: The post content/description
+            image_url: URL of the image to post
+            
+        Returns:
+            Dict containing the submission result
+        """
+        log_operation(
+            logger,
+            "submit_image_post",
+            "started",
+            {
+                "subreddit": subreddit_name,
+                "title_length": len(title),
+                "content_length": len(content),
+                "image_url": image_url,
+                "mode": self.mode,
+            },
+        )
+        
+        subreddit = self.get_subreddit(subreddit_name)
+        
+        if self.mode == "dryrun":
+            log_operation(
+                logger,
+                "submit_image_post",
+                "dryrun",
+                {
+                    "type": "image_post",
+                    "action": "would submit image post",
+                    "subreddit": subreddit_name,
+                    "title": title,
+                    "content": content,
+                    "image_url": image_url,
+                    "mode": self.mode,
+                },
+            )
+            return {
+                "type": "image_post",
+                "action": "would submit image post",
+                "subreddit": subreddit_name,
+                "title": title,
+                "content": content,
+                "image_url": image_url,
+                "post_id": "dryrun_post_id",
+                "post_url": f"https://reddit.com/r/{subreddit_name}/comments/dryrun_post_id",
+            }
+        
+        # In live mode, submit the image post using PRAW's InlineImage
+        try:
+            from praw.models import InlineImage
+            
+            # Create inline image with caption
+            inline_image = InlineImage(path=image_url, caption="Commissioned artwork")
+            
+            # Create media dictionary
+            media = {"image1": inline_image}
+            
+            # Create selftext with inline image reference
+            selftext_with_image = f"{content}\n\n{{image1}}"
+            
+            # Submit the post with inline media
+            new_post = subreddit.submit(
+                title=title,
+                inline_media=media,
+                selftext=selftext_with_image
+            )
+            
+            log_operation(
+                logger,
+                "submit_image_post",
+                "success",
+                {
+                    "type": "image_post",
+                    "action": "submitted image post",
+                    "subreddit": subreddit_name,
+                    "title": title,
+                    "content": content,
+                    "image_url": image_url,
+                    "post_id": new_post.id,
+                    "post_url": new_post.url,
+                    "mode": self.mode,
+                },
+            )
+            
+            return {
+                "type": "image_post",
+                "action": "submitted image post",
+                "subreddit": subreddit_name,
+                "title": title,
+                "content": content,
+                "image_url": image_url,
+                "post_id": new_post.id,
+                "post_url": new_post.url,
+            }
+            
+        except Exception as e:
+            log_operation(
+                logger,
+                "submit_image_post",
+                "failure",
+                {
+                    "subreddit": subreddit_name,
+                    "title": title,
+                    "image_url": image_url,
+                    "mode": self.mode,
+                },
+                error=e,
+            )
+            raise

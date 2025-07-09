@@ -81,6 +81,20 @@ export interface GeneratedProduct {
   reddit_post: RedditPost;
 }
 
+export interface ProductSubredditPost {
+  id: number;
+  product_info_id: number;
+  subreddit_name: string;
+  reddit_post_id: string;
+  reddit_post_url?: string;
+  reddit_post_title?: string;
+  submitted_at: string;
+  dry_run: boolean;
+  status: string;
+  error_message?: string;
+  engagement_data?: Record<string, any>;
+}
+
 export interface GeneratedProductSchema {
   product_info: ProductInfo;
   pipeline_run: PipelineRun;

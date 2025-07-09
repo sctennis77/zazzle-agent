@@ -215,6 +215,7 @@ class ProductInfo(Base):
         back_populates="product_info",
         cascade="all, delete-orphan",
     )
+    subreddit_post = relationship("ProductSubredditPost", back_populates="product_info", uselist=False)
 
 
 class ErrorLog(Base):
@@ -295,3 +296,28 @@ class InteractionAgentAction(Base):
     @success_enum.setter
     def success_enum(self, value: InteractionActionStatus):
         self.success = value.value
+
+
+class ProductSubredditPost(Base):
+    """Tracks products that have been published to subreddits."""
+    __tablename__ = "product_subreddit_posts"
+    id = Column(Integer, primary_key=True)
+    product_info_id = Column(
+        Integer,
+        ForeignKey("product_infos.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,  # One-to-one relationship
+        index=True,
+    )
+    subreddit_name = Column(String(100), nullable=False, index=True)  # e.g., "clouvel"
+    reddit_post_id = Column(String(32), nullable=False, index=True)  # Reddit's post ID
+    reddit_post_url = Column(Text, nullable=True)  # Full URL to the Reddit post
+    reddit_post_title = Column(Text, nullable=True)  # Title of the Reddit post
+    submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    dry_run = Column(Boolean, default=True, nullable=False)  # Whether this was a dry run
+    status = Column(String(32), default="published", nullable=False, index=True)  # published, failed, deleted
+    error_message = Column(Text, nullable=True)  # Error message if submission failed
+    engagement_data = Column(JSON, nullable=True)  # Store engagement metrics (upvotes, comments, etc.)
+
+    # Relationships
+    product_info = relationship("ProductInfo", back_populates="subreddit_post", uselist=False)

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
+import type { GeneratedProduct, CommissionInfo, ProductSubredditPost } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
+import { usePublishProduct } from '../../hooks/usePublishProduct';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
@@ -33,6 +34,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
 
   const { getTierDisplay } = useDonationTiers();
+  const { publishedPost, getPublishedPost } = usePublishProduct();
 
   // Fetch donation information when modal opens
   useEffect(() => {
@@ -54,9 +56,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         }
       };
 
+      const fetchPublishedPost = async () => {
+        try {
+          await getPublishedPost(product.product_info.id.toString());
+        } catch (error) {
+          console.error('Error fetching published post:', error);
+        }
+      };
+
       fetchDonationInfo();
+      fetchPublishedPost();
     }
-  }, [isOpen, product.pipeline_run.id]);
+  }, [isOpen, product.pipeline_run.id, product.product_info.id, getPublishedPost]);
 
   return (
     <>
@@ -277,6 +288,54 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </div>
                 </div>
               </div>
+              
+              {/* Published to Reddit Section */}
+              {publishedPost && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-gray-900">Published to Reddit</h4>
+                  <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-green-100 border border-green-300">
+                        <FaReddit size={20} className="text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900">
+                            r/{publishedPost.subreddit_name}
+                          </span>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            {publishedPost.dry_run ? 'Dry Run' : 'Live'}
+                          </span>
+                        </div>
+                        {publishedPost.reddit_post_title && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {publishedPost.reddit_post_title}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-600 mt-1">
+                          Posted on {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                        {publishedPost.reddit_post_url && (
+                          <a
+                            href={publishedPost.reddit_post_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline mt-1 inline-block"
+                          >
+                            View on Reddit →
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           {/* Moved to bottom: Illustration credit */}

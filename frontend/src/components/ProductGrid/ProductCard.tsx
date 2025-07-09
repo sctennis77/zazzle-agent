@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
+import type { GeneratedProduct, CommissionInfo, ProductSubredditPost } from '../../types/productTypes';
 import type { Task } from '../../types/taskTypes';
-import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock, FaReddit } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
 import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
+import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
 
 interface ProductCardProps {
@@ -26,7 +27,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showDonationModal, setShowDonationModal] = useState(false);
+  const [showPublishAnimation, setShowPublishAnimation] = useState(false);
   const { getTierDisplay, tiers } = useDonationTiers();
+  const { publishing, publishedPost, publishProduct, getPublishedPost } = usePublishProduct();
 
   // Find associated task for this product by checking if it's a commission product
   // and matching with active tasks
@@ -70,6 +73,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     };
     fetchDonationInfo();
   }, [product.pipeline_run.id]);
+
+  // Check if commission is completed and publish to Reddit
+  useEffect(() => {
+    const handleCommissionCompletion = async () => {
+      // Check if this is a commission product and any task is completed
+      const completedTask = activeTasks.find(task => 
+        task.status === 'completed' && 
+        commissionInfo // If we have commission info, this is a commission product
+      );
+
+      if (completedTask && commissionInfo && !publishedPost) {
+        try {
+          // Check if already published
+          const existingPost = await getPublishedPost(product.product_info.id.toString());
+          if (!existingPost) {
+            // Publish the product
+            await publishProduct(product.product_info.id.toString(), true); // dry run for now
+            setShowPublishAnimation(true);
+            
+            // Hide animation after 3 seconds
+            setTimeout(() => {
+              setShowPublishAnimation(false);
+            }, 3000);
+          }
+        } catch (error) {
+          console.error('Failed to publish product:', error);
+        }
+      }
+    };
+
+    handleCommissionCompletion();
+  }, [activeTasks, commissionInfo, publishedPost, product.product_info.id, publishProduct, getPublishedPost]);
 
   const getTaskStatusIcon = (status: string) => {
     switch (status) {
@@ -177,6 +212,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full ${getTaskStatusColor(associatedTask.status)}`}> 
                 {getTaskStatusIcon(associatedTask.status)}
                 <span className="capitalize">{associatedTask.status.replace('_', ' ')}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Publish animation */}
+          {showPublishAnimation && (
+            <div className="mt-2 text-xs text-center animate-pulse">
+              <div className="inline-flex items-center space-x-1 px-2 py-1 rounded-full bg-orange-100 border border-orange-300">
+                <FaReddit className="text-orange-500" size={12} />
+                <span className="text-orange-700">Published to Reddit!</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Published status */}
+          {publishedPost && !showPublishAnimation && (
+            <div className="mt-2 text-xs text-center">
+              <div className="inline-flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 border border-green-300">
+                <FaReddit className="text-green-500" size={12} />
+                <span className="text-green-700">Posted to r/{publishedPost.subreddit_name}</span>
               </div>
             </div>
           )}

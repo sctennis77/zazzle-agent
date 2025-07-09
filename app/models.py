@@ -983,3 +983,20 @@ class CommissionValidationResponse(BaseModel):
     post_url: Optional[str] = Field(None, description="URL of the post")
     commission_type: str = Field(..., description="Type of commission that was validated")
     error: Optional[str] = Field(None, description="Error message if validation failed")
+
+
+class ProductSubredditPostSchema(BaseModel):
+    """Schema for tracking products published to subreddits."""
+    id: int
+    product_info_id: int
+    subreddit_name: str
+    reddit_post_id: str
+    reddit_post_url: Optional[str] = None
+    reddit_post_title: Optional[str] = None
+    submitted_at: datetime
+    dry_run: bool
+    status: str
+    error_message: Optional[str] = None
+    engagement_data: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(from_attributes=True)
