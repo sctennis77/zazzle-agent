@@ -29,14 +29,22 @@ const DonationSuccessPage: React.FC = () => {
   const paymentIntentId = searchParams.get('payment_intent');
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 30; // Increased from 15 to 30 attempts
+  const [countdown, setCountdown] = useState(5);
 
   // Auto-redirect when donation is found
   useEffect(() => {
     if (donation) {
-      const timer = setTimeout(() => {
-        navigate('/');
-      }, 3000); // 3 seconds
-      return () => clearTimeout(timer);
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            navigate('/');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
     }
   }, [donation, navigate]);
 
@@ -210,7 +218,7 @@ const DonationSuccessPage: React.FC = () => {
                 View Gallery
               </Link>
               <p className="text-xs text-gray-500">
-                Redirecting automatically in 5 seconds...
+                Redirecting automatically in {countdown} seconds...
               </p>
             </div>
           </div>

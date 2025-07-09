@@ -4,6 +4,7 @@ import { Elements, ExpressCheckoutElement, PaymentElement, useStripe, useElement
 import { Modal } from './Modal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -176,20 +177,21 @@ const DonationModal: React.FC<DonationModalProps> = ({
   postId, 
   supportOnly = false
 }) => {
-  const [amount, setAmount] = useState('10');
+  const [amount, setAmount] = useState('5');
+  const [customAmount, setCustomAmount] = useState('');
   const [message, setMessage] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [redditUsername, setRedditUsername] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false); // Default to not anonymous, like commission form
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [previousRedditUsername, setPreviousRedditUsername] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [customAmount, setCustomAmount] = useState('');
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [showMessage, setShowMessage] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-  const isMounted = useRef(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const navigate = useNavigate();
 
   // Use dynamic tiers from API
   const { tiers, getTierDisplay } = useDonationTiers();
@@ -202,10 +204,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
     }
   }, [isOpen, tiers]);
 
-  useEffect(() => {
-    isMounted.current = isOpen;
-    return () => { isMounted.current = false; };
-  }, [isOpen]);
+
 
 
 
@@ -236,7 +235,6 @@ const DonationModal: React.FC<DonationModalProps> = ({
       // Small delay to ensure state is properly set
       const timeoutId = setTimeout(async () => {
         await createPaymentIntent();
-        if (!isMounted.current) return;
       }, 100);
       
       return () => clearTimeout(timeoutId);
@@ -390,7 +388,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
   if (success) {
     // Redirect to task dashboard to see commission status updates
     setTimeout(() => {
-      window.location.href = '/tasks';
+      navigate('/');
     }, 1200);
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Thank you!">
