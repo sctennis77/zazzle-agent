@@ -32,6 +32,12 @@ const DonationSuccessPage: React.FC = () => {
   const [countdown, setCountdown] = useState(3);
   const countdownStartedRef = useRef(false);
 
+  // Reset countdownStartedRef when donation changes
+  useEffect(() => {
+    countdownStartedRef.current = false;
+    setCountdown(3); // Reset countdown to 3 seconds for each new donation
+  }, [donation]);
+
   // Auto-redirect when donation is found
   useEffect(() => {
     if (donation && !countdownStartedRef.current) {
