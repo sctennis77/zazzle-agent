@@ -29,7 +29,7 @@ const DonationSuccessPage: React.FC = () => {
   const paymentIntentId = searchParams.get('payment_intent');
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 30; // Increased from 15 to 30 attempts
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(3);
 
   // Auto-redirect when donation is found
   useEffect(() => {
