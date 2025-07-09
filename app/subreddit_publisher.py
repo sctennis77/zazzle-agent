@@ -26,6 +26,11 @@ class SubredditPublisher:
     
     This class handles fetching products from the database, preparing them
     for posting, and submitting them as image posts to specified subreddits.
+    
+    Supports context manager pattern for automatic session cleanup:
+    
+        with SubredditPublisher(dry_run=True) as publisher:
+            result = publisher.publish_product('1')
     """
 
     def __init__(self, dry_run: bool = True, session: Optional[Session] = None):
@@ -55,6 +60,16 @@ class SubredditPublisher:
             
         Returns:
             Dict containing the result of the publishing operation
+            
+        Example:
+            # Recommended: Use context manager for automatic cleanup
+            with SubredditPublisher(dry_run=True) as publisher:
+                result = publisher.publish_product('1')
+                
+            # Alternative: Manual cleanup (remember to call .close())
+            publisher = SubredditPublisher(dry_run=True)
+            result = publisher.publish_product('1')
+            publisher.close()
         """
         try:
             logger.info(f"Starting product publication for product_id: {product_id}")
@@ -275,6 +290,16 @@ This piece was commissioned by u/{reddit_post.author or 'Anonymous'} from r/{red
             
         Returns:
             Dict containing the result of the clearing operation
+            
+        Example:
+            # Recommended: Use context manager for automatic cleanup
+            with SubredditPublisher(dry_run=True) as publisher:
+                result = publisher.clear_productsubredditpost_from_db('1')
+                
+            # Alternative: Manual cleanup (remember to call .close())
+            publisher = SubredditPublisher(dry_run=True)
+            result = publisher.clear_productsubredditpost_from_db('1')
+            publisher.close()
         """
         try:
             logger.info(f"Clearing ProductSubredditPost for product_id: {product_id}")
