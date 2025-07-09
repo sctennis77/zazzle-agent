@@ -1099,7 +1099,7 @@ async def handle_payment_intent_succeeded(payment_intent):
             # Extract metadata
             metadata = payment_intent.metadata
             
-            logger.info(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
+            logger.debug(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
             
             # Create donation request from metadata
             donation_request = DonationRequest(
@@ -1116,8 +1116,7 @@ async def handle_payment_intent_succeeded(payment_intent):
                 commission_type=metadata.get('commission_type'),
             )
             
-            # Debug logging for extracted donation request
-            logger.info(f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
+            logger.debug(f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}")
             
             # Process the donation
             donation = stripe_service.save_donation_to_db(db, {
@@ -1131,6 +1130,11 @@ async def handle_payment_intent_succeeded(payment_intent):
                 "created": payment_intent.created,
             }, donation_request)
             
+            logger.info(
+                f"Created donation {donation.id} for payment intent {payment_intent.id} "
+                f"(user: {donation.customer_name}, amount: {donation.amount_usd}, type: {donation.donation_type}, tier: {donation.tier})"
+            )
+            
             # Update donation status to succeeded
             stripe_service.update_donation_status(db, payment_intent.id, DonationStatus.SUCCEEDED)
             
@@ -1139,8 +1143,6 @@ async def handle_payment_intent_succeeded(payment_intent):
             
             # Create commission task if this is a commission donation
             if donation.donation_type == "commission":
-                logger.info(f"Creating commission task for donation {donation.id}")
-                
                 # Prepare task data for TaskManager
                 task_data = {
                     "donation_id": donation.id,
@@ -1154,16 +1156,17 @@ async def handle_payment_intent_succeeded(payment_intent):
                     "commission_message": donation.commission_message,
                     "post_id": donation.post_id,
                 }
-                
                 # Create task using TaskManager (this will automatically run in background thread if K8s not available)
                 task_id = task_manager.create_commission_task(donation.id, task_data)
-                logger.info(f"Created commission task {task_id} for donation {donation.id}")
-            
+                logger.info(
+                    f"Commission task {task_id} created for donation {donation.id} "
+                    f"(user: {donation.customer_name}, type: {donation.commission_type}, tier: {donation.tier})"
+                )
         finally:
             db.close()
             
     except Exception as e:
-        logger.error(f"Error handling payment intent success: {str(e)}")
+        logger.error(f"Error handling payment intent success for payment_intent_id={getattr(payment_intent, 'id', None)}: {str(e)}\n{traceback.format_exc()}")
         raise
 
 
@@ -1181,7 +1184,7 @@ async def handle_payment_intent_failed(payment_intent):
             db.close()
             
     except Exception as e:
-        logger.error(f"Error handling payment intent failure: {str(e)}")
+        logger.error(f"Error handling payment intent failure for payment_intent_id={getattr(payment_intent, 'id', None)}: {str(e)}\n{traceback.format_exc()}")
         raise
 
 
@@ -1236,6 +1239,7 @@ async def create_commission_task(donation_id: int, db: Session = Depends(get_db)
         # Get donation
         donation = db.query(Donation).filter_by(id=donation_id).first()
         if not donation:
+            logger.error(f"Donation not found for commission task creation (donation_id={donation_id})")
             raise HTTPException(status_code=404, detail="Donation not found")
         
         # Prepare task data for TaskManager
@@ -1260,8 +1264,7 @@ async def create_commission_task(donation_id: int, db: Session = Depends(get_db)
         return {"task_id": task_id}
         
     except Exception as e:
-        logger.error(f"Error creating commission task: {str(e)}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Error creating commission task for donation_id={donation_id}: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error creating task: {str(e)}")
 
 
