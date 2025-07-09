@@ -390,7 +390,8 @@ const DonationModal: React.FC<DonationModalProps> = ({
   React.useEffect(() => {
     if (success && supportOnly) {
       if (countdown <= 0) {
-        navigate(`/?product=${postId}`);
+        onClose();
+        window.location.href = `/?product=${postId}`;
         return;
       }
       const timer = setTimeout(() => {
@@ -398,7 +399,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [success, supportOnly, countdown, navigate, postId]);
+  }, [success, supportOnly, countdown, postId, onClose]);
 
   if (success) {
     return (
@@ -417,7 +418,10 @@ const DonationModal: React.FC<DonationModalProps> = ({
               <div className="flex gap-3 mt-2">
                 <button
                   className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
-                  onClick={() => navigate(`/?product=${postId}`)}
+                  onClick={() => {
+                    onClose();
+                    window.location.href = `/?product=${postId}`;
+                  }}
                 >
                   Continue
                 </button>
