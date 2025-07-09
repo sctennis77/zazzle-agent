@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from enum import Enum
 import asyncio
+import traceback
 
 from app.db.database import SessionLocal
 from app.db.models import Donation, PipelineTask
@@ -56,11 +57,11 @@ class TaskManager:
         
         if self.use_k8s:
             # Use Kubernetes Jobs
-            logger.info(f"Creating K8s Job for task {task_id}")
+            logger.info(f"Creating K8s Job for task {task_id} (donation_id={donation_id})")
             self.k8s_manager.create_commission_job(task_id, donation_id, task_data)
         else:
             # Use direct execution fallback
-            logger.info(f"Running commission task {task_id} directly")
+            logger.info(f"Running commission task {task_id} directly (donation_id={donation_id})")
             self._run_commission_task_directly(task_id, donation_id, task_data)
         
         return task_id
@@ -92,7 +93,11 @@ class TaskManager:
             db.add(task)
             db.commit()
             db.refresh(task)
+            logger.info(f"Created pipeline task {task.id} for donation {donation_id} (user: {donation.customer_name}, tier: {donation.tier})")
             return str(task.id)
+        except Exception as e:
+            logger.error(f"Error creating pipeline task for donation_id={donation_id}: {str(e)}\n{traceback.format_exc()}")
+            raise
         finally:
             db.close()
     
@@ -107,7 +112,7 @@ class TaskManager:
         """
         def run_task():
             try:
-                logger.info(f"Starting commission task {task_id} in background thread")
+                logger.debug(f"Starting commission task {task_id} in background thread (donation_id={donation_id})")
                 
                 # Update task status to in progress
                 self._update_task_status(task_id, TaskStatus.IN_PROGRESS.value)
@@ -124,24 +129,24 @@ class TaskManager:
                     if success:
                         # Update task status to completed
                         self._update_task_status(task_id, TaskStatus.COMPLETED.value)
-                        logger.info(f"Commission task {task_id} completed successfully")
+                        logger.info(f"Commission task {task_id} completed successfully (donation_id={donation_id})")
                     else:
                         # Update task status to failed
                         self._update_task_status(task_id, TaskStatus.FAILED.value, "Commission processing failed")
-                        logger.error(f"Commission task {task_id} failed")
+                        logger.error(f"Commission task {task_id} failed (donation_id={donation_id})")
                         
                 finally:
                     loop.close()
                 
             except Exception as e:
-                logger.error(f"Commission task {task_id} failed: {e}")
+                logger.error(f"Commission task {task_id} failed (donation_id={donation_id}): {str(e)}\n{traceback.format_exc()}")
                 # Update task status to failed
                 self._update_task_status(task_id, TaskStatus.FAILED.value, str(e))
         
         # Run the task in a background thread
         thread = threading.Thread(target=run_task, daemon=True)
         thread.start()
-        logger.info(f"Commission task {task_id} started in background thread")
+        logger.debug(f"Commission task {task_id} started in background thread (donation_id={donation_id})")
     
     def _update_task_status(self, task_id: str, status: str, error_message: str = None):
         """Update task status in the database and broadcast over WebSocket."""
@@ -169,6 +174,13 @@ class TaskManager:
                     "amount_usd": float(donation.amount_usd) if donation else None,
                     "is_anonymous": donation.is_anonymous if donation else None,
                 }
+                
+                # Log task status update (this is the single source of truth for task status logging)
+                if status in ["completed", "failed"]:
+                    logger.info(f"Task {task_id} {status} (donation_id={task.donation_id}, user: {donation.customer_name if donation else 'Unknown'})")
+                else:
+                    logger.debug(f"Task {task_id} status updated to {status} (donation_id={task.donation_id})")
+                
                 # Use simple Redis publishing to avoid event loop conflicts
                 try:
                     import redis
@@ -187,13 +199,13 @@ class TaskManager:
                     
                     # Publish to Redis
                     r.publish("task_updates", json.dumps(message))
-                    logger.info(f"[TASK MANAGER] Published task update for {task.id}: {update}")
+                    logger.debug(f"[TASK MANAGER] Published task update for {task.id}: {update}")
                     
                 except Exception as e:
-                    logger.error(f"[TASK MANAGER] Failed to publish task update: {e}")
+                    logger.error(f"[TASK MANAGER] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
                     
         except Exception as e:
-            logger.error(f"Failed to update task status: {e}")
+            logger.error(f"Failed to update task status for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
         finally:
             db.close()
     
