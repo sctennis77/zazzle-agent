@@ -179,8 +179,9 @@ class TaskManager:
                 try:
                     import redis
                     import json
+                    from app.config import REDIS_HOST, REDIS_PORT, REDIS_DB
                     # Create a simple Redis client for this operation
-                    r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
                     # Create the message
                     message = {
                         "type": "task_update",

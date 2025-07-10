@@ -228,10 +228,9 @@ class CommissionWorker:
         try:
             import redis
             import json
-            
+            from app.config import REDIS_HOST, REDIS_PORT, REDIS_DB
             # Create a simple Redis client for this operation
-            r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-            
+            r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
             # Create the message
             message = {
                 "type": "task_update",
@@ -239,11 +238,9 @@ class CommissionWorker:
                 "data": update,
                 "timestamp": datetime.now().isoformat()
             }
-            
             # Publish to Redis
             r.publish("task_updates", json.dumps(message))
             logger.debug(f"[SIMPLE REDIS] Published task update for {task_id}: {update}")
-            
         except Exception as e:
             logger.error(f"[SIMPLE REDIS] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
 

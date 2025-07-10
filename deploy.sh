@@ -127,6 +127,15 @@ start_services() {
     docker-compose up -d
     
     success "Services started"
+
+    # --- Redis health check ---
+    log "Checking Redis health..."
+    if ! docker-compose exec -T redis redis-cli ping | grep -q PONG; then
+        error "Redis health check failed! Aborting deploy."
+        docker-compose logs redis
+        exit 1
+    fi
+    success "Redis health check passed."
 }
 
 # Wait for services to be healthy
@@ -270,7 +279,23 @@ main() {
     build_images
     start_services
     wait_for_health
-    run_migrations
+
+    # --- Run Alembic migrations before testing deployment ---
+    log "Running Alembic migrations before testing deployment..."
+    if ! docker-compose exec -T api python -m alembic upgrade head; then
+        error "Alembic migration failed! Aborting deploy."
+        exit 1
+    fi
+    success "Alembic migration completed."
+
+    # --- Check for critical tables ---
+    log "Checking for critical tables after migration..."
+    if ! docker-compose exec -T database sqlite3 /app/data/zazzle_pipeline.db "SELECT name FROM sqlite_master WHERE name='pipeline_runs' OR name='pipeline_tasks';" | grep -q pipeline_runs; then
+        error "Critical tables missing after migration! Aborting deploy."
+        exit 1
+    fi
+    success "Critical tables exist."
+
     test_deployment
     
     show_deployment_info
