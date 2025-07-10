@@ -673,12 +673,12 @@ class CommissionWorker:
                 progress_ratio = i / (total_updates - 1) if total_updates > 1 else 1
                 current_progress = start_progress + int((end_progress - start_progress) * progress_ratio)
                 
-                # Send progress update
+                # Send progress update with user-friendly message
                 self._update_task_status(
                     status="in_progress",
                     progress=current_progress,
-                    stage="image_generation_started",
-                    message=f"Generating image with DALL-E... ({current_progress}%)"
+                    stage="image_generation_in_progress",
+                    message=f"Image generation in progress... ({current_progress}%)"
                 )
                 
                 # Sleep before next update

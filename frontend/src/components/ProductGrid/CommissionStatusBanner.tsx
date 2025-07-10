@@ -74,6 +74,8 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
         return '🎨';
       case 'image_generation_started':
         return '🎭';
+      case 'image_generation_in_progress':
+        return '🎨';
       case 'image_generated':
         return '🖼️';
       case 'image_stamped':
