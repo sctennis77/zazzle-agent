@@ -37,12 +37,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     return commissionInfo && task.status !== 'completed' && task.status !== 'failed';
   });
 
-  // Find the completed task for this specific product
-  const completedTask = activeTasks.find(task => 
-    task.status === 'completed' && 
-    commissionInfo // If we have commission info, this is a commission product
-  );
-
   const handleImageClick = () => {
     setShowModal(true);
   };
@@ -80,47 +74,27 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     fetchDonationInfo();
   }, [product.pipeline_run.id]);
 
-  // Check if commission is completed and publish to Reddit
+  // Check for published status and show animation if newly published
   useEffect(() => {
-    const handleCommissionCompletion = async () => {
-      console.log('ProductCard: Checking commission completion', {
-        productId: product.product_info.id,
-        commissionInfo: !!commissionInfo,
-        completedTask: !!completedTask,
-        publishedPost: !!publishedPost,
-        activeTasksCount: activeTasks.length
-      });
-
-      if (completedTask && commissionInfo && !publishedPost) {
-        console.log('ProductCard: Commission completed, attempting to publish', {
-          productId: product.product_info.id,
-          taskId: completedTask.task_id
-        });
-        
+    const checkPublishedStatus = async () => {
+      if (commissionInfo && !publishedPost) {
         try {
-          // Check if already published
           const existingPost = await getPublishedPost(product.product_info.id.toString());
-          if (!existingPost) {
-            console.log('ProductCard: No existing post found, publishing...');
-            // Publish the product
-            await publishProduct(product.product_info.id.toString(), true); // dry run for safety
+          if (existingPost && !publishedPost) {
+            // Product was just published, show animation
             setShowPublishAnimation(true);
-            
-            // Hide animation after 3 seconds
             setTimeout(() => {
               setShowPublishAnimation(false);
             }, 3000);
-          } else {
-            console.log('ProductCard: Already published, skipping');
           }
         } catch (error) {
-          console.error('ProductCard: Failed to publish product:', error);
+          // Ignore errors, just means not published yet
         }
       }
     };
-
-    handleCommissionCompletion();
-  }, [activeTasks, commissionInfo, publishedPost, product.product_info.id, publishProduct, getPublishedPost, completedTask]);
+    
+    checkPublishedStatus();
+  }, [commissionInfo, publishedPost, product.product_info.id, getPublishedPost]);
 
   const getTaskStatusIcon = (status: string) => {
     switch (status) {
