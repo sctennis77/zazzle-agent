@@ -9,6 +9,7 @@ import json
 
 # Remove the base import since we're not inheriting from it anymore
 # from .base import ChannelAgent
+import asyncio
 import logging
 import os
 import random
@@ -29,7 +30,8 @@ from app.db.mappers import reddit_context_to_db, product_idea_to_db, product_inf
 from app.db.models import RedditPost, ProductInfo
 # Remove legacy distribution imports
 # from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-from app.image_generator import ImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
+from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
+from app.async_image_generator import AsyncImageGenerator
 from app.models import (
     DesignInstructions,
     DistributionMetadata,
@@ -518,7 +520,7 @@ class RedditAgent:
         
         # Initialize other components
         self.imgur_client = ImgurClient()
-        self.image_generator = ImageGenerator(model=self.config.model)
+        self.image_generator = AsyncImageGenerator(model=self.config.model)
         self.zazzle_designer = ZazzleProductDesigner()
         self.affiliate_linker = ZazzleAffiliateLinker(
             zazzle_affiliate_id=self.config.zazzle_affiliate_id,
@@ -551,6 +553,63 @@ class RedditAgent:
         Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-3.5-turbo.
         """
         return os.getenv("OPENAI_IDEA_MODEL", "gpt-3.5-turbo")
+
+    async def _send_image_generation_progress(self, delay: int = 1, image_title: str = None):
+        """Send incremental progress updates during image generation (40% to 89%)."""
+        try:
+            logger.info(f"=== _send_image_generation_progress START ===")
+            logger.info(f"Starting _send_image_generation_progress with delay={delay}")
+            logger.info(f"Progress callback available: {self.progress_callback}")
+            logger.info(f"Progress callback type: {type(self.progress_callback)}")
+            logger.info(f"Current event loop: {asyncio.get_event_loop()}")
+            
+            # Sleep at the start to avoid jumping straight from started to progress
+            logger.info(f"Sleeping for {delay} seconds before starting progress updates")
+            await asyncio.sleep(delay)
+            logger.info("Finished initial delay, starting progress updates")
+            
+            start_progress = 40
+            end_progress = 89
+            total_updates = 15  # Reduced from 30 to make updates more frequent
+            
+            for i in range(total_updates):
+                # Calculate progress (smooth curve from 40% to 89%)
+                progress_ratio = i / (total_updates - 1) if total_updates > 1 else 1
+                current_progress = start_progress + int((end_progress - start_progress) * progress_ratio)
+                
+                # Ensure the last update reaches exactly end_progress
+                if i == total_updates - 1:
+                    current_progress = end_progress
+                
+                logger.info(f"Progress update {i+1}/{total_updates}: {current_progress}%")
+                
+                # Call progress callback
+                if self.progress_callback:
+                    try:
+                        await self.progress_callback("image_generation_progress", {
+                            "progress": current_progress
+                        })
+                        logger.info(f"Successfully sent progress callback for {current_progress}%")
+                    except Exception as e:
+                        logger.error(f"Error calling progress callback: {e}")
+                else:
+                    logger.warning("No progress_callback available")
+                
+                # Don't sleep after the last update
+                if i < total_updates - 1:
+                    # Random sleep interval (0.5 to 1.5 seconds) - more frequent updates
+                    sleep_time = random.uniform(0.5, 1.5)
+                    logger.info(f"Sleeping for {sleep_time:.2f} seconds before next update")
+                    await asyncio.sleep(sleep_time)
+            
+            logger.info("Completed all progress updates")
+            
+        except asyncio.CancelledError:
+            logger.info("Progress task was cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"Error in _send_image_generation_progress: {e}")
+            # Don't re-raise - we want this to fail gracefully
 
     @track_openai_call(model="gpt-3.5-turbo", operation="chat")
     def _make_openai_call(self, messages: List[Dict[str, str]]) -> str:
@@ -664,113 +723,16 @@ class RedditAgent:
             logger.error(f"Error determining product idea: {str(e)}")
             return None
 
-    async def find_and_create_product(self) -> Optional[ProductInfo]:
-        """
-        Find a trending post and create a product from it.
-        Persists RedditContext as RedditPost in the DB if session and pipeline_run_id are provided.
-        Returns:
-            ProductInfo object if successful, None otherwise
-        """
-        try:
-            # Find a trending post
-            trending_post = await self._find_trending_post()
-            if not trending_post:
-                logger.warning("No suitable trending post found")
-                return None
-
-            # Log trending post details
-            logger.info("Found trending post:")
-            logger.info(f"Post ID: {trending_post.id}")
-            logger.info(f"Title: {trending_post.title}")
-            logger.info(f"URL: {trending_post.url}")
-            logger.info(f"Subreddit: {trending_post.subreddit.display_name}")
-            logger.info(
-                f"Content: {trending_post.selftext if hasattr(trending_post, 'selftext') else 'No content'}"
-            )
-            logger.info(
-                f"Comment Summary: {getattr(trending_post, 'comment_summary', 'No comment summary')}"
-            )
-
-            # Create RedditContext from the post
-            reddit_context = RedditContext(
-                post_id=trending_post.id,
-                post_title=trending_post.title,
-                post_url=f"https://reddit.com{trending_post.permalink}",
-                subreddit=trending_post.subreddit.display_name,
-                post_content=(
-                    trending_post.selftext
-                    if hasattr(trending_post, "selftext")
-                    else None
-                ),
-                permalink=trending_post.permalink,
-                author=str(trending_post.author) if trending_post.author else None,
-                score=trending_post.score,
-                num_comments=trending_post.num_comments,
-                comments=[
-                    {
-                        "text": getattr(
-                            trending_post, "comment_summary", "No comment summary"
-                        )
-                    }
-                ],
-            )
-
-            # Determine product idea from post (asynchronous call)
-            product_idea = await self._determine_product_idea(reddit_context)
-            if not product_idea:
-                logger.warning("Could not determine product idea from post")
-                return None
-            if not product_idea.theme or product_idea.theme.lower() == "default theme":
-                raise ValueError("No valid theme was generated from the Reddit context")
-            logger.info(f"Product Idea: {product_idea}")
-            if (
-                not product_idea.image_description
-                or not product_idea.image_description.strip()
-            ):
-                logger.error(
-                    "Image prompt (image_description) is empty. Aborting image generation."
-                )
-                raise ValueError("Image prompt (image_description) cannot be empty.")
-            try:
-                imgur_url, local_path = await self.image_generator.generate_image(
-                    product_idea.image_description,
-                    template_id=self.config.zazzle_template_id,
-                )
-            except Exception as e:
-                logger.error(f"Failed to generate image: {str(e)}")
-                return None
-            design_instructions = DesignInstructions(
-                image=imgur_url,
-                theme=product_idea.theme,
-                image_title=product_idea.design_instructions.get("image_title"),
-                text=product_idea.image_description,
-                product_type=ZAZZLE_PRINT_TEMPLATE.product_type,
-                template_id=self.config.zazzle_template_id,
-                model=self.config.model,
-                prompt_version=self.config.prompt_version,
-            )
-            logger.info(f"Design Instructions: {design_instructions}")
-            product_info = await self.zazzle_designer.create_product(
-                design_instructions=design_instructions, reddit_context=reddit_context
-            )
-            if not product_info:
-                logger.warning("Failed to create product")
-                return None
-            if isinstance(product_info, dict):
-                product_info = ProductInfo.from_dict(product_info)
-            return product_info
-        except Exception as e:
-            logger.error(f"Error in find_and_create_product: {str(e)}")
-            return None
-
     async def find_and_create_product_for_task(self) -> Optional[ProductInfo]:
         """
-        Find a trending post and create a product from it using task-specific logic.
-        This method uses _find_trending_post_for_task for easier testing and mocking.
-        Persists RedditContext as RedditPost in the DB if session and pipeline_run_id are provided.
-        Returns:
-            ProductInfo object if successful, None otherwise
+        Find a trending post and create a product for it.
+        This is the main entry point for task-based product creation.
         """
+        logger.info("=== find_and_create_product_for_task START ===")
+        logger.info(f"Progress callback available: {self.progress_callback}")
+        logger.info(f"Progress callback type: {type(self.progress_callback)}")
+        logger.info(f"Task context: {self.task_context}")
+        
         try:
             # Find a trending post using task-specific method
             trending_post = await self._find_trending_post_for_task()
@@ -831,14 +793,86 @@ class RedditAgent:
                     "Image prompt (image_description) is empty. Aborting image generation."
                 )
                 raise ValueError("Image prompt (image_description) cannot be empty.")
+            
+            logger.info("=== ABOUT TO START IMAGE GENERATION ===")
+            logger.info(f"Progress callback at image generation: {self.progress_callback}")
+            
+            # Call image generation started callback
+            if self.progress_callback:
+                try:
+                    logger.info("Calling image generation started callback")
+                    logger.info(f"Progress callback function: {self.progress_callback}")
+                    await self.progress_callback("image_generation_started", {
+                        "post_id": reddit_context.post_id,
+                        "subreddit_name": reddit_context.subreddit
+                    })
+                    logger.info("Successfully called image generation started callback")
+                except Exception as e:
+                    logger.error(f"Error calling image generation started callback: {e}")
+                    logger.error(f"Exception type: {type(e)}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                
+                # Start progress updates as a background task
+                logger.info("Creating progress task for image generation")
+                logger.info(f"Progress callback available: {self.progress_callback}")
+                logger.info(f"Current event loop: {asyncio.get_event_loop()}")
+                try:
+                    progress_task = asyncio.create_task(self._send_image_generation_progress())
+                    logger.info(f"Progress task created successfully: {progress_task}")
+                    logger.info(f"Progress task done: {progress_task.done()}")
+                    logger.info(f"Progress task cancelled: {progress_task.cancelled()}")
+                except Exception as e:
+                    logger.error(f"Error creating progress task: {e}")
+                    logger.error(f"Exception type: {type(e)}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    progress_task = None
+            else:
+                progress_task = None
+                logger.info("No progress_callback available, skipping progress task")
+            
             try:
+                # Log the start time
+                start_time = time.time()
+                logger.info(f"Starting image generation at {start_time}")
+                
                 imgur_url, local_path = await self.image_generator.generate_image(
                     product_idea.image_description,
                     template_id=self.config.zazzle_template_id,
                 )
+                
+                # Log the end time and duration
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.info(f"Image generation completed at {end_time}, duration: {duration:.2f} seconds")
+                
             except Exception as e:
-                logger.error(f"Failed to generate image: {str(e)}")
-                return None
+                logger.error(f"Error during image generation: {str(e)}")
+                raise
+            finally:
+                # Cancel progress task if it exists
+                if progress_task and not progress_task.done():
+                    logger.info(f"Cancelling progress task: {progress_task}")
+                    progress_task.cancel()
+                    try:
+                        await progress_task
+                    except asyncio.CancelledError:
+                        logger.info("Progress task cancelled successfully")
+                    except Exception as e:
+                        logger.error(f"Error cancelling progress task: {e}")
+            
+            # Call image generation complete callback
+            if self.progress_callback:
+                try:
+                    await self.progress_callback("image_generation_complete", {
+                        "post_id": reddit_context.post_id,
+                        "subreddit_name": reddit_context.subreddit,
+                        "duration": duration
+                    })
+                except Exception as e:
+                    logger.error(f"Error calling image generation complete callback: {e}")
+            
             design_instructions = DesignInstructions(
                 image=imgur_url,
                 theme=product_idea.theme,
@@ -872,7 +906,7 @@ class RedditAgent:
         """
         try:
             # Find a trending post and create a product
-            product_info = await self.find_and_create_product()
+            product_info = await self.find_and_create_product_for_task()
             if product_info:
                 return [product_info]
             return []

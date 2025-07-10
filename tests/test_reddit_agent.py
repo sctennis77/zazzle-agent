@@ -447,44 +447,22 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].product_id, "test_product_123")
 
-    async def test_find_and_create_product_for_task_simple(self):
-        """Test the task-specific find_and_create_product_for_task method."""
-        agent = RedditAgent(subreddit_name="test_subreddit")
-        
-        # Mock the _find_trending_post_for_task method
-        mock_submission = MagicMock()
-        mock_submission.id = "test_post_id"
-        mock_submission.title = "Test Post"
-        mock_submission.selftext = "Test content"
-        mock_submission.subreddit.display_name = "test_subreddit"
-        mock_submission.permalink = "/r/test/123"
-        mock_submission.url = "https://reddit.com/test"
-        mock_submission.author = "test_user"
-        mock_submission.score = 100
-        mock_submission.num_comments = 25
-        mock_submission.comment_summary = "Test comment summary"
-        
-        agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
-        
-        # Mock the _determine_product_idea method
-        mock_product_idea = MagicMock()
-        mock_product_idea.theme = "Test Theme"
-        mock_product_idea.image_description = "Test image description"
-        mock_product_idea.design_instructions = {"image_title": "Test Image"}
-        agent._determine_product_idea = AsyncMock(return_value=mock_product_idea)
-        
-        # Mock the image generator
-        agent.image_generator = MagicMock()
-        agent.image_generator.generate_image = AsyncMock(return_value=("https://imgur.com/test.jpg", "/tmp/test.jpg"))
-        
-        # Mock the product designer
-        mock_product_info = MagicMock()
-        mock_product_info.product_id = "test_product_123"
-        agent.zazzle_designer = MagicMock()
-        agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
-        
-        # Test the method
-        result = await agent.find_and_create_product_for_task()
+    async def test_find_and_create_product_for_task(
+        self,
+        mock_find_trending_post,
+        mock_determine_product_idea,
+        mock_generate_image,
+        mock_create_product,
+    ):
+        """Test the find_and_create_product_for_task method."""
+        # Setup mocks
+        mock_find_trending_post.return_value = self.mock_submission
+        mock_determine_product_idea.return_value = self.mock_product_idea
+        mock_generate_image.return_value = ("https://i.imgur.com/test.jpg", "/tmp/test.jpg")
+        mock_create_product.return_value = self.mock_product_info
+
+        # Call the method
+        result = await self.reddit_agent.find_and_create_product_for_task()
         
         # Verify the result
         self.assertIsNotNone(result)

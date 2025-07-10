@@ -120,7 +120,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result)
 
     @patch("app.image_generator.ImageGenerator.generate_image", new_callable=AsyncMock)
-    async def test_find_and_create_product_image_generation_failure(
+    async def test_find_and_create_product_for_task_image_generation_failure(
         self, mock_generate_image
     ):
         """Test handling of image generation failure."""
@@ -138,14 +138,14 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         # Mock image generation failure
         mock_generate_image.side_effect = Exception("Image generation failed")
 
-        result = await self.reddit_agent.find_and_create_product()
+        result = await self.reddit_agent.find_and_create_product_for_task()
         self.assertIsNone(result)
 
     @patch(
         "app.zazzle_product_designer.ZazzleProductDesigner.create_product",
         new_callable=AsyncMock,
     )
-    async def test_find_and_create_product_creation_failure(self, mock_create_product):
+    async def test_find_and_create_product_for_task_creation_failure(self, mock_create_product):
         """Test handling of product creation failure."""
         # Mock successful product idea generation
         self.mock_openai_instance.chat.completions.create.return_value = MagicMock(
@@ -170,7 +170,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
             # Mock product creation failure
             mock_create_product.return_value = None
 
-            result = await self.reddit_agent.find_and_create_product()
+            result = await self.reddit_agent.find_and_create_product_for_task()
             self.assertIsNone(result)
 
     async def test_save_reddit_context_to_db_error(self):
@@ -197,14 +197,14 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         "app.agents.reddit_agent.RedditAgent._find_trending_post",
         new_callable=AsyncMock,
     )
-    async def test_find_and_create_product_no_trending_post(
+    async def test_find_and_create_product_for_task_no_trending_post(
         self, mock_find_trending_post
     ):
-        """Test handling of no trending post found."""
+        """Test handling when no trending post is found."""
         # Mock no trending post found
         mock_find_trending_post.return_value = None
 
-        result = await self.reddit_agent.find_and_create_product()
+        result = await self.reddit_agent.find_and_create_product_for_task()
         self.assertIsNone(result)
 
     async def test_determine_product_idea_invalid_theme(self):
