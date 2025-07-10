@@ -12,10 +12,25 @@ import io
 from app.clients.imgur_client import ImgurClient
 from app.models import ProductIdea, ProductInfo
 from app.services.image_processor import ImageProcessor
-from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS, ImageGenerationError
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# Base prompts for different DALL-E models
+IMAGE_GENERATION_BASE_PROMPTS = {
+    "dall-e-2": {
+        "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful image based on the following description. ",
+        "version": "1.0.1",
+    },
+    "dall-e-3": {
+        "prompt": "Create a square (1:1) image designed for clear, engaging visual storytelling on a webpage. and your 1024x1024 image size. Create a beautiful illustration based on the following scene description. Use a combined impasto and pointillism style, inspired by painters like Van Gogh and Seurat. Focus on visible brushstrokes, rich texture, and vibrant, light-filled color with a strong emphasis on nature. Highlight mood, setting, and symbolic details rather than realism. Do not include any text or representations of text.", 
+        "version": "1.0.1",
+    },
+}
+
+class ImageGenerationError(Exception):
+    """Exception raised for errors in image generation."""
+    pass
 
 class AsyncImageGenerator:
     """

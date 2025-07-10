@@ -70,7 +70,7 @@ def sample_subreddit():
 def mock_openai():
     """Mock OpenAI API calls."""
     with (
-        patch("app.image_generator.OpenAI") as mock_img,
+        patch("app.async_image_generator.OpenAI") as mock_img,
         patch("app.content_generator.OpenAI") as mock_content,
         patch("app.agents.reddit_agent.openai.OpenAI") as mock_reddit,
     ):

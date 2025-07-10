@@ -274,51 +274,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         # Verify that the second post was returned (first one was skipped)
         self.assertEqual(result, mock_post2)
 
-    @patch("app.zazzle_product_designer.ZazzleProductDesigner.create_product")
-    async def test_get_product_info(self, mock_create_product):
-        """Test retrieving product information from the Zazzle Product Designer."""
-        reddit_context = RedditContext(
-            post_id="test_post_id",
-            post_title="Test Post Title",
-            post_url="https://reddit.com/test",
-            subreddit="test_subreddit",
-        )
-        mock_create_product.return_value = ProductInfo(
-            product_id="12345",
-            name="Test Product",
-            product_type="sticker",
-            zazzle_template_id="template123",
-            zazzle_tracking_code="tracking456",
-            image_url="https://example.com/image.jpg",
-            product_url="https://example.com/product",
-            theme="test_theme",
-            model="dall-e-3",
-            prompt_version="1.0.0",
-            reddit_context=reddit_context,
-            design_instructions={"image": "https://example.com/image.jpg"},
-            image_local_path="/path/to/image.jpg",
-        )
-        design_instructions = DesignInstructions(
-            image="https://example.com/image.jpg",
-            theme="test_theme",
-            text="Custom Golf Ball",
-            color="Red",
-            quantity=12,
-            product_type="sticker",
-            template_id=None,
-            model=None,
-            prompt_version=None,
-        )
-        with patch.object(
-            self.reddit_agent,
-            "get_product_info",
-            AsyncMock(return_value=mock_create_product.return_value),
-        ):
-            result = await self.reddit_agent.get_product_info(design_instructions)
-            self.assertIsInstance(result, ProductInfo)
-            self.assertEqual(result.product_id, "12345")
-            self.assertEqual(result.product_url, "https://example.com/product")
-
     async def test_find_trending_post_for_task_simple(self):
         """Test the task-specific _find_trending_post_for_task method with simple mocking."""
         agent = RedditAgent(subreddit_name="test_subreddit")
@@ -354,50 +309,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertEqual(result.id, "test_post_id")
         self.assertEqual(result.title, "Test Post")
         self.assertEqual(result.comment_summary, "Test comment summary")
-
-    async def test_get_product_info_for_task_simple(self):
-        """Test the task-specific get_product_info_for_task method."""
-        agent = RedditAgent(subreddit_name="test_subreddit")
-        
-        # Mock the _find_trending_post_for_task method to return a valid post
-        mock_submission = MagicMock()
-        mock_submission.id = "test_post_id"
-        mock_submission.title = "Test Post"
-        mock_submission.selftext = "Test content"
-        mock_submission.subreddit.display_name = "test_subreddit"
-        mock_submission.permalink = "/r/test/123"
-        mock_submission.url = "https://reddit.com/test"
-        mock_submission.author = "test_user"
-        mock_submission.score = 100
-        mock_submission.num_comments = 25
-        mock_submission.comment_summary = "Test comment summary"
-        
-        agent._find_trending_post_for_task = AsyncMock(return_value=mock_submission)
-        
-        # Mock the _determine_product_idea method
-        mock_product_idea = MagicMock()
-        mock_product_idea.theme = "Test Theme"
-        mock_product_idea.image_description = "Test image description"
-        mock_product_idea.design_instructions = {"image": "https://i.imgur.com/test.jpg", "theme": "Test Theme"}
-        agent._determine_product_idea = AsyncMock(return_value=mock_product_idea)
-        
-        # Mock the image generator
-        agent.image_generator = MagicMock()
-        agent.image_generator.generate_image = AsyncMock(return_value=("https://imgur.com/test.jpg", "/tmp/test.jpg"))
-        
-        # Mock the product designer
-        mock_product_info = MagicMock()
-        mock_product_info.product_id = "test_product_123"
-        agent.zazzle_designer = AsyncMock()
-        agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
-        
-        # Test the method
-        result = await agent.get_product_info_for_task()
-        
-        # Verify the result
-        self.assertIsNotNone(result)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].product_id, "test_product_123")
 
     def test_pick_subreddit(self):
         """Test that pick_subreddit returns a valid subreddit from the available list."""

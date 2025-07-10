@@ -10,7 +10,7 @@ from app.models import (
     ProductInfo,
     RedditContext,
 )
-from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
+from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 
 def test_product_info_to_csv():

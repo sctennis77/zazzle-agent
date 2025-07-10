@@ -16,7 +16,7 @@ from app.affiliate_linker import (
     ZazzleAffiliateLinkerError,
 )
 from app.models import ProductIdea, ProductInfo, RedditContext
-from app.image_generator import IMAGE_GENERATION_BASE_PROMPTS
+from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS
 
 
 @pytest.fixture(autouse=True)
