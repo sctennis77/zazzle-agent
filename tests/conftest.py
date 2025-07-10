@@ -1,12 +1,95 @@
+import os
+os.environ["STRIPE_SECRET_KEY"] = "test_secret_key"
+
 import shutil
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 pytest_plugins = ["pytest_asyncio"]
+
+# Patch StripeService before any imports to prevent initialization errors
+mock_stripe_service = MagicMock()
+
+# Configure the mock to return real donation objects
+def save_donation_to_db_side_effect(db, payment_intent_data, donation_request):
+    from app.db.models import Donation, Subreddit
+    from app.models import DonationStatus, get_tier_from_amount
+    
+    # Check if donation already exists
+    existing_donation = db.query(Donation).filter_by(
+        stripe_payment_intent_id=payment_intent_data["payment_intent_id"]
+    ).first()
+    
+    if existing_donation:
+        return existing_donation
+    
+    # Get or create subreddit
+    subreddit_id = None
+    if donation_request.subreddit:
+        subreddit = db.query(Subreddit).filter_by(subreddit_name=donation_request.subreddit).first()
+        if not subreddit:
+            subreddit = Subreddit(
+                subreddit_name=donation_request.subreddit,
+                display_name=donation_request.subreddit.title()
+            )
+            db.add(subreddit)
+            db.commit()
+            db.refresh(subreddit)
+        subreddit_id = subreddit.id
+    
+    # Determine tier
+    tier = get_tier_from_amount(donation_request.amount_usd)
+    
+    # Create donation
+    donation = Donation(
+        stripe_payment_intent_id=payment_intent_data["payment_intent_id"],
+        amount_cents=payment_intent_data["amount_cents"],
+        amount_usd=payment_intent_data["amount_usd"],
+        currency="usd",
+        status=DonationStatus.PENDING.value,
+        tier=tier.value,
+        customer_email=donation_request.customer_email,
+        customer_name=donation_request.customer_name,
+        message=donation_request.message,
+        subreddit_id=subreddit_id,
+        reddit_username=donation_request.reddit_username,
+        is_anonymous=donation_request.is_anonymous,
+        stripe_metadata=payment_intent_data.get("metadata", {}),
+        donation_type=donation_request.donation_type,
+        commission_type=donation_request.commission_type,
+        post_id=donation_request.post_id,
+        commission_message=donation_request.commission_message,
+    )
+    
+    db.add(donation)
+    db.commit()
+    db.refresh(donation)
+    return donation
+
+def update_donation_status_side_effect(db, payment_intent_id, status):
+    from app.db.models import Donation
+    donation = db.query(Donation).filter_by(stripe_payment_intent_id=payment_intent_id).first()
+    if donation:
+        donation.status = status.value
+        db.commit()
+        db.refresh(donation)
+    return donation
+
+def process_subreddit_tiers_side_effect(db, donation):
+    # Mock implementation - just return empty dict
+    return {}
+
+# Configure the mock methods
+mock_stripe_service.save_donation_to_db.side_effect = save_donation_to_db_side_effect
+mock_stripe_service.update_donation_status.side_effect = update_donation_status_side_effect
+mock_stripe_service.process_subreddit_tiers.side_effect = process_subreddit_tiers_side_effect
+
+# Apply the patch at module level
+patch("app.api.stripe_service", mock_stripe_service).start()
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -41,6 +124,12 @@ def patch_database():
     # Cleanup: remove the test database file
     if test_db_path.exists():
         test_db_path.unlink()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def patch_stripe_service():
+    """Patch StripeService to prevent initialization errors during tests."""
+    yield mock_stripe_service
 
 
 @pytest.fixture(scope="session")
