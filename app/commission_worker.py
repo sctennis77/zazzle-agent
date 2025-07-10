@@ -345,23 +345,33 @@ class CommissionWorker:
             # The RedditAgent will call our progress callback for:
             # - post_fetched (20%)
             # - product_designed (30%)
+            
+            # Step 3: Broadcast image generation started (40%) BEFORE the actual generation
+            await self._broadcast_image_generation_started({"post_id": donation.post_id}, donation)
+            
+            # Step 4: Start incremental progress updates during image generation
+            progress_thread = threading.Thread(
+                target=self._send_incremental_progress_updates,
+                args=(donation,),
+                daemon=True
+            )
+            progress_thread.start()
+            
+            # Step 5: Generate the actual product (this includes image generation)
             product_info = await self.reddit_agent.find_and_create_product_for_task()
             if not product_info:
                 return None
             
-            # Step 3: Broadcast image generation started (40%)
-            await self._broadcast_image_generation_started({"post_id": donation.post_id}, donation)
-            
-            # Step 4: Broadcast image generation complete (70%)
+            # Step 6: Broadcast image generation complete (70%)
             await self._broadcast_image_generation_complete(product_info, donation)
             
-            # Step 5: Broadcast Zazzle creation started (80%)
+            # Step 7: Broadcast Zazzle creation started (80%)
             await self._broadcast_zazzle_creation_started(donation)
             
-            # Step 6: Broadcast Zazzle creation complete (90%)
+            # Step 8: Broadcast Zazzle creation complete (90%)
             await self._broadcast_zazzle_creation_complete(donation)
             
-            # Step 7: Broadcast commission complete (100%)
+            # Step 9: Broadcast commission complete (100%)
             await self._broadcast_commission_complete(donation, product_info)
             
             return product_info
@@ -643,6 +653,40 @@ class CommissionWorker:
         except Exception as e:
             logger.error(f"Error in progress callback for stage {stage}: {e}")
             # Don't let callback errors break the main workflow
+    
+    def _send_incremental_progress_updates(self, donation: Donation):
+        """Send incremental progress updates during image generation (40% to 70%)."""
+        try:
+            import time
+            
+            # Start at 40% and gradually increase to 70%
+            start_progress = 40
+            end_progress = 70
+            current_progress = start_progress
+            
+            # Send updates every 2 seconds for smooth progress
+            update_interval = 2.0
+            total_updates = 15  # 15 updates over ~30 seconds
+            
+            for i in range(total_updates):
+                # Calculate progress (smooth curve from 40% to 70%)
+                progress_ratio = i / (total_updates - 1) if total_updates > 1 else 1
+                current_progress = start_progress + int((end_progress - start_progress) * progress_ratio)
+                
+                # Send progress update
+                self._update_task_status(
+                    status="in_progress",
+                    progress=current_progress,
+                    stage="image_generation_started",
+                    message=f"Generating image with DALL-E... ({current_progress}%)"
+                )
+                
+                # Sleep before next update
+                time.sleep(update_interval)
+                
+        except Exception as e:
+            logger.error(f"Error in incremental progress updates: {e}")
+            # Don't let this break the main workflow
 
 
 def main():
