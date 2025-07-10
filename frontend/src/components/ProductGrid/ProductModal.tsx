@@ -34,7 +34,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
 
   const { getTierDisplay } = useDonationTiers();
-  const { publishedPost, getPublishedPost } = usePublishProduct();
+  const { publishedPost, getPublishedPost, publishProduct } = usePublishProduct();
 
   // Fetch donation information when modal opens
   useEffect(() => {
@@ -64,10 +64,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         }
       };
 
+      const autoPublishIfNeeded = async () => {
+        try {
+          // First try to get the published post
+          const publishedPost = await getPublishedPost(product.product_info.id.toString());
+          
+          // If no published post found (404), automatically publish the product
+          if (!publishedPost) {
+            console.log(`Product ${product.product_info.id} not published yet, auto-publishing...`);
+            await publishProduct(product.product_info.id.toString());
+          }
+        } catch (error) {
+          console.error('Error in auto-publish logic:', error);
+        }
+      };
+
       fetchDonationInfo();
-      fetchPublishedPost();
+      autoPublishIfNeeded();
     }
-  }, [isOpen, product.pipeline_run.id, product.product_info.id, getPublishedPost]);
+  }, [isOpen, product.pipeline_run.id, product.product_info.id, getPublishedPost, publishProduct]);
 
   return (
     <>

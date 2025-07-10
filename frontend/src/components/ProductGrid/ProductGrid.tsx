@@ -24,6 +24,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
 
   // Handle query parameter for opening specific product
   useEffect(() => {
@@ -144,11 +145,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
                       });
                       
                       if (publishResponse.ok) {
+                        handleProductPublished(latestProduct.product_info.id);
                         console.log('ProductGrid: Successfully auto-published product', latestProduct.product_info.id);
                       } else {
                         console.error('ProductGrid: Failed to auto-publish product', latestProduct.product_info.id);
                       }
                     } else {
+                      handleProductPublished(latestProduct.product_info.id);
                       console.log('ProductGrid: Product already published, skipping auto-publish');
                     }
                   }
@@ -258,6 +261,12 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     }
   }, [hasActiveCommissions, onCommissionProgressChange]);
 
+  // Handler for ephemeral publish animation
+  const handleProductPublished = (productId: number) => {
+    setJustPublishedId(productId);
+    setTimeout(() => setJustPublishedId(null), 2500);
+  };
+
   // Helper to ensure tasks are unique by task_id
   const dedupeTasks = (tasks: Task[]): Task[] => {
     const map = new Map<string, Task>();
@@ -330,6 +339,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
               key={product.product_info.id}
               product={product}
               activeTasks={activeTasks}
+              justPublished={justPublishedId === product.product_info.id}
             />
           ))}
         </div>

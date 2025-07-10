@@ -7,12 +7,12 @@ export const usePublishProduct = () => {
   const [publishedPost, setPublishedPost] = useState<ProductSubredditPost | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const publishProduct = useCallback(async (productId: string, dryRun: boolean = true) => {
+  const publishProduct = useCallback(async (productId: string) => {
     try {
       setPublishing(true);
       setError(null);
       
-      const result = await publishService.publishProduct(productId, dryRun);
+      const result = await publishService.publishProduct(productId);
       setPublishedPost(result);
       
       return result;

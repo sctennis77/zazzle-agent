@@ -1455,7 +1455,7 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
 @app.post("/api/publish/product/{product_id}", response_model=ProductSubredditPostSchema)
 async def publish_product_to_subreddit(
     product_id: str,
-    dry_run: bool = Query(True, description="Whether to run in dry run mode"),
+    dry_run: bool = Query(True, description="Whether to run in dry run mode (defaults to True for safety)"),
     db: Session = Depends(get_db)
 ):
     """

@@ -11,6 +11,7 @@ import DonationModal from '../common/DonationModal';
 interface ProductCardProps {
   product: GeneratedProduct;
   activeTasks?: Task[];
+  justPublished?: boolean;
 }
 
 // Map icon string to actual icon component
@@ -21,7 +22,7 @@ const iconMap = {
   heart: FaHeart,
 };
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [] }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [], justPublished }) => {
   const [showModal, setShowModal] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
@@ -36,6 +37,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const associatedTask = activeTasks.find(task => {
     return commissionInfo && task.status !== 'completed' && task.status !== 'failed';
   });
+
+  // Add back showTaskStatus logic, but only render the status indicator if associatedTask exists and is in progress or pending
+  const showTaskStatus = associatedTask && (associatedTask.status === 'in_progress' || associatedTask.status === 'pending');
 
   const handleImageClick = () => {
     setShowModal(true);
@@ -73,58 +77,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     };
     fetchDonationInfo();
   }, [product.pipeline_run.id]);
-
-  // Check for published status and show animation if newly published
-  useEffect(() => {
-    const checkPublishedStatus = async () => {
-      if (commissionInfo && !publishedPost) {
-        try {
-          const existingPost = await getPublishedPost(product.product_info.id.toString());
-          if (existingPost && !publishedPost) {
-            // Product was just published, show animation
-            setShowPublishAnimation(true);
-            setTimeout(() => {
-              setShowPublishAnimation(false);
-            }, 3000);
-          }
-        } catch (error) {
-          // Ignore errors, just means not published yet
-        }
-      }
-    };
-    
-    checkPublishedStatus();
-  }, [commissionInfo, publishedPost, product.product_info.id, getPublishedPost]);
-
-  const getTaskStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <FaCheckCircle className="text-green-500" size={12} />;
-      case 'failed':
-        return <FaExclamationTriangle className="text-red-500" size={12} />;
-      case 'in_progress':
-        return <FaSpinner className="text-blue-500 animate-spin" size={12} />;
-      case 'pending':
-        return <FaClock className="text-yellow-500" size={12} />;
-      default:
-        return <FaClock className="text-gray-500" size={12} />;
-    }
-  };
-
-  const getTaskStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 border-green-300';
-      case 'failed':
-        return 'bg-red-100 border-red-300';
-      case 'in_progress':
-        return 'bg-blue-100 border-blue-300';
-      case 'pending':
-        return 'bg-yellow-100 border-yellow-300';
-      default:
-        return 'bg-gray-100 border-gray-300';
-    }
-  };
 
   // For commission products, use commissionInfo and donation_info for tier
   let tierName = '';
@@ -196,35 +148,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               {product.product_info.theme}
             </p>
           </div>
-          {/* Task status info for commission products */}
-          {associatedTask && (
-            <div className="mt-2 text-xs text-center">
-              <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full ${getTaskStatusColor(associatedTask.status)}`}> 
-                {getTaskStatusIcon(associatedTask.status)}
-                <span className="capitalize">{associatedTask.status.replace('_', ' ')}</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Publish animation */}
-          {showPublishAnimation && (
-            <div className="mt-2 text-xs text-center animate-pulse">
-              <div className="inline-flex items-center space-x-1 px-2 py-1 rounded-full bg-orange-100 border border-orange-300">
-                <FaReddit className="text-orange-500" size={12} />
-                <span className="text-orange-700">Published to Reddit!</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Published status */}
-          {publishedPost && !showPublishAnimation && (
-            <div className="mt-2 text-xs text-center">
-              <div className="inline-flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 border border-green-300">
-                <FaReddit className="text-green-500" size={12} />
-                <span className="text-green-700">Posted to r/{publishedPost.subreddit_name}</span>
-              </div>
-            </div>
-          )}
+          {/* Remove publish animation and published status from card */}
           <div className="text-sm text-gray-500 text-center mt-auto">
             {new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -246,11 +170,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               </button>
             </div>
           )}
-          <ProductModal
-            product={product}
-            isOpen={showModal}
-            onClose={() => setShowModal(false)}
-          />
+          {justPublished && (
+            <div className="published-indicator">
+              <span>Published to Reddit!</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full h-full" style={{ maxHeight: '100%' }}>
@@ -270,6 +194,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           />
         </div>
       )}
+      
+      {/* Product Modal */}
+      <ProductModal
+        product={product}
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+      />
     </>
   );
 }; 

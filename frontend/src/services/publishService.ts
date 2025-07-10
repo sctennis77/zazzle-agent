@@ -7,13 +7,9 @@ export const publishService = {
   /**
    * Publish a product to the clouvel subreddit
    */
-  async publishProduct(productId: string, dryRun: boolean = true): Promise<ProductSubredditPost> {
+  async publishProduct(productId: string): Promise<ProductSubredditPost> {
     const response = await axios.post<ProductSubredditPost>(
-      `${API_BASE}/product/${productId}`,
-      null,
-      {
-        params: { dry_run: dryRun }
-      }
+      `${API_BASE}/product/${productId}`
     );
     return response.data;
   },
