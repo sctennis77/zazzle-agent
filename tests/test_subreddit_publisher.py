@@ -161,10 +161,28 @@ class TestSubredditPublisher:
 
     def test_submit_image_post(self, sample_generated_product):
         """Test image post submission."""
-        publisher = SubredditPublisher(dry_run=True)
-        
-        result = publisher.submit_image_post(sample_generated_product)
-        
+        import io
+        from unittest.mock import patch, MagicMock
+        from PIL import Image
+
+        # Create a minimal valid PNG image for testing
+        test_image = Image.new('RGB', (10, 10), color='red')
+        img_buffer = io.BytesIO()
+        test_image.save(img_buffer, format='JPEG')
+        img_buffer.seek(0)
+        fake_image_bytes = img_buffer.read()
+
+        # Patch requests.get to return a fake response with image bytes
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = fake_image_bytes
+            mock_response.raise_for_status = lambda: None
+            mock_get.return_value = mock_response
+
+            publisher = SubredditPublisher(dry_run=True)
+            result = publisher.submit_image_post(sample_generated_product)
+
         assert result["type"] == "image_post"
         assert result["action"] == "would submit image post"
         assert result["subreddit"] == "clouvel"

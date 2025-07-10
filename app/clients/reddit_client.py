@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import praw
+import requests
 
 from app.utils.logging_config import get_logger, log_operation
 
@@ -722,80 +723,103 @@ class RedditClient:
         
         subreddit = self.get_subreddit(subreddit_name)
         
-        if self.mode == "dryrun":
-            log_operation(
-                logger,
-                "submit_image_post",
-                "dryrun",
-                {
-                    "type": "image_post",
-                    "action": "would submit image post",
-                    "subreddit": subreddit_name,
-                    "title": title,
-                    "content": content,
-                    "image_url": image_url,
-                    "mode": self.mode,
-                },
-            )
-            return {
-                "type": "image_post",
-                "action": "would submit image post",
-                "subreddit": subreddit_name,
-                "title": title,
-                "content": content,
-                "image_url": image_url,
-                "post_id": "dryrun_post_id",
-                "post_url": f"https://reddit.com/r/{subreddit_name}/comments/dryrun_post_id",
-            }
-        
-        # In live mode, submit the image post using PRAW's InlineImage
+        # COMMON LOGIC - runs for both dry run and live mode
         try:
             from praw.models import InlineImage
+            import tempfile
+            import requests
+            import os
             
-            # Create inline image with caption
-            inline_image = InlineImage(path=image_url, caption="Commissioned artwork")
-            
-            # Create media dictionary
-            media = {"image1": inline_image}
-            
-            # Create selftext with inline image reference
-            selftext_with_image = f"{content}\n\n{{image1}}"
-            
-            # Submit the post with inline media
-            new_post = subreddit.submit(
-                title=title,
-                inline_media=media,
-                selftext=selftext_with_image
-            )
-            
-            log_operation(
-                logger,
-                "submit_image_post",
-                "success",
-                {
-                    "type": "image_post",
-                    "action": "submitted image post",
-                    "subreddit": subreddit_name,
-                    "title": title,
-                    "content": content,
-                    "image_url": image_url,
-                    "post_id": new_post.id,
-                    "post_url": new_post.url,
-                    "mode": self.mode,
-                },
-            )
-            
-            return {
-                "type": "image_post",
-                "action": "submitted image post",
-                "subreddit": subreddit_name,
-                "title": title,
-                "content": content,
-                "image_url": image_url,
-                "post_id": new_post.id,
-                "post_url": new_post.url,
+            # Download image to temporary file with browser-like User-Agent
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             }
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                response = requests.get(image_url, headers=headers)
+                response.raise_for_status()
+                temp_file.write(response.content)
+                temp_file_path = temp_file.name
             
+            try:
+                # Create inline image with local file path
+                inline_image = InlineImage(path=temp_file_path, caption="Commissioned artwork")
+                
+                # Create media dictionary
+                media = {"image1": inline_image}
+                
+                # Create selftext with inline image reference
+                selftext_with_image = f"{content}\n\n{{image1}}"
+                
+                # DRY RUN: Log what would be submitted and return mock data
+                if self.mode == "dryrun":
+                    log_operation(
+                        logger,
+                        "submit_image_post",
+                        "dryrun",
+                        {
+                            "type": "image_post",
+                            "action": "would submit image post",
+                            "subreddit": subreddit_name,
+                            "title": title,
+                            "content": selftext_with_image,  # Real prepared content
+                            "image_url": image_url,
+                            "temp_file_path": temp_file_path,
+                            "media_keys": list(media.keys()),
+                            "mode": self.mode,
+                        },
+                    )
+                    return {
+                        "type": "image_post",
+                        "action": "would submit image post",
+                        "subreddit": subreddit_name,
+                        "title": title,
+                        "content": selftext_with_image,
+                        "image_url": image_url,
+                        "post_id": "dryrun_post_id",
+                        "post_url": f"https://reddit.com/r/{subreddit_name}/comments/dryrun_post_id",
+                    }
+                
+                # LIVE MODE: Actually submit to Reddit
+                else:
+                    new_post = subreddit.submit(
+                        title=title,
+                        inline_media=media,
+                        selftext=selftext_with_image
+                    )
+                    
+                    log_operation(
+                        logger,
+                        "submit_image_post",
+                        "success",
+                        {
+                            "type": "image_post",
+                            "action": "submitted image post",
+                            "subreddit": subreddit_name,
+                            "title": title,
+                            "content": selftext_with_image,
+                            "image_url": image_url,
+                            "post_id": new_post.id,
+                            "post_url": new_post.url,
+                            "mode": self.mode,
+                        },
+                    )
+                    
+                    return {
+                        "type": "image_post",
+                        "action": "submitted image post",
+                        "subreddit": subreddit_name,
+                        "title": title,
+                        "content": selftext_with_image,
+                        "image_url": image_url,
+                        "post_id": new_post.id,
+                        "post_url": new_post.url,
+                    }
+                    
+            finally:
+                # Clean up temporary file (for both modes)
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    
         except Exception as e:
             log_operation(
                 logger,
