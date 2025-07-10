@@ -10,14 +10,17 @@ RUN apk add --no-cache curl git
 # Copy package files
 COPY frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
 
 # Copy frontend source code
 COPY frontend/ .
 
 # Build the application
 RUN npm run build
+
+# Remove dev dependencies to reduce image size
+RUN npm prune --production
 
 # Install serve for production
 RUN npm install -g serve

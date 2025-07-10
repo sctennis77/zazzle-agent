@@ -128,8 +128,6 @@ docker-build-all:
 	@echo "🐳 Building all Docker images..."
 	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
 	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
-	@docker build -f Dockerfile.pipeline -t zazzle-agent/pipeline:latest .
-	@docker build -f Dockerfile.interaction -t zazzle-agent/interaction:latest .
 	@echo "✅ All Docker images built successfully"
 
 docker-run-local:
@@ -200,16 +198,8 @@ stop-api:
 	@while lsof -i :8000 > /dev/null; do sleep 1; done 
 
 # =====================
-# Task Runner Management
+# Task Management (API-based)
 # =====================
-
-run-task-runner:
-	@echo "Starting Task Runner service..."
-	$(POETRY) run python -m app.task_runner
-
-run-task-runner-once:
-	@echo "Running Task Runner once..."
-	$(POETRY) run python -c "import asyncio; from app.task_runner import TaskRunner; asyncio.run(TaskRunner().run_once())"
 
 add-front-task:
 	@echo "Adding front page task to queue..."
@@ -227,9 +217,9 @@ cleanup-stuck-tasks:
 # Testing Commands
 # =====================
 
-test-task-runner:
-	@echo "🧪 Testing Task Runner independently..."
-	$(POETRY) run python scripts/test_task_runner.py
+test-task-queue:
+	@echo "🧪 Testing Task Queue functionality..."
+	$(POETRY) run python -c "from app.db.database import SessionLocal; from app.task_queue import TaskQueue; session = SessionLocal(); queue = TaskQueue(session); print('Task queue test completed'); session.close()"
 
 test-end-to-end:
 	@echo "🚀 Testing full end-to-end pipeline..."
@@ -374,7 +364,7 @@ run-pipeline-batch:
 
 run-pipeline:
 	@echo "🚀 Running pipeline manually..."
-	@docker-compose exec -T pipeline python app/main.py --mode full
+	@docker-compose exec -T api python -m app.main --mode full
 
 monitor-pipeline:
 	@echo "Starting pipeline monitor..."
@@ -405,10 +395,6 @@ show-logs:
 show-logs-api:
 	@echo "📋 Showing API logs..."
 	@docker-compose logs -f api
-
-show-logs-pipeline:
-	@echo "📋 Showing pipeline logs..."
-	@docker-compose logs -f pipeline
 
 show-logs-frontend:
 	@echo "📋 Showing frontend logs..."
@@ -641,7 +627,7 @@ deploy-clean:
 	@./deploy.sh --clean-images
 
 deploy-quick:
-	@echo "🚀 Quick deployment (skipping initial pipeline)..."
+	@echo "🚀 Quick deployment..."
 	@if [ ! -f .env ]; then \
 		echo "❌ .env file not found. Please create one with required environment variables."; \
 		echo "See .env.example for required variables."; \
@@ -650,7 +636,7 @@ deploy-quick:
 		echo "  make setup-prod"; \
 		exit 1; \
 	fi
-	@./deploy.sh --skip-pipeline
+	@./deploy.sh
 
 validate-deployment:
 	@echo "🔍 Validating deployment..."

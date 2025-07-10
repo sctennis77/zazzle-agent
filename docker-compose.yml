@@ -44,7 +44,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # API Server
+  # API Server (handles commission tasks as threads locally)
   api:
     build:
       context: .
@@ -112,45 +112,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # Task Runner (processes task queue)
-  task-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.pipeline
-    volumes:
-      - ./data:/app/data
-    environment:
-      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
-      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
-      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
-      - ZAZZLE_AFFILIATE_ID=${ZAZZLE_AFFILIATE_ID}
-      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID}
-      - IMGUR_CLIENT_SECRET=${IMGUR_CLIENT_SECRET}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - STRIPE_CLI_MODE=${STRIPE_CLI_MODE:-false}
-      - TASK_PROCESSING_INTERVAL=300  # 5 minutes
-    depends_on:
-      database:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    command: python -m app.task_runner
 
   # Stripe CLI for local webhook testing
   stripe-cli:

@@ -162,11 +162,8 @@ run_migrations() {
     # Wait a bit for the database to be ready
     sleep 5
     
-    # Run migrations
-    docker-compose exec -T database sh -c "
-        apk add --no-cache sqlite &&
-        sqlite3 /app/data/zazzle_pipeline.db 'SELECT 1;' || echo 'Database not ready yet'
-    "
+    # Run migrations using the API container
+    docker-compose exec -T api python -m alembic upgrade head
     
     success "Database migrations completed"
 }
@@ -194,16 +191,6 @@ test_deployment() {
     success "All health checks passed"
 }
 
-# Run initial pipeline
-run_initial_pipeline() {
-    log "Running initial pipeline..."
-    
-    # Run a single pipeline execution using task-runner
-    docker-compose exec -T task-runner python -m app.main --mode full
-    
-    success "Initial pipeline completed"
-}
-
 # Display deployment information
 show_deployment_info() {
     echo ""
@@ -214,6 +201,7 @@ show_deployment_info() {
     echo "  • Frontend: http://localhost:5173"
     echo "  • API: http://localhost:8000"
     echo "  • API Docs: http://localhost:8000/docs"
+    echo "  • Redis: localhost:6379"
     echo ""
     echo "🔧 Management Commands:"
     echo "  • View logs: docker-compose logs -f"
@@ -221,7 +209,7 @@ show_deployment_info() {
     echo "  • View Stripe CLI logs: docker-compose logs -f stripe-cli"
     echo "  • Stop services: docker-compose down"
     echo "  • Restart services: docker-compose restart"
-    echo "  • Run pipeline: docker-compose exec task-runner python -m app.main --mode full"
+    echo "  • Run pipeline manually: docker-compose exec api python -m app.main --mode full"
     echo ""
     echo "📋 Useful URLs:"
     echo "  • Frontend: http://localhost:5173"
@@ -239,6 +227,9 @@ show_deployment_info() {
     echo "  • Verify validation logic works correctly"
     echo "  • Check Stripe payment processing"
     echo ""
+    echo "💡 Note: Commission tasks run as threads in the API service locally"
+    echo "   In production (K8s), they will run as separate jobs"
+    echo ""
 }
 
 # Main deployment function
@@ -249,7 +240,6 @@ main() {
     
     # Parse command line arguments
     CLEAN_IMAGES=false
-    SKIP_PIPELINE=false
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -257,16 +247,11 @@ main() {
                 CLEAN_IMAGES=true
                 shift
                 ;;
-            --skip-pipeline)
-                SKIP_PIPELINE=true
-                shift
-                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
                 echo "  --clean-images    Remove old Docker images before building"
-                echo "  --skip-pipeline   Skip running the initial pipeline"
                 echo "  --help           Show this help message"
                 exit 0
                 ;;
@@ -287,10 +272,6 @@ main() {
     wait_for_health
     run_migrations
     test_deployment
-    
-    if [[ "$SKIP_PIPELINE" != true ]]; then
-        run_initial_pipeline
-    fi
     
     show_deployment_info
 }
