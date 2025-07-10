@@ -294,6 +294,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             <ProductCard
               key={product.product_info.id}
               product={product}
+              activeTasks={activeTasks}
             />
           ))}
         </div>

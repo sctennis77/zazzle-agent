@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { GeneratedProduct, CommissionInfo, ProductSubredditPost } from '../../types/productTypes';
+import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import type { Task } from '../../types/taskTypes';
 import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock, FaReddit } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
@@ -89,7 +89,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
           const existingPost = await getPublishedPost(product.product_info.id.toString());
           if (!existingPost) {
             // Publish the product
-            await publishProduct(product.product_info.id.toString(), true); // dry run for now
+            await publishProduct(product.product_info.id.toString(), true); // dry run for safety
             setShowPublishAnimation(true);
             
             // Hide animation after 3 seconds
