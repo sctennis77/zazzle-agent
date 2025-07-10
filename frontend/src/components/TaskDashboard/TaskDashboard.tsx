@@ -39,11 +39,9 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
   };
 
   const setupWebSocket = () => {
-    // Connect to the API WebSocket endpoint on port 8000
-    const wsUrl = window.location.hostname === 'localhost' 
-      ? 'ws://localhost:8000/ws/tasks'
-      : `ws://${window.location.hostname}:8000/ws/tasks`;
-    
+    // Use the current host and /ws/tasks for Nginx reverse proxy compatibility
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = wsProtocol + '//' + window.location.host + '/ws/tasks';
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {

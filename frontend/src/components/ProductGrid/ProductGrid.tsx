@@ -81,14 +81,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   };
 
   const setupWebSocket = () => {
-    let wsUrl: string = import.meta.env.VITE_API_WS_URL || '';
-    if (!wsUrl) {
-      if (window.location.protocol === 'https:') {
-        wsUrl = 'wss://' + window.location.hostname + ':8000/ws/tasks';
-      } else {
-        wsUrl = 'ws://' + window.location.hostname + ':8000/ws/tasks';
-      }
-    }
+    // Use the current host and /ws/tasks for Nginx reverse proxy compatibility
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = wsProtocol + '//' + window.location.host + '/ws/tasks';
     const ws = new WebSocket(wsUrl);
     ws.onopen = (event) => {
       setWebsocketError(null);

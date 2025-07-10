@@ -62,3 +62,13 @@ VITE_API_WS_URL=ws://localhost:8000/ws/tasks
 ```
 
 This ensures the frontend connects to the correct backend WebSocket endpoint in Docker or local development. If not set, it defaults to ws://localhost:8000/ws/tasks.
+
+## API Base URL Configuration
+
+To configure the API endpoint for all fetch/axios calls, set the environment variable in your frontend .env file:
+
+```
+VITE_API_BASE_URL=http://localhost:8000/api
+```
+
+This ensures the frontend connects to the correct backend API endpoint in Docker or local development. If not set, it defaults to /api for local dev outside Docker.
