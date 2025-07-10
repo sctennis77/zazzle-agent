@@ -10,6 +10,7 @@ import json
 import logging
 import sys
 import os
+import random
 from typing import Dict, Any, Optional
 from datetime import datetime
 import asyncio
@@ -84,6 +85,7 @@ class CommissionWorker:
             zazzle_tracking_code=os.getenv("ZAZZLE_TRACKING_CODE", ""),
         )
         self.imgur_client = ImgurClient()
+        self._stop_progress_thread = False
         
         logger.info(f"Commission worker initialized for donation {donation_id}")
     
@@ -362,7 +364,8 @@ class CommissionWorker:
             if not product_info:
                 return None
             
-            # Step 6: Broadcast image generation complete (70%)
+            # Step 6: Stop progress thread and broadcast image generation complete (90%)
+            self._stop_progress_thread = True
             await self._broadcast_image_generation_complete(product_info, donation)
             
             # Step 7: Broadcast Zazzle creation started (80%)
@@ -380,58 +383,9 @@ class CommissionWorker:
             logger.error(f"Error in product generation with progress: {e}")
             return None
     
-    async def _fetch_post_with_progress(self, donation: Donation) -> Optional[dict]:
-        """Fetch the Reddit post with progress update."""
-        try:
-            # The actual post fetching happens in the RedditAgent
-            # The progress callback will handle the "post_fetched" stage
-            
-            return {
-                'post_id': donation.post_id,
-                'subreddit': donation.subreddit.subreddit_name if donation.subreddit else None
-            }
-            
-        except Exception as e:
-            logger.error(f"Error fetching post: {e}")
-            return None
+
     
-    async def _generate_product_idea_with_progress(self, post_info: dict) -> Optional[dict]:
-        """Generate product idea with progress update."""
-        try:
-            # The actual generation happens in RedditAgent._determine_product_idea
-            # The progress callback will handle the "product_designed" stage
-            
-            return {
-                'post_id': post_info['post_id'],
-                'subreddit': post_info['subreddit']
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating product idea: {e}")
-            return None
-    
-    async def _generate_image_with_progress(self, product_idea: dict, donation: Donation) -> Optional[ProductInfo]:
-        """Generate image with progress updates."""
-        try:
-            # Step 1: Broadcast image generation start (50%)
-            await self._broadcast_image_generation_started(product_idea, donation)
-            
-            # Step 2: Generate the actual product (this includes image generation)
-            product_info = await self.reddit_agent.find_and_create_product_for_task()
-            if not product_info:
-                return None
-            
-            # Step 3: Broadcast image generation complete (80%)
-            await self._broadcast_image_generation_complete(product_info, donation)
-            
-            # Step 4: Broadcast image stamping complete (90%)
-            await self._broadcast_image_stamping_complete(donation)
-            
-            return product_info
-            
-        except Exception as e:
-            logger.error(f"Error generating image with progress: {e}")
-            return None
+
     
     async def _broadcast_post_fetch_started(self, donation: Donation):
         self._update_task_status(
@@ -441,58 +395,19 @@ class CommissionWorker:
             message=f"Fetching commissioned post from r/{donation.subreddit.subreddit_name if donation.subreddit else 'unknown'}"
         )
     
-    async def _broadcast_post_fetched(self, donation: Donation, post_title: str):
-        self._update_task_status(
-            status="in_progress",
-            progress=20,
-            stage="post_fetched",
-            message=f"Fetched commissioned post: {post_title}"
-        )
-    
-    async def _broadcast_product_idea_started(self, post_info: dict):
-        self._update_task_status(
-            status="in_progress",
-            progress=30,
-            stage="product_idea_generation",
-            message="Generating product idea from Reddit post..."
-        )
-    
-    async def _broadcast_product_designed(self, product_info: ProductInfo, donation: Donation):
-        self._update_task_status(
-            status="in_progress",
-            progress=30,
-            stage="product_designed",
-            message=f"Product design created: {product_info.theme}"
-        )
-    
     async def _broadcast_image_generation_started(self, product_idea: dict, donation: Donation):
+        subreddit_name = donation.subreddit.subreddit_name if donation.subreddit else "unknown"
         self._update_task_status(
             status="in_progress",
             progress=40,
             stage="image_generation_started",
-            message="Generating image with DALL-E..."
-        )
-    
-    async def _broadcast_image_processing(self, donation: Donation):
-        self._update_task_status(
-            status="in_progress",
-            progress=55,
-            stage="image_processing",
-            message="Processing and optimizing image..."
-        )
-    
-    async def _broadcast_image_uploading(self, donation: Donation):
-        self._update_task_status(
-            status="in_progress",
-            progress=65,
-            stage="image_uploading",
-            message="Uploading image to Imgur..."
+            message=f"Clouvel illustrating {donation.post_id} from r/{subreddit_name}"
         )
     
     async def _broadcast_image_generation_complete(self, product_info: ProductInfo, donation: Donation):
         self._update_task_status(
             status="in_progress",
-            progress=70,
+            progress=90,
             stage="image_generated",
             message="Image generated successfully"
         )
@@ -500,24 +415,15 @@ class CommissionWorker:
     async def _broadcast_zazzle_creation_started(self, donation: Donation):
         self._update_task_status(
             status="in_progress",
-            progress=80,
+            progress=95,
             stage="zazzle_creation_started",
             message="Creating product on Zazzle..."
-        )
-    
-    async def _broadcast_image_stamping_complete(self, donation: Donation):
-        customer_name = donation.customer_name if donation.customer_name else "Anonymous"
-        self._update_task_status(
-            status="in_progress",
-            progress=85,
-            stage="image_stamped",
-            message=f"Image stamped with QR code for {customer_name}"
         )
     
     async def _broadcast_zazzle_creation_complete(self, donation: Donation):
         self._update_task_status(
             status="in_progress",
-            progress=90,
+            progress=97,
             stage="zazzle_creation_complete",
             message="Product created on Zazzle successfully"
         )
@@ -655,23 +561,29 @@ class CommissionWorker:
             # Don't let callback errors break the main workflow
     
     def _send_incremental_progress_updates(self, donation: Donation):
-        """Send incremental progress updates during image generation (40% to 70%)."""
+        """Send incremental progress updates during image generation (40% to 89%)."""
         try:
             import time
             
-            # Start at 40% and gradually increase to 70%
+            # Start at 40% and gradually increase to 89%
             start_progress = 40
-            end_progress = 70
-            current_progress = start_progress
+            end_progress = 89
             
-            # Send updates every 2 seconds for smooth progress
-            update_interval = 2.0
-            total_updates = 15  # 15 updates over ~30 seconds
+            total_updates = 30  # 30 updates over ~40 seconds
             
             for i in range(total_updates):
-                # Calculate progress (smooth curve from 40% to 70%)
+                # Check if we should stop the thread
+                if self._stop_progress_thread:
+                    logger.debug("Progress thread stopped by flag")
+                    return
+                
+                # Calculate progress (smooth curve from 40% to 89%)
                 progress_ratio = i / (total_updates - 1) if total_updates > 1 else 1
                 current_progress = start_progress + int((end_progress - start_progress) * progress_ratio)
+                
+                # Ensure the last update reaches exactly end_progress
+                if i == total_updates - 1:
+                    current_progress = end_progress
                 
                 # Send progress update with user-friendly message
                 self._update_task_status(
@@ -681,8 +593,11 @@ class CommissionWorker:
                     message=f"Image generation in progress... ({current_progress}%)"
                 )
                 
-                # Sleep before next update
-                time.sleep(update_interval)
+                # Don't sleep after the last update
+                if i < total_updates - 1:
+                    # Random sleep interval (1.0 to 2.5 seconds)
+                    update_interval = random.uniform(1.0, 2.5)
+                    time.sleep(update_interval)
                 
         except Exception as e:
             logger.error(f"Error in incremental progress updates: {e}")
