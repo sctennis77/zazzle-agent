@@ -81,11 +81,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   };
 
   const setupWebSocket = () => {
-    let wsUrl: string;
-    if (window.location.protocol === 'https:') {
-      wsUrl = 'wss://' + window.location.host + '/ws/tasks';
-    } else {
-      wsUrl = 'ws://' + window.location.host + '/ws/tasks';
+    let wsUrl: string = import.meta.env.VITE_API_WS_URL || '';
+    if (!wsUrl) {
+      if (window.location.protocol === 'https:') {
+        wsUrl = 'wss://' + window.location.hostname + ':8000/ws/tasks';
+      } else {
+        wsUrl = 'ws://' + window.location.hostname + ':8000/ws/tasks';
+      }
     }
     const ws = new WebSocket(wsUrl);
     ws.onopen = (event) => {

@@ -52,3 +52,13 @@ export default tseslint.config({
   },
 })
 ```
+
+## WebSocket Configuration
+
+To configure the WebSocket endpoint for real-time updates, set the environment variable in your frontend .env file:
+
+```
+VITE_API_WS_URL=ws://localhost:8000/ws/tasks
+```
+
+This ensures the frontend connects to the correct backend WebSocket endpoint in Docker or local development. If not set, it defaults to ws://localhost:8000/ws/tasks.
