@@ -1,9 +1,16 @@
 """
-Reddit interaction agent module.
+DEPRECATED: Reddit interaction agent module.
 
 This module provides an LLM-powered agent that can interact with Reddit posts and comments
 using various tools like upvoting, downvoting, and replying. The agent only interacts with
 posts that exist in the database and logs all actions for tracking.
+
+DEPRECATION NOTICE:
+This file is marked as deprecated and should not be considered for cleanup or modification
+unless explicitly requested. It contains legacy functionality that may be used in the future
+but is not part of the current active codebase.
+
+Last reviewed: 2024-12-19
 """
 
 import json

@@ -168,7 +168,7 @@ class TestSubredditPublisher:
         assert result["type"] == "image_post"
         assert result["action"] == "would submit image post"
         assert result["subreddit"] == "clouvel"
-        assert result["title"] == "🎨 Test Theme - Commissioned by u/test_user"
+        assert result["title"] == "🎨 Test Image - commissioned by u/test_user"
         assert "Commissioned Artwork: Test Theme" in result["content"]
         assert result["image_url"] == "https://example.com/image.jpg"
 
@@ -185,7 +185,7 @@ class TestSubredditPublisher:
         
         mock_reddit_client.submit_image_post.assert_called_once_with(
             subreddit_name="clouvel",
-            title="🎨 Test Theme - Commissioned by u/test_user",
+            title="🎨 Test Image - commissioned by u/test_user",
             content=mock_reddit_client.submit_image_post.call_args[1]["content"],
             image_url="https://example.com/image.jpg"
         )

@@ -27,7 +27,8 @@ from app.clients.imgur_client import ImgurClient
 from app.db.database import SessionLocal
 from app.db.mappers import reddit_context_to_db, product_idea_to_db, product_info_to_db
 from app.db.models import RedditPost, ProductInfo
-from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
+# Remove legacy distribution imports
+# from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
 from app.image_generator import ImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
 from app.models import (
     DesignInstructions,

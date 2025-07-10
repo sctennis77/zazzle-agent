@@ -1,15 +1,9 @@
-import argparse
-import asyncio
-import csv
-import glob
-import json
 import logging
 import os
-import sys
 import random
 from contextlib import contextmanager
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
+from typing import List, Optional
 
 from dotenv import load_dotenv
 
@@ -51,57 +45,7 @@ else:
     logger.warning("OPENAI_API_KEY not loaded.")
 
 
-def ensure_output_dir(output_dir: str = "outputs") -> None:
-    """Ensure the output directory exists."""
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "screenshots"), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
-    logger.info("Ensured outputs directory exists")
 
-
-def save_to_csv(products: List[ProductInfo], output_file: str = "processed_products.csv") -> None:
-    """Save product information to a CSV file."""
-    if not isinstance(products, list):
-        products = [products]
-
-    # Convert products to dictionaries
-    product_dicts = [product.to_dict() for product in products]
-
-    # Determine output directory
-    output_dir = os.getenv("OUTPUT_DIR", None)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, output_file)
-
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.exists(output_file)
-
-    mode = "a" if file_exists else "w"
-
-    with open(output_file, mode, newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=product_dicts[0].keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerows(product_dicts)
-
-
-def log_product_info(product_info: ProductInfo) -> None:
-    """Log product information in a readable format."""
-    logger.info("\nGenerated Product Info:")
-    logger.info(f"Theme: {product_info.theme}")
-    logger.info(f"Model: {product_info.model}")
-    logger.info(f"Prompt Version: {product_info.prompt_version}")
-
-    logger.info("\nReddit Context:")
-    logger.info(f"Post Title: {product_info.reddit_context.post_title}")
-    logger.info(f"Post URL: {product_info.reddit_context.post_url}")
-
-    logger.info("\nProduct URL:")
-    logger.info("To view and customize the product, open this URL in your browser:")
-    logger.info(f"{product_info.product_url}")
-
-    logger.info("\nGenerated Image URL:")
-    logger.info(f"{product_info.image_url}")
 
 
 @contextmanager
@@ -201,12 +145,6 @@ async def run_full_pipeline(
 
                 # If we got results, we're done!
                 if results:
-                    # Save results to CSV if any products were generated
-                    output_dir = os.getenv("OUTPUT_DIR", "outputs")
-                    os.makedirs(output_dir, exist_ok=True)
-                    output_file = os.path.join(output_dir, "processed_products.csv")
-                    save_to_csv(results, output_file)
-
                     # Update pipeline run status and end time
                     pipeline_run.status = PipelineStatus.COMPLETED.value
                     pipeline_run.end_time = datetime.utcnow()
@@ -247,17 +185,6 @@ async def run_full_pipeline(
     raise Exception(error_msg)
 
 
-async def run_generate_image_pipeline(image_prompt: str, model: str = "dall-e-3") -> None:
-    """Run the image generation pipeline with a given prompt."""
-    image_generator = ImageGenerator(model=model)
-    try:
-        imgur_url, local_path = await image_generator.generate_image(image_prompt)
-        logger.info(f"\nGenerated Image URL: {imgur_url}")
-        logger.info(f"Generated Image Local Path: {local_path}")
-    except Exception as e:
-        logger.error(f"Error generating image: {e}")
-
-
 def validate_subreddit(subreddit_name: str) -> None:
     """
     Validate that the given subreddit name is in the available subreddits list.
@@ -273,54 +200,6 @@ def validate_subreddit(subreddit_name: str) -> None:
             f"Subreddit '{subreddit_name}' is not available. "
             f"Available subreddits: {AVAILABLE_SUBREDDITS}"
         )
-
-
-async def main() -> None:
-    """Main entry point for the application."""
-    try:
-        # Initialize the database
-        init_db()
-
-        # Parse command line arguments
-        parser = argparse.ArgumentParser(description="Run the Zazzle Agent pipeline")
-        parser.add_argument(
-            "--mode",
-            type=str,
-            default="full",
-            choices=["full", "image"],
-            help="Pipeline mode: full (complete pipeline) or image (image generation only)",
-        )
-        parser.add_argument(
-            "--model",
-            type=str,
-            default="dall-e-3",
-            help="AI model to use (default: dall-e-3)",
-        )
-        parser.add_argument(
-            "--prompt", type=str, help="Image prompt (required for image mode)"
-        )
-        parser.add_argument(
-            "--subreddit",
-            type=str,
-            help="Subreddit to use (optional, will pick randomly if not specified)",
-        )
-        args = parser.parse_args()
-
-        # Validate arguments based on mode
-        if args.mode == "image":
-            if not args.prompt:
-                logger.error("--prompt is required for image mode")
-                sys.exit(2)
-            await run_generate_image_pipeline(args.prompt, args.model)
-        else:  # full mode
-            await run_full_pipeline(subreddit_name=args.subreddit)
-    except Exception as e:
-        logger.error(f"Error in main: {e}")
-        raise
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
 # Expose FastAPI app for Uvicorn
 from app.api import app

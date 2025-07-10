@@ -278,15 +278,6 @@ async def test_end_to_end_pipeline_with_csv_output(
         result = await run_full_pipeline(config)
         assert result == [test_product]
 
-        # Verify CSV file was created
-        csv_file = test_output_dir / "processed_products.csv"
-        assert csv_file.exists()
-        with open(csv_file) as f:
-            content = f.read()
-            assert "test123" in content
-            assert "Test Product" in content
-            assert "https://zazzle.com/test123" in content
-
 
 @pytest.mark.asyncio
 async def test_end_to_end_pipeline_with_different_model(
@@ -354,15 +345,6 @@ async def test_end_to_end_pipeline_with_different_model(
         )
         result = await run_full_pipeline(config)
         assert result == [test_product]
-
-        # Verify CSV file was created
-        csv_file = test_output_dir / "processed_products.csv"
-        assert csv_file.exists()
-        with open(csv_file) as f:
-            content = f.read()
-            assert "test123" in content
-            assert "Test Product" in content
-            assert "https://zazzle.com/test123" in content
 
 
 @pytest.mark.asyncio
