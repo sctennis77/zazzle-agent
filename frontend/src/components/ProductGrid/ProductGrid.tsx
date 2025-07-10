@@ -117,47 +117,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             return updatedTasks;
           });
           if (message.data.status === 'completed') {
-            console.log('Task completed, fetching new product...');
+            console.log('Task completed, refreshing product list...');
             
-            // Automatically publish the product when commission completes
+            // Refresh the product list to show the new product
             setTimeout(async () => {
               try {
-                // Fetch the new product first
                 await fetchNewProduct();
-                
-                // Then attempt to publish it (dry run)
-                const productResponse = await fetch('/api/generated_products');
-                if (productResponse.ok) {
-                  const products = await productResponse.json();
-                  // Find the most recently completed product (should be the one that just finished)
-                  const latestProduct = products[0]; // Assuming products are ordered by completion time
-                  if (latestProduct) {
-                    console.log('ProductGrid: Attempting to auto-publish product', latestProduct.product_info.id);
-                    
-                    // Check if already published
-                    const publishCheckResponse = await fetch(`/api/publish/product/${latestProduct.product_info.id}`);
-                    if (publishCheckResponse.status === 404) {
-                      // Not published yet, so publish it
-                      const publishResponse = await fetch(`/api/publish/product/${latestProduct.product_info.id}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dry_run: true })
-                      });
-                      
-                      if (publishResponse.ok) {
-                        handleProductPublished(latestProduct.product_info.id);
-                        console.log('ProductGrid: Successfully auto-published product', latestProduct.product_info.id);
-                      } else {
-                        console.error('ProductGrid: Failed to auto-publish product', latestProduct.product_info.id);
-                      }
-                    } else {
-                      handleProductPublished(latestProduct.product_info.id);
-                      console.log('ProductGrid: Product already published, skipping auto-publish');
-                    }
-                  }
-                }
               } catch (error) {
-                console.error('ProductGrid: Error in auto-publish flow:', error);
+                console.error('ProductGrid: Error refreshing products:', error);
               }
             }, 1000);
             
@@ -334,7 +301,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             />
           ))}
           {/* Generated product cards */}
-          {products.map((product) => (
+          {[...products]
+            .sort((a, b) => b.product_info.id - a.product_info.id)
+            .map((product) => (
             <ProductCard
               key={product.product_info.id}
               product={product}

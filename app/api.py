@@ -1433,13 +1433,17 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
         if not reddit_post:
             raise HTTPException(status_code=404, detail="Reddit post not found")
         
-        # Convert to the expected format
-        from app.db.mappers import product_info_from_db, reddit_post_from_db, pipeline_run_from_db
+        # Convert to the expected format using model_validate
+        product_schema = ProductInfoSchema.model_validate(product_info)
+        pipeline_schema = PipelineRunSchema.model_validate(pipeline_run)
+        reddit_post_dict = reddit_post.__dict__.copy()
+        reddit_post_dict['subreddit'] = reddit_post.subreddit.subreddit_name if reddit_post.subreddit else None
+        reddit_schema = RedditPostSchema.model_validate(reddit_post_dict)
         
-        generated_product = GeneratedProduct(
-            product_info=product_info_from_db(product_info),
-            pipeline_run=pipeline_run_from_db(pipeline_run),
-            reddit_post=reddit_post_from_db(reddit_post)
+        generated_product = GeneratedProductSchema(
+            product_info=product_schema,
+            pipeline_run=pipeline_schema,
+            reddit_post=reddit_schema
         )
         
         return generated_product
