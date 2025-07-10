@@ -175,6 +175,7 @@ redis-status:
 # API Management
 # =====================
 
+# NOTE: Always use --env-file .env so Poetry/Uvicorn loads environment variables correctly (required for Stripe, etc)
 run-api:
 	@echo "Stopping any existing API instances..."
 	@if lsof -ti :8000 > /dev/null; then \
@@ -185,7 +186,7 @@ run-api:
 	@echo "Waiting for port 8000 to be released..."
 	@while lsof -i :8000 > /dev/null; do sleep 1; done
 	@echo "Starting API server..."
-	$(POETRY) run uvicorn app.api:app --host 0.0.0.0 --port 8000 --reload
+	$(POETRY) run uvicorn app.api:app --host 0.0.0.0 --port 8000 --reload --env-file .env
 
 stop-api:
 	@echo "Stopping API server..."

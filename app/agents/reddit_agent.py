@@ -1084,59 +1084,6 @@ class RedditAgent:
             logger.warning("No session or pipeline_run_id available for saving RedditPost")
         return reddit_post_id
 
-    async def _find_trending_post(self, tries: int = 3, limit: int = 50):
-        """
-        Find a trending Reddit post that has not already been processed.
-        Works for both specific subreddits and "all" (front page).
-        Skips posts that are stickied, too old, or already present in the database (by post_id).
-        Returns the first valid post or None if none are found.
-        """
-        logger.info(
-            f"Starting _find_trending_post with subreddit: {self.subreddit_name}, limit: {limit}, retries: {tries}"
-        )
-        try:
-            for attempt in range(tries):
-                # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.reddit_client.reddit.subreddit(self.subreddit_name).hot(limit=limit):
-                    logger.info(
-                        f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
-                    )
-                    if submission.stickied:
-                        continue
-                    if (
-                        datetime.now(timezone.utc)
-                        - datetime.fromtimestamp(submission.created_utc, timezone.utc)
-                    ).days > 30:
-                        continue
-                    if not submission.selftext:
-                        continue
-
-                    # Check if already processed
-                    if self.session:
-                        existing_post = (
-                            self.session.query(RedditPost)
-                            .filter_by(post_id=submission.id)
-                            .first()
-                        )
-                        if existing_post:
-                            logger.info(
-                                f"Skipping post {submission.id}: already processed"
-                            )
-                            continue
-
-                    # Generate comment summary and add to submission
-                    comment_summary = self._generate_comment_summary(submission)
-                    submission.comment_summary = comment_summary
-                    return submission
-                # If we reach here, no suitable post was found in this attempt
-                logger.info(
-                    f"No suitable trending post found on attempt {attempt + 1}/{tries}"
-                )
-            return None
-        except Exception as e:
-            logger.error(f"Error finding trending post: {str(e)}")
-            return None
-
     async def _find_trending_post_for_task(self, tries: int = 3, limit: int = 50, subreddit_name: str = None):
         """
         Find a trending Reddit post specifically for task-based processing.

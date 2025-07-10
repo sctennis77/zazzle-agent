@@ -189,7 +189,7 @@ def mock_zazzle():
 @pytest.fixture
 def mock_image_generator():
     """Mock image generation."""
-    with patch("app.image_generator.ImageGenerator.generate_image", new_callable=AsyncMock) as mock:
+    with patch("app.async_image_generator.AsyncImageGenerator.generate_image", new_callable=AsyncMock) as mock:
         mock.return_value = ("https://i.imgur.com/test_commission.png", "/tmp/test_commission_image.png")
         yield mock
 

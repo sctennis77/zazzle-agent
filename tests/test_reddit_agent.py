@@ -107,57 +107,45 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         )
         self.addCleanup(self.patcher_openai.stop)
 
-    @patch(
-        "app.image_generator.ImageGenerator.generate_image",
-        new_callable=AsyncMock,
-        return_value=("https://example.com/image.jpg", "/tmp/image.jpg"),
-    )
-    @patch(
-        "app.agents.reddit_agent.RedditAgent._determine_product_idea",
-        return_value=ProductIdea(
-            theme="Test Theme",
-            image_description="Test image description",
-            design_instructions={
-                "image": "https://example.com/image.jpg",
-                "theme": "Test Theme",
-            },
-            reddit_context=RedditContext(
-                post_id="test_post_id",
-                post_title="Test Post Title",
-                post_url="https://reddit.com/test",
-                subreddit="test_subreddit",
-            ),
-            model="dall-e-3",
-            prompt_version="1.0.0",
-        ),
-    )
-    @patch(
-        "app.agents.reddit_agent.RedditAgent._find_trending_post",
-        new_callable=AsyncMock,
-    )
-    async def test_find_and_create_product(
+    @patch("app.async_image_generator.AsyncImageGenerator.generate_image", new_callable=AsyncMock)
+    @patch("app.agents.reddit_agent.RedditAgent._determine_product_idea", new_callable=AsyncMock)
+    @patch("app.agents.reddit_agent.RedditAgent._find_trending_post_for_task", new_callable=AsyncMock)
+    async def test_find_and_create_product_for_task(
         self,
         mock_find_trending_post,
         mock_determine_product_idea,
         mock_generate_image,
     ):
-        # Setup
+        """Test the find_and_create_product_for_task method."""
+        # Setup mocks
         mock_post = MagicMock()
-        mock_post.id = "test_post_id"
-        mock_post.title = "Test Post Title"
-        mock_post.url = "https://reddit.com/test"
-        mock_post.permalink = "/r/test/123"
-        mock_post.subreddit.display_name = "test_subreddit"
-        mock_post.selftext = "Test Content"
-        mock_post.comment_summary = "Test comment summary"
-        mock_find_trending_post.return_value = mock_post
+        
+        # Patch the create_product method on the instance
+        with patch.object(self.reddit_agent.zazzle_designer, "create_product", new_callable=AsyncMock) as mock_create_product:
+            mock_post.id = "test_post_id"
+            mock_post.title = "Test Post Title"
+            mock_post.url = "https://reddit.com/test"
+            mock_post.subreddit = MagicMock()
+            mock_post.subreddit.display_name = "test_subreddit"
+            mock_post.selftext = "Test Content"
+            mock_post.comment_summary = "Test comment summary"
+            mock_find_trending_post.return_value = mock_post
 
-        mock_product_info = MagicMock()
-        self.reddit_agent.zazzle_designer.create_product = AsyncMock(return_value=mock_product_info)
+            mock_product_idea = MagicMock()
+            mock_product_idea.theme = "Test Theme"
+            mock_product_idea.image_description = "Test image description"
+            mock_product_idea.design_instructions = {"image": "https://i.imgur.com/test.jpg", "theme": "Test Theme"}
+            mock_determine_product_idea.return_value = mock_product_idea
+            mock_generate_image.return_value = ("https://i.imgur.com/test.jpg", "/tmp/test.jpg")
 
-        result = await self.reddit_agent.find_and_create_product()
-        # Compare the return value, not the mock itself
-        self.assertEqual(result, mock_product_info)
+            # Fix: create a mock product with product_id attribute
+            mock_product = MagicMock()
+            mock_product.product_id = "test_product_123"
+            # Set the return_value directly on the AsyncMock
+            mock_create_product.return_value = mock_product
+
+            result = await self.reddit_agent.find_and_create_product_for_task()
+            self.assertEqual(result.product_id, "test_product_123")
 
     async def test_create_product(self):
         """Test the Reddit agent's ability to create products."""
@@ -196,7 +184,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertEqual(result, mock_product_info)
 
     @patch(
-        "app.agents.reddit_agent.RedditAgent._find_trending_post",
+        "app.agents.reddit_agent.RedditAgent._find_trending_post_for_task",
         new_callable=AsyncMock,
     )
     async def test_find_reddit_post(self, mock_find_trending_post):
@@ -211,7 +199,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_post.comment_summary = "Test comment summary"
         mock_find_trending_post.return_value = mock_post
 
-        result = await self.reddit_agent._find_trending_post()
+        result = await self.reddit_agent._find_trending_post_for_task()
         self.assertEqual(result, mock_post)
 
     async def test_find_reddit_post_skips_processed(self):
@@ -281,7 +269,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         agent._generate_comment_summary = MagicMock(return_value="Test comment summary")
 
         # Call _find_trending_post
-        result = await agent._find_trending_post()
+        result = await agent._find_trending_post_for_task()
 
         # Verify that the second post was returned (first one was skipped)
         self.assertEqual(result, mock_post2)
@@ -330,42 +318,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
             self.assertIsInstance(result, ProductInfo)
             self.assertEqual(result.product_id, "12345")
             self.assertEqual(result.product_url, "https://example.com/product")
-
-    @patch("app.agents.reddit_agent.openai")
-    async def test_find_trending_post(self, mock_openai):
-        agent = RedditAgent(subreddit_name="test_subreddit")
-        agent.openai = mock_openai
-        # Patch agent.reddit_client.reddit.subreddit().hot to return a mock submission
-        mock_submission = MagicMock()
-        mock_submission.title = "Test Post"
-        mock_submission.score = 100
-        mock_submission.is_self = True  # Self post
-        mock_submission.selftext = "Test content"  # Required: non-empty selftext
-        mock_submission.created_utc = datetime.now(timezone.utc).timestamp()
-        mock_submission.stickied = False  # Not stickied
-        mock_submission.subreddit.display_name = "test_subreddit"
-        mock_comment = MagicMock()
-        mock_comment.body = "Test comment"
-        mock_submission.comments.replace_more = MagicMock(side_effect=lambda limit=0: None)
-        mock_submission.comments.list.return_value = [mock_comment]
-        
-        mock_subreddit = MagicMock()
-        mock_subreddit.hot.return_value = [mock_submission]
-        agent.reddit_client.reddit.subreddit.return_value = mock_subreddit
-
-        # Mock the comment summary generation
-        agent._generate_comment_summary = MagicMock(return_value="Summary of comments")
-
-        # Mock OpenAI response
-        mock_openai.chat.completions.create.return_value.choices = [
-            MagicMock(message=MagicMock(content="Summary of comments"))
-        ]
-        try:
-            result = await agent._find_trending_post(tries=3, limit=20)
-            assert result is not None
-        except Exception as e:
-            print(f"Exception during test_find_trending_post: {e}")
-            assert False
 
     async def test_find_trending_post_for_task_simple(self):
         """Test the task-specific _find_trending_post_for_task method with simple mocking."""
@@ -426,7 +378,7 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         mock_product_idea = MagicMock()
         mock_product_idea.theme = "Test Theme"
         mock_product_idea.image_description = "Test image description"
-        mock_product_idea.design_instructions = {"image_title": "Test Image"}
+        mock_product_idea.design_instructions = {"image": "https://i.imgur.com/test.jpg", "theme": "Test Theme"}
         agent._determine_product_idea = AsyncMock(return_value=mock_product_idea)
         
         # Mock the image generator
@@ -446,27 +398,6 @@ class TestRedditAgent(IsolatedAsyncioTestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].product_id, "test_product_123")
-
-    async def test_find_and_create_product_for_task(
-        self,
-        mock_find_trending_post,
-        mock_determine_product_idea,
-        mock_generate_image,
-        mock_create_product,
-    ):
-        """Test the find_and_create_product_for_task method."""
-        # Setup mocks
-        mock_find_trending_post.return_value = self.mock_submission
-        mock_determine_product_idea.return_value = self.mock_product_idea
-        mock_generate_image.return_value = ("https://i.imgur.com/test.jpg", "/tmp/test.jpg")
-        mock_create_product.return_value = self.mock_product_info
-
-        # Call the method
-        result = await self.reddit_agent.find_and_create_product_for_task()
-        
-        # Verify the result
-        self.assertIsNotNone(result)
-        self.assertEqual(result.product_id, "test_product_123")
 
     def test_pick_subreddit(self):
         """Test that pick_subreddit returns a valid subreddit from the available list."""

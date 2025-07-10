@@ -3,24 +3,22 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import unittest
+import pytest
 from unittest.mock import MagicMock, patch
 from app.commission_worker import CommissionWorker
 
 class TestCommissionWorkerProgress(unittest.TestCase):
-    @patch('app.commission_worker.time.sleep', return_value=None)
-    @patch('app.commission_worker.random.uniform', return_value=1.5)
-    def test_incremental_progress_updates(self, mock_random, mock_sleep):
+    def test_incremental_progress_updates(self):
         # This test is no longer relevant since progress updates are now handled by RedditAgent
         # The CommissionWorker no longer has _send_incremental_progress_updates method
         pass
 
-    @patch('app.commission_worker.time.sleep', return_value=None)
-    @patch('app.commission_worker.random.uniform', return_value=1.5)
-    def test_incremental_progress_updates_stop_flag(self, mock_random, mock_sleep):
+    def test_incremental_progress_updates_stop_flag(self):
         # This test is no longer relevant since progress updates are now handled by RedditAgent
         # The CommissionWorker no longer has _send_incremental_progress_updates method or _stop_progress_thread flag
         pass
 
+    @pytest.mark.asyncio
     async def test_progress_callback_image_generation_started(self):
         """Test that the progress callback handles image_generation_started stage correctly."""
         # Arrange
@@ -40,6 +38,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]['stage'], 'image_generation_started')
         self.assertEqual(call_args[1]['message'], 'Clouvel illustrating abc123 from r/golf')
 
+    @pytest.mark.asyncio
     async def test_progress_callback_image_generation_started_no_subreddit(self):
         """Test that the progress callback handles missing subreddit gracefully."""
         # Arrange
@@ -59,6 +58,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]['stage'], 'image_generation_started')
         self.assertEqual(call_args[1]['message'], 'Clouvel illustrating abc123 from r/unknown')
 
+    @pytest.mark.asyncio
     async def test_progress_callback_image_generation_progress(self):
         """Test that the progress callback handles image_generation_progress stage correctly."""
         # Arrange
@@ -77,6 +77,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]['stage'], 'image_generation_in_progress')
         self.assertEqual(call_args[1]['message'], 'Image generation in progress... (65%)')
 
+    @pytest.mark.asyncio
     async def test_progress_callback_image_generation_complete(self):
         """Test that the progress callback handles image_generation_complete stage correctly."""
         # Arrange

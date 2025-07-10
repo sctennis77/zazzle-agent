@@ -119,7 +119,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         result = await self.reddit_agent._determine_product_idea(reddit_context)
         self.assertIsNone(result)
 
-    @patch("app.image_generator.ImageGenerator.generate_image", new_callable=AsyncMock)
+    @patch("app.async_image_generator.AsyncImageGenerator.generate_image", new_callable=AsyncMock)
     async def test_find_and_create_product_for_task_image_generation_failure(
         self, mock_generate_image
     ):
@@ -160,7 +160,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
 
         # Mock successful image generation
         with patch(
-            "app.image_generator.ImageGenerator.generate_image", new_callable=AsyncMock
+            "app.async_image_generator.AsyncImageGenerator.generate_image", new_callable=AsyncMock
         ) as mock_generate_image:
             mock_generate_image.return_value = (
                 "https://example.com/image.jpg",
@@ -194,7 +194,7 @@ class TestRedditAgentErrorHandling(unittest.IsolatedAsyncioTestCase):
         mock_session.add.assert_called_once()
 
     @patch(
-        "app.agents.reddit_agent.RedditAgent._find_trending_post",
+        "app.agents.reddit_agent.RedditAgent._find_trending_post_for_task",
         new_callable=AsyncMock,
     )
     async def test_find_and_create_product_for_task_no_trending_post(
