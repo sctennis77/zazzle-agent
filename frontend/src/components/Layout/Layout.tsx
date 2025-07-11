@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from '../../assets/logo.png';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createNoise3D } from 'simplex-noise';
+import { AnimatedPainting } from '../common/AnimatedPainting';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,15 +13,25 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isCommissionInProgress }) => {
   const location = useLocation();
+  const [showAnimated, setShowAnimated] = useState(false);
+  const [showLogo, setShowLogo] = useState(true);
+  const animationDuration = 20; // seconds
+
+  // Handle logo click
+  const handleLogoClick = () => {
+    setShowLogo(false);
+    setShowAnimated(true);
+    // After animation, restore logo
+    setTimeout(() => {
+      setShowAnimated(false);
+      setShowLogo(true);
+    }, animationDuration * 1000); // match animation duration
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 text-gray-900">
       {/* Unified Compact Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-50 relative overflow-hidden">
-        {/* Animated painting effect background with hundreds of organic, noise-based mask shapes */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          {/* Large logo image as background, masked by many animated organic blobs */}
-          <NoiseMaskPainting logo={logo} />
-        </div>
+      <header className={`bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-50 relative overflow-hidden transition-all duration-700 ${showAnimated ? 'min-h-[260px] py-8' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
           <div className="flex items-center justify-between h-auto py-3 gap-y-2 w-full">
             {/* Left: Navigation */}
@@ -46,15 +57,23 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
                 Fundraising
               </Link>
             </div>
-            {/* Center: Logo, Title, Subtitle */}
+            {/* Center: Interactive Logo/AnimatedPainting, Title, Subtitle */}
             <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
+              {/* Static Logo (clickable) */}
               <img
                 src={logo}
                 alt="Clouvel Logo"
-                className="w-16 h-16 rounded-full border-2 border-white shadow-md object-cover mb-1"
+                className={`w-16 h-16 rounded-full border-2 border-white shadow-md object-cover mb-1 cursor-pointer transition-opacity duration-700 ${showLogo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                onClick={handleLogoClick}
+                style={{ zIndex: 2 }}
               />
-              <span className="text-xl font-bold text-gray-900 truncate">Clouvel</span>
-              <span className="text-xs text-gray-500 font-medium truncate mb-2">An AI illustrator Inspired By Reddit</span>
+              {/* Animated Painting (shows on click) */}
+              <div className={`transition-opacity duration-700 ${showAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ position: 'absolute', top: '2.5rem' }}>
+                {showAnimated && <AnimatedPainting logo={logo} animationDuration={animationDuration} />}
+              </div>
+              {/* Hide title/subtitle during animation */}
+              <span className={`text-xl font-bold text-gray-900 truncate transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>Clouvel</span>
+              <span className={`text-xs text-gray-500 font-medium truncate mb-2 transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>An AI illustrator Inspired By Reddit</span>
             </div>
             {/* Right: Empty for now */}
             <div className="flex-1"></div>
