@@ -27,6 +27,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [fabAnimation, setFabAnimation] = useState(false);
 
   // Handle query parameter for opening specific product
   useEffect(() => {
@@ -245,6 +246,33 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     return Array.from(map.values());
   };
 
+  // Function to trigger FAB animation
+  const triggerFabAnimation = () => {
+    setFabAnimation(true);
+    setTimeout(() => setFabAnimation(false), 1000); // Reset after 1 second
+  };
+
+  // Expose the trigger function to parent component
+  useEffect(() => {
+    if (onCommissionProgressChange) {
+      onCommissionProgressChange(hasActiveCommissions);
+    }
+  }, [hasActiveCommissions, onCommissionProgressChange]);
+
+  // Listen for animation trigger from parent
+  useEffect(() => {
+    const handleAnimationTrigger = () => {
+      triggerFabAnimation();
+    };
+    
+    // Add event listener for custom event
+    window.addEventListener('trigger-fab-animation', handleAnimationTrigger);
+    
+    return () => {
+      window.removeEventListener('trigger-fab-animation', handleAnimationTrigger);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -330,7 +358,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       {/* Floating Action Button for Commission Art */}
       <button
         onClick={() => setShowCommissionModal(true)}
-        className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md hover:from-indigo-600 hover:to-purple-600 focus:outline-none flex items-center gap-2"
+        className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md hover:from-indigo-600 hover:to-purple-600 focus:outline-none flex items-center gap-2 ${
+          fabAnimation ? 'animate-bounce shadow-lg shadow-purple-500/50 ring-2 ring-purple-300' : ''
+        }`}
         aria-label="Commission Art"
       >
         <span className="text-lg">🎨</span>

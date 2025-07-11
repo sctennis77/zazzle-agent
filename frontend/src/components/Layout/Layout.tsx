@@ -21,6 +21,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
   const handleLogoClick = () => {
     setShowLogo(false);
     setShowAnimated(true);
+    
+    // Trigger FAB animation when thank you message appears
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('trigger-fab-animation'));
+    }, 500); // Trigger after 500ms when message starts appearing
+    
     // After animation, restore logo
     setTimeout(() => {
       setShowAnimated(false);
@@ -75,8 +81,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
               <span className={`text-xl font-bold text-gray-900 truncate transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>Clouvel</span>
               <span className={`text-xs text-gray-500 font-medium truncate mb-2 transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>An AI illustrator Inspired By Reddit</span>
             </div>
-            {/* Right: Empty for now */}
-            <div className="flex-1"></div>
+            {/* Right: Show message during animation */}
+            <div className="flex-1 flex items-center justify-end">
+              <span
+                className={`transition-all duration-700 text-2xl font-bold text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-2xl px-8 py-4 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60
+                  ${showAnimated ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8 pointer-events-none'}`}
+                style={{ minWidth: '22rem', textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: '600' }}
+              >
+                Thanks for supporting clouvel 🐶❤️
+              </span>
+            </div>
           </div>
         </div>
       </header>
