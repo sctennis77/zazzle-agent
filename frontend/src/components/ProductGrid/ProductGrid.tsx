@@ -12,9 +12,10 @@ import { toast } from 'react-toastify';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
+  onCommissionClick?: () => void;
 }
 
-export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange }) => {
+export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange, onCommissionClick }) => {
   const { products, loading, error, refresh: refreshProducts } = useProducts();
   const [searchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
@@ -26,7 +27,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const location = useLocation();
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
-  const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [fabAnimation, setFabAnimation] = useState(false);
 
   // Handle query parameter for opening specific product
@@ -141,6 +141,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           if (ws.readyState === WebSocket.OPEN) {
             subscribeToActiveTasks(ws, [message.task_info]);
           }
+          // Trigger thank you message animation for new commission tasks
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('trigger-logo-animation'));
+          }, 1000); // Delay to let the task card appear first
         } else if (message.type === 'general_update') {
           if (message.data.type === 'task_created') {
             setActiveTasks(prevTasks => dedupeTasks([message.data.task_info, ...prevTasks]));
@@ -148,6 +152,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             if (ws.readyState === WebSocket.OPEN) {
               subscribeToActiveTasks(ws, [message.data.task_info]);
             }
+            // Trigger thank you message animation for new commission tasks
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('trigger-logo-animation'));
+            }, 1000); // Delay to let the task card appear first
           }
         }
       } catch (err) {
@@ -357,7 +365,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
       {/* Floating Action Button for Commission Art */}
       <button
-        onClick={() => setShowCommissionModal(true)}
+        onClick={onCommissionClick}
         className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md hover:from-indigo-600 hover:to-purple-600 focus:outline-none flex items-center gap-2 ${
           fabAnimation ? 'animate-bounce shadow-lg shadow-purple-500/50 ring-2 ring-purple-300' : ''
         }`}
@@ -375,11 +383,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           onClose={() => setShowModal(false)}
         />
       )}
-      {/* Commission Modal */}
-      <CommissionModal
-        isOpen={showCommissionModal}
-        onClose={() => setShowCommissionModal(false)}
-      />
+
     </div>
   );
 }; 

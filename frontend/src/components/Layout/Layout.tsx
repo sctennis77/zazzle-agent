@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import logo from '../../assets/logo.png';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { createNoise3D } from 'simplex-noise';
 import { AnimatedPainting } from '../common/AnimatedPainting';
 
@@ -19,6 +19,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
 
   // Handle logo click
   const handleLogoClick = () => {
+    triggerLogoAnimation();
+  };
+
+  // Function to trigger the complete logo animation
+  const triggerLogoAnimation = () => {
     setShowLogo(false);
     setShowAnimated(true);
     
@@ -33,6 +38,19 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
       setShowLogo(true);
     }, animationDuration * 1000); // match animation duration
   };
+
+  // Listen for external animation triggers (e.g., from commission task creation)
+  useEffect(() => {
+    const handleExternalTrigger = () => {
+      triggerLogoAnimation();
+    };
+    
+    window.addEventListener('trigger-logo-animation', handleExternalTrigger);
+    
+    return () => {
+      window.removeEventListener('trigger-logo-animation', handleExternalTrigger);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 text-gray-900">

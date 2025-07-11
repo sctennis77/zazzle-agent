@@ -30,8 +30,8 @@ function App() {
     <Router>
       <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
         <Routes>
-          <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
-          <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} />} />
+          <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
+          <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
           <Route path="/fundraising" element={<FundraisingPage />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
         </Routes>
