@@ -19,6 +19,20 @@ const iconMap = {
   heart: FaHeart,
 };
 
+// Use the same date formatting as ProductCard
+function formatDateWithTime(date: string | Date | null | undefined) {
+  if (!date) return '-';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
 function formatShortDate(date: string | Date | null | undefined) {
   if (!date) return '-';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -50,7 +64,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
 
   // Helper for aligned row with hover message
   const renderRow = (
-    icon: React.ReactNode,
+    icon: React.ReactElement,
     username: string,
     amount: number | null | undefined,
     date: string | Date | null | undefined,
@@ -64,24 +78,27 @@ export const DonationCard: React.FC<DonationCardProps> = ({
     return (
       <div
         key={key}
-        className={`mb-2 ${bgClass} rounded-lg px-3 pt-2 pb-1 min-h-0`}
+        className={`mb-3 ${bgClass} rounded-xl px-4 py-2 min-h-0 flex items-center shadow-sm transition-all duration-200 group hover:shadow-md focus-within:ring-2 focus-within:ring-blue-400`}
         onMouseEnter={() => setHoveredRow(key)}
         onMouseLeave={() => setHoveredRow(null)}
+        tabIndex={hasMsg ? 0 : -1}
       >
-        {/* Main row: icon, username, amount, date */}
-        <div className="grid grid-cols-2 sm:grid-cols-[24px_1fr_70px] md:grid-cols-[24px_1fr_90px] items-center gap-2 pb-0.5">
-          <span className={`flex-shrink-0 flex items-center justify-center ${colorClass}`}>{icon}</span>
-          <span className={`font-semibold text-xs max-w-[150px] whitespace-nowrap overflow-hidden ${username.length > 16 ? 'text-[11px]' : 'text-[13px]'}`}>
-            {username || '-'}
-          </span>
-          <span className="flex flex-col items-end">
-            <span className="font-mono text-gray-700 text-xs">{amount != null ? `$${amount.toFixed(2)}` : '-'}</span>
-            <span className="text-[11px] text-gray-400 leading-tight">{formatShortDate(date)}</span>
-          </span>
-        </div>
-        {/* Message row, only on hover */}
-        {hoveredRow === key && (
-          <div className="ml-7 pl-2 text-xs text-gray-400 leading-snug break-words min-h-[18px]">
+        {/* Icon */}
+        <span className={`flex-shrink-0 flex items-center justify-center ${colorClass} mr-1`}>
+          {icon}
+        </span>
+        {/* Username and message */}
+        <span className={`font-semibold max-w-[180px] whitespace-nowrap overflow-hidden ${username.length > 20 ? 'truncate text-[11px]' : 'text-[12px]'}`} title={username}>
+          {username || '-'}
+        </span>
+        {/* Amount and date */}
+        <span className="flex flex-col items-end ml-auto">
+          <span className="font-mono text-gray-700 text-sm">{amount != null ? `$${amount.toFixed(2)}` : '-'}</span>
+          <span className="text-[11px] text-gray-400 leading-tight">{formatShortDate(date)}</span>
+        </span>
+        {/* Tooltip for message */}
+        {hasMsg && hoveredRow === key && (
+          <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-2 text-xs text-gray-700 z-30 w-64 max-w-xs">
             {tooltip}
           </div>
         )}
@@ -89,15 +106,13 @@ export const DonationCard: React.FC<DonationCardProps> = ({
     );
   };
 
-  // Card height: match product card (e.g. min-h-[480px] or h-full if parent is fixed)
-  // You may want to adjust min-h to match your actual ProductCard
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full max-w-2xl mx-auto h-full min-h-[480px] relative">
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col w-full max-w-lg mx-auto h-full min-h-[480px] relative overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="text-xs text-gray-500 mb-1">Commissioned by</div>
+      <div className="px-6 pt-6 pb-2">
+        <div className="text-xs text-gray-500 mb-2 font-semibold tracking-wide">Commissioned by</div>
         {commissionInfo && renderRow(
-          <CommissionIconComponent size={18} className={commissionTierDisplay.color} />, 
+          <CommissionIconComponent size={15} className={commissionTierDisplay.color} />, 
           commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username || '-',
           commissionInfo.donation_amount,
           product.pipeline_run.end_time,
@@ -106,16 +121,16 @@ export const DonationCard: React.FC<DonationCardProps> = ({
           'bg-blue-50 border border-blue-100',
           'commission'
         )}
-        <div className="text-xs text-gray-500 mt-3 mb-1">Supported by</div>
+        <div className="text-xs text-gray-500 mt-4 mb-2 font-semibold tracking-wide">Supported by</div>
       </div>
       {/* Donation list */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
         {supportDonations.length > 0 ? supportDonations.map((donation) => {
           const donationTierDisplay = getTierDisplay(donation.tier_name);
           const DonationIconComponent = donationTierDisplay && donationTierDisplay.icon ? 
             iconMap[donationTierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart : FaHeart;
           return renderRow(
-            <DonationIconComponent size={18} className={donationTierDisplay.color} />, 
+            <DonationIconComponent size={15} className={donationTierDisplay.color} />, 
             donation.reddit_username || '-',
             donation.donation_amount,
             donation.created_at,
@@ -125,23 +140,23 @@ export const DonationCard: React.FC<DonationCardProps> = ({
             donation.donation_id
           );
         }) : (
-          <div className="text-center text-gray-400 text-sm py-8">No support donations yet</div>
+          <div className="text-center text-gray-400 text-base py-12 font-medium">No support donations yet</div>
         )}
       </div>
       {/* Footer with Back and Support buttons */}
-      <div className="absolute left-0 right-0 bottom-0 flex items-center justify-between px-4 py-3 bg-white rounded-b-lg border-t border-gray-100">
+      <div className="absolute left-0 right-0 bottom-0 flex items-center justify-between px-6 py-4 bg-white rounded-b-2xl border-t border-gray-100 shadow-md">
         <button
           onClick={onFlipBack}
-          className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-200 bg-gray-50 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-gray-50 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
           title="Flip back"
         >
           <FaArrowLeft size={18} />
         </button>
         <button
           onClick={onSupport}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-md font-semibold hover:from-pink-600 hover:to-red-600 transition-all duration-200 shadow-md hover:shadow-lg text-sm"
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-xl font-bold hover:from-pink-600 hover:to-red-600 transition-all duration-200 shadow-lg hover:shadow-xl text-base focus:outline-none focus:ring-2 focus:ring-pink-400"
         >
-          <FaSupport size={16} />
+          <FaSupport size={18} />
           Support
         </button>
       </div>
