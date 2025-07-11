@@ -109,6 +109,37 @@ cleanup_existing() {
     success "Cleanup completed"
 }
 
+# Build frontend assets
+build_frontend() {
+    log "Building frontend assets..."
+    
+    # Check if Node.js is available
+    if ! command -v node &> /dev/null; then
+        error "Node.js is not installed. Please install Node.js first."
+        exit 1
+    fi
+    
+    if ! command -v npm &> /dev/null; then
+        error "npm is not installed. Please install npm first."
+        exit 1
+    fi
+    
+    # Build frontend assets
+    cd frontend
+    if ! npm install; then
+        error "Frontend npm install failed"
+        exit 1
+    fi
+    
+    if ! npm run build; then
+        error "Frontend build failed"
+        exit 1
+    fi
+    cd ..
+    
+    success "Frontend assets built successfully"
+}
+
 # Build Docker images
 build_images() {
     log "Building Docker images..."
@@ -190,7 +221,7 @@ test_deployment() {
     fi
     
     # Test frontend
-    if curl -f -s http://localhost:80 > /dev/null; then
+    if curl -f -s http://localhost:5173 > /dev/null; then
         success "Frontend health check passed"
     else
         error "Frontend health check failed"
@@ -207,7 +238,7 @@ show_deployment_info() {
     echo "======================================"
     echo ""
     echo "📊 Services:"
-    echo "  • Frontend: http://localhost:80"
+    echo "  • Frontend: http://localhost:5173"
     echo "  • API: http://localhost:8000"
     echo "  • API Docs: http://localhost:8000/docs"
     echo "  • Redis: localhost:6379"
@@ -221,12 +252,12 @@ show_deployment_info() {
     echo "  • Run pipeline manually: docker-compose exec api python -m app.main --mode full"
     echo ""
     echo "📋 Useful URLs:"
-    echo "  • Frontend: http://localhost:80"
+    echo "  • Frontend: http://localhost:5173"
     echo "  • API Health: http://localhost:8000/health"
     echo "  • Generated Products: http://localhost:8000/api/generated_products"
     echo ""
     echo "🚀 Next steps:"
-    echo "  1. Open http://localhost:80 in your browser"
+    echo "  1. Open http://localhost:5173 in your browser"
     echo "  2. Test the commission system by clicking 'Commission' button"
     echo "  3. Run the pipeline to generate your first product"
     echo "  4. Monitor the logs for any issues"
@@ -276,6 +307,7 @@ main() {
     check_prerequisites
     validate_environment
     cleanup_existing $([[ "$CLEAN_IMAGES" == true ]] && echo "--clean-images")
+    build_frontend
     build_images
     start_services
     wait_for_health
