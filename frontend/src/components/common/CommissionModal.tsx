@@ -829,8 +829,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                 type="text"
                 value={redditUsername}
                 onChange={e => {
-                  // Remove any leading u/ and enforce max length
-                  let val = e.target.value.replace(/^u\//i, '');
+                  // Remove any leading u/, spaces, and enforce max length
+                  let val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
                   if (val.length > 20) {
                     setUsernameError('Reddit username must be at most 20 characters.');
                   } else {

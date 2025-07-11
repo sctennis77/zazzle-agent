@@ -528,7 +528,8 @@ const DonationModal: React.FC<DonationModalProps> = ({
                 type="text"
                 value={redditUsername}
                 onChange={e => {
-                  let val = e.target.value.replace(/^u\//i, '');
+                  // Remove any leading u/, spaces, and enforce max length
+                  let val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
                   if (val.length > 20) {
                     setUsernameError('Reddit username must be at most 20 characters.');
                   } else {
