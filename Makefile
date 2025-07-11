@@ -639,6 +639,28 @@ deploy-quick:
 	fi
 	@./deploy.sh
 
+# =====================
+# Railway Deployment
+# =====================
+
+deploy-railway:
+	@echo "🚂 Deploying to Railway..."
+	@./scripts/deploy-railway.sh
+
+railway-setup:
+	@echo "🔧 Setting up Railway project..."
+	@npm install -g @railway/cli
+	@railway login
+	@railway project create clouvel
+
+railway-logs:
+	@echo "📋 Showing Railway logs..."
+	@railway logs
+
+railway-status:
+	@echo "📊 Showing Railway status..."
+	@railway status
+
 deploy-frontend:
 	@echo "🎨 Deploying frontend changes only..."
 	@cd frontend && npm run build

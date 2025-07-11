@@ -58,3 +58,5 @@ dist/
 *.rdb
 dump.rdb
 
+.env.production
+.env.production

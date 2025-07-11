@@ -19,11 +19,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
-COPY env.example .env
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 COPY fonts/ /app/fonts/
 COPY start-api.sh ./
+
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 # Expose port
 EXPOSE 8000
