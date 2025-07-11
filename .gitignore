@@ -54,3 +54,7 @@ Thumbs.db
 node_modules/
 dist/
 
+# Redis
+*.rdb
+dump.rdb
+
