@@ -17,6 +17,7 @@ export default {
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
         'twinkle': 'twinkle 4s linear infinite',
         'success-pop': 'success-pop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+        'paint-reveal': 'paint-reveal 1.8s cubic-bezier(0.77,0,0.175,1) forwards',
       },
       keyframes: {
         'fade-in': {
@@ -74,6 +75,10 @@ export default {
             transform: 'scale(1)',
             opacity: '1',
           },
+        },
+        'paint-reveal': {
+          '0%': { width: '0%' },
+          '100%': { width: '100%' },
         },
       },
       backgroundImage: {
