@@ -190,7 +190,7 @@ test_deployment() {
     fi
     
     # Test frontend
-    if curl -f -s http://localhost:5173 > /dev/null; then
+    if curl -f -s http://localhost:80 > /dev/null; then
         success "Frontend health check passed"
     else
         error "Frontend health check failed"
@@ -207,7 +207,7 @@ show_deployment_info() {
     echo "======================================"
     echo ""
     echo "📊 Services:"
-    echo "  • Frontend: http://localhost:5173"
+    echo "  • Frontend: http://localhost:80"
     echo "  • API: http://localhost:8000"
     echo "  • API Docs: http://localhost:8000/docs"
     echo "  • Redis: localhost:6379"
@@ -221,12 +221,12 @@ show_deployment_info() {
     echo "  • Run pipeline manually: docker-compose exec api python -m app.main --mode full"
     echo ""
     echo "📋 Useful URLs:"
-    echo "  • Frontend: http://localhost:5173"
+    echo "  • Frontend: http://localhost:80"
     echo "  • API Health: http://localhost:8000/health"
     echo "  • Generated Products: http://localhost:8000/api/generated_products"
     echo ""
     echo "🚀 Next steps:"
-    echo "  1. Open http://localhost:5173 in your browser"
+    echo "  1. Open http://localhost:80 in your browser"
     echo "  2. Test the commission system by clicking 'Commission' button"
     echo "  3. Run the pipeline to generate your first product"
     echo "  4. Monitor the logs for any issues"

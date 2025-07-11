@@ -654,7 +654,7 @@ deployment-status:
 	@docker-compose ps
 	@echo ""
 	@echo "🔗 Service URLs:"
-	@echo "  • Frontend: http://localhost:5173"
+	@echo "  • Frontend: http://localhost:80"
 	@echo "  • API: http://localhost:8000"
 	@echo "  • API Docs: http://localhost:8000/docs"
 	@echo ""
