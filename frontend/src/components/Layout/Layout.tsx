@@ -46,7 +46,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
       <header className="group relative py-8 px-4 bg-gradient-to-r from-blue-900 via-purple-900 to-indigo-900 shadow-lg overflow-hidden">
         {/* Starry sky overlay - only on hover */}
         <div
-          className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-700 bg-gradient-to-b from-indigo-900 via-purple-900 to-transparent star-bg opacity-0 group-hover:opacity-100"
+          className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-700 bg-gradient-to-b from-indigo-900 via-purple-900 to-transparent bg-star-bg bg-repeat bg-star-pattern animate-twinkle opacity-0 group-hover:opacity-100"
         />
         <div className="max-w-6xl mx-auto flex items-center justify-center relative z-10">
           <div className="flex flex-col items-center space-y-3">

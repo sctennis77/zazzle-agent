@@ -186,8 +186,7 @@ export const CommissionStatusBanner: React.FC<CommissionStatusBannerProps> = ({
           {tasks.map((task) => (
             <div
               key={task.task_id}
-              className={`flex items-center justify-between p-6 rounded-2xl border ${getStatusColor(task.status)} shadow-sm mb-4 transition-opacity duration-500 ${task.justCompleted ? 'opacity-100' : ''}`}
-              style={{ minHeight: '110px', boxShadow: '0 2px 12px rgba(80,80,120,0.08)' }}
+              className={`flex items-center justify-between p-6 rounded-2xl border ${getStatusColor(task.status)} shadow-sm mb-4 transition-opacity duration-500 ${task.justCompleted ? 'opacity-100' : ''} min-h-[110px] shadow-[0_2px_12px_rgba(80,80,120,0.08)]`}
             >
               <div className="flex items-center space-x-4">
                 <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-white border border-gray-200 shadow">

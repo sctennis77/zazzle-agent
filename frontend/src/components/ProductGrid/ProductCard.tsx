@@ -136,7 +136,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
 
             </div>
           </div>
-          <h3 className="text-base font-medium text-gray-800 text-center cursor-pointer leading-relaxed" style={{ minHeight: '2.5em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <h3 className="text-base font-medium text-gray-800 text-center cursor-pointer leading-relaxed min-h-[2.5em] flex items-center justify-center">
             {product.product_info.image_title || product.product_info.theme}
           </h3>
           <div className="flex justify-center">
@@ -171,13 +171,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             </div>
           )}
           {justPublished && (
-            <div className="published-indicator">
+            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-success-pop">
               <span>Published to Reddit!</span>
             </div>
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full h-full" style={{ maxHeight: '100%' }}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-full h-full max-h-full">
           <DonationCard
             product={product}
             commissionInfo={commissionInfo}

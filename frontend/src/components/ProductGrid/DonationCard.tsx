@@ -64,15 +64,14 @@ export const DonationCard: React.FC<DonationCardProps> = ({
     return (
       <div
         key={key}
-        className={`mb-2 ${bgClass} rounded-lg px-3 pt-2 pb-1`}
-        style={{ minHeight: 0 }}
+        className={`mb-2 ${bgClass} rounded-lg px-3 pt-2 pb-1 min-h-0`}
         onMouseEnter={() => setHoveredRow(key)}
         onMouseLeave={() => setHoveredRow(null)}
       >
         {/* Main row: icon, username, amount, date */}
         <div className="grid grid-cols-2 sm:grid-cols-[24px_1fr_70px] md:grid-cols-[24px_1fr_90px] items-center gap-2 pb-0.5">
           <span className={`flex-shrink-0 flex items-center justify-center ${colorClass}`}>{icon}</span>
-          <span className="font-semibold text-xs max-w-[150px] whitespace-nowrap overflow-hidden" style={{ fontSize: username.length > 16 ? '11px' : '13px' }}>
+          <span className={`font-semibold text-xs max-w-[150px] whitespace-nowrap overflow-hidden ${username.length > 16 ? 'text-[11px]' : 'text-[13px]'}`}>
             {username || '-'}
           </span>
           <span className="flex flex-col items-end">
@@ -82,7 +81,7 @@ export const DonationCard: React.FC<DonationCardProps> = ({
         </div>
         {/* Message row, only on hover */}
         {hoveredRow === key && (
-          <div className="ml-7 pl-2 text-xs text-gray-400 leading-snug break-words" style={{ minHeight: 18 }}>
+          <div className="ml-7 pl-2 text-xs text-gray-400 leading-snug break-words min-h-[18px]">
             {tooltip}
           </div>
         )}

@@ -110,7 +110,7 @@ const DonationSuccessPage: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-in">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-fade-in">
           <div className="mb-6">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,7 +143,7 @@ const DonationSuccessPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-in">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-fade-in">
           {/* Loading Animation */}
           <div className="mb-8">
             <div className="relative w-20 h-20 mx-auto mb-6">
@@ -186,13 +186,13 @@ const DonationSuccessPage: React.FC = () => {
   if (donation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-in">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-fade-in">
           {/* Success Animation */}
           <div className="mb-8">
             <div className="relative w-20 h-20 mx-auto">
               <div className="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-75"></div>
               <div className="absolute inset-2 bg-green-500 rounded-full flex items-center justify-center">
-                <svg className="w-10 h-10 text-white checkmark-animate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-10 h-10 text-white animate-checkmark-draw" style={{ strokeDasharray: '100' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                 </svg>
               </div>

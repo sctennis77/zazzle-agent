@@ -236,7 +236,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                       {product.reddit_post.title}
                     </h3>
                     <div className="border-t border-gray-200 pt-3">
-                      <p className="text-sm leading-relaxed italic text-gray-700" style={{ minHeight: '3.5em' }}>
+                      <p className="text-sm leading-relaxed italic text-gray-700 min-h-[3.5em]">
                         {showFullPost ? postContent : previewContent}
                       </p>
                       {isLong && (
