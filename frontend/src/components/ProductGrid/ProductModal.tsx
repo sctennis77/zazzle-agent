@@ -87,16 +87,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose} title={product.product_info.image_title || product.product_info.theme}>
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Image Section */}
+        <div className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+            {/* Left Column: Image, Theme, Actions */}
             <div className="space-y-4">
+              {/* Image Section */}
               <div className="space-y-3">
-                <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 relative">
+                <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 relative group">
                   <img
                     src={product.product_info.image_url}
                     alt={product.product_info.image_title || product.product_info.theme}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
                 {/* Theme Caption */}
@@ -106,269 +107,242 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </p>
                 </div>
               </div>
-              
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3">
-                <a
-                  href={product.product_info.affiliate_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
-                >
-                  <FaExternalLinkAlt size={16} />
-                  Buy {product.product_info.product_type}
-                </a>
-                <a
-                  href={product.reddit_post.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 bg-[#FF4500] text-white px-6 py-3 rounded-xl hover:bg-[#FF4500]/90 transition-colors font-semibold"
-                >
-                  <FaReddit size={16} />
-                  View on Reddit
-                </a>
+              {/* Action Buttons - Support and Buy Print only */}
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowDonation(true)}
-                  className="flex items-center justify-center gap-2 bg-pink-100 text-pink-600 hover:bg-pink-200 hover:text-pink-700 px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-sm hover:shadow-md mt-2"
-                  title="Support this project"
-                  aria-label="Support"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-3 rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
+                  title="Support"
                 >
                   <FaHeart size={16} />
                   Support
                 </button>
+                <a
+                  href={product.product_info.affiliate_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
+                  title="Buy Print"
+                >
+                  <FaExternalLinkAlt size={16} />
+                  Buy Print
+                </a>
               </div>
             </div>
-            {/* Details Section */}
-            <div className="space-y-6">
-              {/* Commission Information - always show */}
-              {commissionInfo && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-900">Commissioned by</h4>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-                    <div className="flex items-center gap-3">
-                      {(() => {
-                        // Use donation tier for commission styling
-                        const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
-                        const tierDisplay = getTierDisplay(tierName);
-                        const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
-                        return (
-                          <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
-                            <IconComponent size={20} className={tierDisplay.color} />
-                          </div>
-                        );
-                      })()}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">
-                            {commissionInfo.reddit_username}
+            {/* Right Column: Reddit Content Only */}
+            <div className="space-y-4 flex flex-col h-full justify-between">
+              {/* Original Post Card */}
+              <div className="flex-1 flex flex-col justify-between">
+                <div className="space-y-2 flex flex-col h-full justify-between">
+                  <div className="bg-orange-50 rounded-xl p-2 border border-orange-200 flex flex-col justify-between h-full">
+                    {/* Header: Orange Reddit button, subreddit, timestamp, author */}
+                    <div className="flex items-start gap-3 mb-2">
+                      <a
+                        href={product.reddit_post.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-full bg-orange-100 border border-orange-300 hover:bg-orange-200 transition-colors cursor-pointer mt-0.5"
+                        title="View on Reddit"
+                      >
+                        <FaReddit size={20} className="text-orange-500" />
+                      </a>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-bold text-gray-900 text-base truncate">
+                            r/{product.reddit_post.subreddit}
                           </span>
-                          {/* Show tier name as badge, styled like donation */}
-                          {(() => {
-                            const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
-                            const tierDisplay = getTierDisplay(tierName);
-                            return tierName ? (
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${tierDisplay.bgColor} ${tierDisplay.color}`}>
-                                {tierName}
-                              </span>
-                            ) : null;
-                          })()}
+                          {product.pipeline_run && product.pipeline_run.start_time && (
+                            <span className="text-sm text-gray-600">
+                              &nbsp;• {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          )}
                         </div>
-                        {commissionInfo.commission_message && (
-                          <p className="text-sm text-gray-600 mt-1 italic">
-                            "{commissionInfo.commission_message}"
-                          </p>
-                        )}
-                        {commissionInfo.donation_amount && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            Donated ${commissionInfo.donation_amount.toFixed(2)}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                          <FaUser size={12} className="text-gray-400" />
+                          <span className="font-medium text-gray-700">{product.reddit_post.author ? `u/${product.reddit_post.author}` : <span className='italic text-gray-400'>[unknown]</span>}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-              {/* Support Donations */}
-              {supportDonations.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-900">Supported by</h4>
-                  <div className="space-y-3">
-                    {supportDonations.map((donation) => {
-                      const tierDisplay = getTierDisplay(donation.tier_name);
-                      const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
-                      return (
-                        <div key={donation.donation_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-full ${tierDisplay.bgColor} border ${tierDisplay.borderColor}`}>
-                              <IconComponent size={20} className={tierDisplay.color} />
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900">
-                                  {donation.reddit_username}
-                                </span>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${tierDisplay.bgColor} ${tierDisplay.color}`}>
-                                  {donation.tier_name}
-                                </span>
-                              </div>
-                              {donation.message && (
-                                <p className="text-sm text-gray-600 mt-1 italic">
-                                  "{donation.message}"
-                                </p>
-                              )}
-                              <p className="text-sm text-gray-600 mt-1">
-                                Donated ${donation.donation_amount.toFixed(2)}
-                              </p>
-                            </div>
-                          </div>
+                    {/* Body: Post title, post content, then Community Discussion */}
+                    <div className="flex-1 flex flex-col overflow-y-auto max-h-72">
+                      {product.reddit_post.title && (
+                        <div className="font-bold text-gray-900 text-base">
+                          {product.reddit_post.title}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {/* Reddit Post Content */}
-              {product.reddit_post.content && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-900">Post</h4>
-                  <div className="bg-gray-50 rounded-xl p-4 text-gray-700 space-y-3">
-                    <h3 className="text-lg font-bold text-gray-900">
-                      {product.reddit_post.title}
-                    </h3>
-                    <div className="border-t border-gray-200 pt-3">
-                      <p className="text-sm leading-relaxed italic text-gray-700 min-h-[3.5em]">
-                        {showFullPost ? postContent : previewContent}
-                      </p>
-                      {isLong && (
-                        <button
-                          className="mt-2 text-xs text-blue-600 hover:underline focus:outline-none"
-                          onClick={() => setShowFullPost(v => !v)}
-                          aria-expanded={showFullPost}
-                        >
-                          {showFullPost ? 'Show less' : 'Show more'}
-                        </button>
                       )}
-                    </div>
-                    <div className="border-t border-gray-200 pt-3">
-                      <div className="flex items-center gap-4 text-sm">
-                        {product.reddit_post.author ? (
-                          <div className="flex items-center gap-1">
-                            <FaUser size={12} className="text-gray-500" />
-                            <span className="text-gray-600">Author:</span>
-                            <span className="font-medium text-gray-900">u/{product.reddit_post.author}</span>
+                      {product.reddit_post.content && (
+                        <div className="text-sm text-gray-700 whitespace-pre-line">
+                          {product.reddit_post.content}
+                        </div>
+                      )}
+                      {/* Community Discussion as inner section */}
+                      <div className="mt-1">
+                        <div className="bg-white rounded-lg border border-gray-200 p-2">
+                          <h5 className="font-semibold text-gray-900 mb-1 text-sm">Community Discussion</h5>
+                          {/* Comments Summary */}
+                          {product.reddit_post.comment_summary && (
+                            <div>
+                              <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
+                            </div>
+                          )}
+                          {/* Reddit post metadata */}
+                          <div className="flex items-center gap-4 text-sm pt-1 border-t border-gray-100 flex-wrap">
+                            {product.reddit_post.score !== undefined && (
+                              <div className="flex items-center gap-1">
+                                <FaThumbsUp size={12} className="text-gray-500" />
+                                <span className="text-gray-600">Score:</span>
+                                <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
+                              </div>
+                            )}
+                            {product.reddit_post.num_comments !== undefined && (
+                              <div className="flex items-center gap-1">
+                                <FaComment size={12} className="text-gray-500" />
+                                <span className="text-gray-600">Comments:</span>
+                                <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <FaUser size={12} className="text-gray-500" />
-                            <span className="text-gray-600">Author:</span>
-                            <span className="italic text-gray-400">[unknown]</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <FaReddit size={12} className="text-gray-500" />
-                          <span className="text-gray-600">Subreddit:</span>
-                          <span className="font-medium text-gray-900">r/{product.reddit_post.subreddit}</span>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-              {/* Community Discussion */}
-              <div className="space-y-2">
-                <h4 className="font-semibold text-gray-900">Community Discussion</h4>
-                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  {/* Comments Summary */}
-                  {product.reddit_post.comment_summary && (
-                    <div>
-                      <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
-                    </div>
-                  )}
-                  {/* Reddit post metadata */}
-                  <div className="flex items-center gap-4 text-sm pt-2 border-t border-gray-200">
-                    {product.reddit_post.score !== undefined && (
-                      <div className="flex items-center gap-1">
-                        <FaThumbsUp size={12} className="text-gray-500" />
-                        <span className="text-gray-600">Score:</span>
-                        <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
-                      </div>
-                    )}
-                    {product.reddit_post.num_comments !== undefined && (
-                      <div className="flex items-center gap-1">
-                        <FaComment size={12} className="text-gray-500" />
-                        <span className="text-gray-600">Comments:</span>
-                        <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Published to Reddit Section */}
-              {publishedPost && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-900">Published to Reddit</h4>
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-green-100 border border-green-300">
-                        <FaReddit size={20} className="text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">
-                            r/{publishedPost.subreddit_name}
-                          </span>
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                            {publishedPost.dry_run ? 'Dry Run' : 'Live'}
-                          </span>
-                        </div>
-                        {publishedPost.reddit_post_title && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            {publishedPost.reddit_post_title}
-                          </p>
-                        )}
-                        <p className="text-sm text-gray-600 mt-1">
-                          Posted on {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
+                    {/* Footer: Published to Reddit/Clouvel Section */}
+                    {publishedPost && (
+                      <div className="flex items-center gap-2 mt-4">
+                        <a
+                          href={publishedPost.reddit_post_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
+                          title="View on Reddit"
+                        >
+                          <FaReddit size={20} className="text-green-600" />
+                        </a>
+                        <span className="font-semibold text-gray-900">
+                          r/{publishedPost.subreddit_name}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          &nbsp;• {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
-                        </p>
-                        {publishedPost.reddit_post_url && (
-                          <a
-                            href={publishedPost.reddit_post_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:underline mt-1 inline-block"
-                          >
-                            View on Reddit →
-                          </a>
-                        )}
+                        </span>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
-          {/* Moved to bottom: Illustration credit */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="text-center text-xs text-gray-500">
-              <span>Illustrated by <span className="font-semibold text-gray-700">Clouvel</span> with </span>
-              <span className="font-semibold text-gray-700">{product.product_info.model}</span>
-              <span> at </span>
-              <span className="font-mono text-gray-600">
-                {product.pipeline_run && product.pipeline_run.end_time ?
-                  new Date(product.pipeline_run.end_time).toLocaleString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                  }) : 'Unknown'}
-              </span>
+          {/* Commissioned By - Styled Like DonationCard Row, Full Width, Message Centered */}
+          {commissionInfo && (
+            <div className="flex justify-center mt-6">
+              <div className="flex items-center w-full bg-blue-50 border border-blue-100 rounded-xl px-6 py-2 shadow-sm">
+                {/* Icon */}
+                {(() => {
+                  const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
+                  const tierDisplay = getTierDisplay(tierName);
+                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                  return (
+                    <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
+                      <IconComponent size={20} className={tierDisplay.color} />
+                    </span>
+                  );
+                })()}
+                {/* Username and subtext */}
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-gray-900 text-base truncate">
+                    {commissionInfo.reddit_username}
+                  </span>
+                  <span className="text-xs text-gray-400 font-medium">Commission</span>
+                </div>
+                {/* Commission message centered */}
+                {commissionInfo.commission_message && (
+                  <span className="flex-1 text-center text-xs text-gray-600 italic px-4">
+                    "{commissionInfo.commission_message}"
+                  </span>
+                )}
+                {/* Amount and date */}
+                <div className="flex flex-col items-end ml-auto">
+                  <span className="font-mono text-gray-700 text-lg font-semibold">${commissionInfo.donation_amount?.toFixed(2)}</span>
+                  <span className="text-xs text-gray-400 leading-tight">
+                    {product.pipeline_run && product.pipeline_run.end_time ?
+                      new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                  </span>
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* Support Donations - Styled Like Commission Row */}
+          {supportDonations.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex flex-col gap-3">
+                {supportDonations.map((donation, index) => {
+                  const tierDisplay = getTierDisplay(donation.tier_name);
+                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                  return (
+                    <div key={index} className="flex items-center w-full bg-green-50 border border-green-100 rounded-xl px-6 py-2 shadow-sm">
+                      {/* Icon */}
+                      <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
+                        <IconComponent size={20} className={tierDisplay.color} />
+                      </span>
+                      {/* Username and subtext */}
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-gray-900 text-base truncate">
+                          {donation.reddit_username}
+                        </span>
+                        <span className="text-xs text-gray-400 font-medium">Supported</span>
+                      </div>
+                      {/* Message centered if present */}
+                      {donation.message && (
+                        <span className="flex-1 text-center text-xs text-gray-600 italic px-4">
+                          "{donation.message}"
+                        </span>
+                      )}
+                      {/* Amount and date */}
+                      <div className="flex flex-col items-end ml-auto">
+                        <span className="font-mono text-gray-700 text-lg font-semibold">${donation.donation_amount?.toFixed(2)}</span>
+                        <span className="text-xs text-gray-400 leading-tight">
+                          {donation.created_at ?
+                            new Date(donation.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Moved to bottom: Illustration credit */}
+        <div className="mt-2 pt-2 border-t border-gray-200">
+          <div className="text-center text-xs text-gray-500 space-x-1">
+            <span>Illustrated by</span>
+            <span className="font-semibold text-gray-700">Clouvel</span>
+            <span>with</span>
+            <span className="font-semibold text-gray-700">{product.product_info.model}</span>
+            <span>at</span>
+            <span className="font-mono text-gray-600">
+              {product.pipeline_run && product.pipeline_run.end_time ?
+                new Date(product.pipeline_run.end_time).toLocaleString('en-US', {
+                  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                }) : 'Unknown'}
+            </span>
           </div>
         </div>
       </Modal>
+
+      {/* Remove any floating or duplicated footer outside the modal */}
+
       <DonationModal
         isOpen={showDonation}
         onClose={() => setShowDonation(false)}
