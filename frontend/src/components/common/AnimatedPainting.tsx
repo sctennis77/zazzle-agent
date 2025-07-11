@@ -51,7 +51,7 @@ export const AnimatedPainting: React.FC<AnimatedPaintingProps> = ({ logo, animat
 
   // Generate all mask pieces
   const maskPieces = useMemo(() => {
-    let pieces = [];
+    let piecesData = [];
     let idx = 0;
     for (let row = 0; row < gridRows; row++) {
       for (let col = 0; col < gridCols; col++) {
@@ -63,24 +63,31 @@ export const AnimatedPainting: React.FC<AnimatedPaintingProps> = ({ logo, animat
         // Each piece gets a unique seed for noise
         const seed = idx * 0.13;
         const path = generateBlobPath(cx, cy, r, seed);
-        // Animate in with proportional delay
-        const delay = (idx / (totalPieces - 1)) * maxDelay;
-        pieces.push(
-          <path
-            key={idx}
-            d={path}
-            fill="white"
-            style={{
-              opacity: 0,
-              animation: `fade-in-stroke ${fadeIn}s ease forwards`,
-              animationDelay: `${delay}s`,
-            }}
-          />
-        );
+        piecesData.push({ idx, path });
         idx++;
       }
     }
-    return pieces;
+    // Shuffle the fill order (Fisher-Yates)
+    for (let i = piecesData.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [piecesData[i], piecesData[j]] = [piecesData[j], piecesData[i]];
+    }
+    // Assign delays based on shuffled order
+    return piecesData.map((piece, orderIdx) => {
+      const delay = (orderIdx / (totalPieces - 1)) * maxDelay;
+      return (
+        <path
+          key={piece.idx}
+          d={piece.path}
+          fill="white"
+          style={{
+            opacity: 0,
+            animation: `fade-in-stroke ${fadeIn}s ease forwards`,
+            animationDelay: `${delay}s`,
+          }}
+        />
+      );
+    });
   }, [gridCols, gridRows, cellW, cellH, noise3D, maxDelay, totalPieces, fadeIn]);
 
   return (
