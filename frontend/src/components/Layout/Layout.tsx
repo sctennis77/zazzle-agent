@@ -31,7 +31,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 text-gray-900">
       {/* Unified Compact Header */}
-      <header className={`bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-50 relative overflow-hidden transition-all duration-700 ${showAnimated ? 'min-h-[260px] py-8' : ''}`}>
+      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-50 relative overflow-hidden transition-all duration-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
           <div className="flex items-center justify-between h-auto py-3 gap-y-2 w-full">
             {/* Left: Navigation */}
@@ -68,7 +68,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
                 style={{ zIndex: 2 }}
               />
               {/* Animated Painting (shows on click) */}
-              <div className={`transition-opacity duration-700 ${showAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ position: 'absolute', top: '2.5rem' }}>
+              <div className={`transition-opacity duration-700 ${showAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ position: 'absolute', top: 0 }}>
                 {showAnimated && <AnimatedPainting logo={logo} animationDuration={animationDuration} />}
               </div>
               {/* Hide title/subtitle during animation */}
