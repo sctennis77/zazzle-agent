@@ -639,6 +639,12 @@ deploy-quick:
 	fi
 	@./deploy.sh
 
+deploy-frontend:
+	@echo "🎨 Deploying frontend changes only..."
+	@cd frontend && npm run build
+	@docker-compose restart nginx
+	@echo "✅ Frontend deployed successfully!"
+
 validate-deployment:
 	@echo "🔍 Validating deployment..."
 	@echo "Checking API health..."
