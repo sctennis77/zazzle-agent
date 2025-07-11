@@ -5,6 +5,7 @@ import { ProductCard } from './ProductCard';
 import { ProductModal } from './ProductModal';
 import { CommissionStatusBanner } from './CommissionStatusBanner';
 import { InProgressProductCard } from './InProgressProductCard';
+import CommissionModal from '../common/CommissionModal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
@@ -25,6 +26,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const location = useLocation();
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
 
   // Handle query parameter for opening specific product
   useEffect(() => {
@@ -325,6 +327,16 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         )}
       </div>
 
+      {/* Floating Action Button for Commission Art */}
+      <button
+        onClick={() => setShowCommissionModal(true)}
+        className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md hover:from-indigo-600 hover:to-purple-600 focus:outline-none flex items-center gap-2"
+        aria-label="Commission Art"
+      >
+        <span className="text-lg">🎨</span>
+        <span className="hidden sm:inline">Commission Art</span>
+      </button>
+
       {/* Product Modal */}
       {selectedProduct && (
         <ProductModal
@@ -333,6 +345,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           onClose={() => setShowModal(false)}
         />
       )}
+      {/* Commission Modal */}
+      <CommissionModal
+        isOpen={showCommissionModal}
+        onClose={() => setShowCommissionModal(false)}
+      />
     </div>
   );
 }; 
