@@ -9,6 +9,7 @@ import CommissionModal from '../common/CommissionModal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
+import { API_BASE, WS_BASE } from '../../utils/apiBase';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
@@ -85,13 +86,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   };
 
   const setupWebSocket = () => {
-    // Use the current host and /ws/tasks for Nginx reverse proxy compatibility
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = wsProtocol + '//' + window.location.host + '/ws/tasks';
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(WS_BASE);
     ws.onopen = (event) => {
       setWebsocketError(null);
-      console.log('WebSocket connected for gallery updates:', wsUrl, event);
+      console.log('WebSocket connected for gallery updates:', WS_BASE, event);
       ws.send(JSON.stringify({ type: 'ping' }));
       // Subscribe to all active tasks if already loaded
       if (activeTasks.length > 0) {
@@ -174,7 +172,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
   const fetchActiveTasks = async () => {
     try {
-      const response = await fetch('/api/tasks');
+      const response = await fetch(`${API_BASE}/api/tasks`);
       if (response.ok) {
         const tasks = await response.json();
         const active = tasks.filter((task: Task) => 
@@ -201,7 +199,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
   const handleCancelTask = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}?task_type=commission`, {
+      const response = await fetch(`${API_BASE}/api/tasks/${taskId}?task_type=commission`, {
         method: 'DELETE',
       });
       

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { API_BASE } from '../../utils/apiBase';
 
 interface Donation {
   id: number;
@@ -62,7 +63,7 @@ const DonationSuccessPage: React.FC = () => {
     const pollForDonation = async () => {
       try {
         console.log(`Polling attempt ${attemptsRef.current + 1}/${maxAttempts} for payment intent: ${paymentIntentId}`);
-        const response = await fetch(`/api/donations/${paymentIntentId}`);
+        const response = await fetch(`${API_BASE}/api/donations/${paymentIntentId}`);
         
         if (response.ok) {
           const donationData = await response.json();

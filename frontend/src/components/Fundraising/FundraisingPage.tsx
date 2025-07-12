@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import DonationsLeaderboardTable from './DonationsLeaderboardTable';
+import { API_BASE } from '../../utils/apiBase';
 
 interface DonationData {
   reddit_username: string;
@@ -73,7 +74,7 @@ const FundraisingPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/donations/by-subreddit');
+      const response = await fetch(`${API_BASE}/api/donations/by-subreddit`);
       if (!response.ok) {
         throw new Error('Failed to fetch donation data');
       }

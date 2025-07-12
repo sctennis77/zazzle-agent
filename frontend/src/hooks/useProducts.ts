@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import type { GeneratedProduct } from '../types/productTypes';
+import { API_BASE } from '../utils/apiBase';
 
-const API_URL = '/api/generated_products';
+const API_URL = `${API_BASE}/api/generated_products`;
 
 export const useProducts = () => {
   const [products, setProducts] = useState<GeneratedProduct[]>([]);

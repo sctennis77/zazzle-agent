@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
+// Use local type definitions if not exported from productTypes
+// import type { AvailableProduct, PublishResult } from '../../types/productTypes';
+import { API_BASE } from '../../utils/apiBase';
 
 interface AvailableProduct {
   id: number;
-  theme: string;
-  product_type: string;
-  image_url: string;
-  affiliate_link: string;
-  original_subreddit: string;
-  original_post_title: string;
-  original_post_url: string;
-  created_at: string;
+  name: string;
+  description: string;
 }
 
 interface PublishResult {
@@ -34,7 +31,7 @@ const SubredditPublisher: React.FC = () => {
   const fetchAvailableProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/publish/available-products');
+      const response = await fetch(`${API_BASE}/api/publish/available-products`);
       if (!response.ok) {
         throw new Error('Failed to fetch available products');
       }
@@ -53,7 +50,7 @@ const SubredditPublisher: React.FC = () => {
       setError(null);
       setPublishResult(null);
 
-      const response = await fetch(`/api/publish/product/${productId}?dry_run=${dryRun}`, {
+      const response = await fetch(`${API_BASE}/api/publish/product/${productId}?dry_run=${dryRun}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,64 +124,20 @@ const SubredditPublisher: React.FC = () => {
         </div>
       )}
 
-      {availableProducts.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No products available for publishing.</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Run the pipeline first to generate some products.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          <h3 className="text-lg font-semibold">
-            Available Products ({availableProducts.length})
-          </h3>
-          {availableProducts.map((product) => (
-            <div
-              key={product.id}
-              className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {availableProducts.map((product) => (
+          <div key={product.id} className="border rounded p-4 bg-white shadow">
+            <div className="mb-2 font-bold">{product.name}</div>
+            <div className="mb-2 text-sm text-gray-600">{product.description}</div>
+            <button
+              onClick={() => publishProduct(product.id)}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             >
-              <div className="flex items-start space-x-4">
-                <img
-                  src={product.image_url}
-                  alt={product.theme}
-                  className="w-24 h-24 object-cover rounded"
-                />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-lg">{product.theme}</h4>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Type: {product.product_type} | 
-                    From: r/{product.original_subreddit}
-                  </p>
-                  <p className="text-sm text-gray-500 mb-2">
-                    Original Post: {product.original_post_title}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Created: {new Date(product.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex flex-col space-y-2">
-                  <button
-                    onClick={() => publishProduct(product.id)}
-                    disabled={loading}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                  >
-                    {loading ? 'Publishing...' : 'Publish to r/clouvel'}
-                  </button>
-                  <a
-                    href={product.affiliate_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-center text-sm"
-                  >
-                    View on Zazzle
-                  </a>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              Publish
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

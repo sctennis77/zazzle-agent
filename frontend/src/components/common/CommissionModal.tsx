@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../../utils/apiBase';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -378,7 +379,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                   return extracted || (post && !post.includes('reddit.com') ? post : undefined);
                 })() : undefined,
       };
-      const response = await fetch('/api/commissions/validate', {
+      const response = await fetch(`${API_BASE}/api/commissions/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validationRequest),
@@ -476,7 +477,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         is_anonymous: isAnonymous,
       };
 
-      const response = await fetch('/api/donations/create-payment-intent', {
+      const response = await fetch(`${API_BASE}/api/donations/create-payment-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commissionRequest),
@@ -532,7 +533,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         is_anonymous: isAnonymous,
       };
 
-      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}/update`, {
+      const response = await fetch(`${API_BASE}/api/donations/payment-intent/${paymentIntentId}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commissionRequest),

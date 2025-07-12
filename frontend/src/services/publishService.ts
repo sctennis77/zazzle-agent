@@ -1,7 +1,8 @@
 import axios from 'axios';
 import type { ProductSubredditPost } from '../types/productTypes';
+import { API_BASE } from '../utils/apiBase';
 
-const API_BASE = '/api/publish';
+const PUBLISH_API_BASE = `${API_BASE}/api/publish`;
 
 export const publishService = {
   /**
@@ -9,7 +10,7 @@ export const publishService = {
    */
   async publishProduct(productId: string): Promise<ProductSubredditPost> {
     const response = await axios.post<ProductSubredditPost>(
-      `${API_BASE}/product/${productId}`
+      `${PUBLISH_API_BASE}/product/${productId}`
     );
     return response.data;
   },
@@ -20,7 +21,7 @@ export const publishService = {
   async getProductSubredditPost(productId: string): Promise<ProductSubredditPost | null> {
     try {
       const response = await axios.get<ProductSubredditPost>(
-        `${API_BASE}/product/${productId}`
+        `${PUBLISH_API_BASE}/product/${productId}`
       );
       return response.data;
     } catch (error) {

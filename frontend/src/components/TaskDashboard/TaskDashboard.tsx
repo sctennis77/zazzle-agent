@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { Task } from '../../types/taskTypes';
+import { API_BASE, WS_BASE } from '../../utils/apiBase';
 
 interface TaskDashboardProps {
   className?: string;
@@ -25,7 +26,7 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/tasks');
+      const response = await fetch(`${API_BASE}/api/tasks`);
       if (!response.ok) {
         throw new Error('Failed to fetch tasks');
       }
@@ -39,13 +40,10 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
   };
 
   const setupWebSocket = () => {
-    // Use the current host and /ws/tasks for Nginx reverse proxy compatibility
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = wsProtocol + '//' + window.location.host + '/ws/tasks';
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(WS_BASE);
     
     ws.onopen = () => {
-      console.log('WebSocket connected to:', wsUrl);
+      console.log('WebSocket connected to:', WS_BASE);
     };
 
     ws.onmessage = (event) => {
@@ -148,7 +146,7 @@ const TaskDashboard: React.FC<TaskDashboardProps> = ({ className = '' }) => {
 
   const cancelTask = async (taskId: string, taskType: string) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}?task_type=${taskType}`, {
+      const response = await fetch(`${API_BASE}/api/tasks/${taskId}?task_type=${taskType}`, {
         method: 'DELETE',
       });
       

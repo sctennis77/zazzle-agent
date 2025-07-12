@@ -7,6 +7,7 @@ import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
+import { API_BASE } from '../../utils/apiBase';
 
 interface ProductCardProps {
   product: GeneratedProduct;
@@ -85,7 +86,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   useEffect(() => {
     const fetchDonationInfo = async () => {
       try {
-        const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
+        const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`);
         if (response.ok) {
           const data = await response.json();
           if (data.commission) {

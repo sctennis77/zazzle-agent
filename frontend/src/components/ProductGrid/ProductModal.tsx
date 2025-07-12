@@ -5,6 +5,7 @@ import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, Fa
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { usePublishProduct } from '../../hooks/usePublishProduct';
+import { API_BASE } from '../../utils/apiBase';
 
 interface ProductModalProps {
   product: GeneratedProduct | null;
@@ -41,7 +42,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
     if (isOpen) {
       const fetchDonationInfo = async () => {
         try {
-          const response = await fetch(`/api/products/${product.pipeline_run.id}/donations`);
+          const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`);
           if (response.ok) {
             const data = await response.json();
             if (data.commission) {

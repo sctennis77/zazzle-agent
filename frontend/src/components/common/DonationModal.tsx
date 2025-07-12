@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../../utils/apiBase';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -284,7 +285,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
         is_anonymous: isAnonymous,
       };
 
-      const response = await fetch('/api/donations/create-payment-intent', {
+      const response = await fetch(`${API_BASE}/api/donations/create-payment-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(donationRequest),
@@ -328,7 +329,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
         is_anonymous: isAnonymous,
       };
 
-      const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}/update`, {
+      const response = await fetch(`${API_BASE}/api/donations/payment-intent/${paymentIntentId}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(donationRequest),
@@ -355,7 +356,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
     // Poll for payment completion
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/donations/payment-intent/${paymentIntentId}`);
+        const response = await fetch(`${API_BASE}/api/donations/payment-intent/${paymentIntentId}`);
         if (response.ok) {
           const data = await response.json();
           if (data.status === 'succeeded') {
