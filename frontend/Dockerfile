@@ -29,7 +29,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY fonts/ /usr/share/nginx/html/fonts/
 
 # Copy nginx config as template for Railway
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Fix permissions for nginx to read all files
 RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/templates/default.conf.template
