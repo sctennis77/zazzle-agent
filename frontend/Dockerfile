@@ -13,6 +13,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Print environment variables for debugging
+RUN printenv
+
 # Build the app
 RUN npm run build
 
