@@ -34,6 +34,9 @@ COPY fonts/ /usr/share/nginx/html/fonts/
 # Fix permissions for nginx to read all files
 RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/nginx.conf
 
+# Substitute $PORT in nginx.conf for Railway
+RUN envsubst '$PORT' < /etc/nginx/nginx.conf > /etc/nginx/conf.d/default.conf
+
 # Expose port
 EXPOSE 80
 
