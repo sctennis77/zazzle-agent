@@ -34,9 +34,6 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 # Fix permissions for nginx to read all files
 RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/templates/default.conf.template
 
-# Set nginx worker processes to 2 (reasonable for Railway)
-ENV NGINX_WORKER_PROCESSES=2
-
 # Expose port
 EXPOSE 80
 
@@ -44,5 +41,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
 
-# Start nginx with limited worker processes
-CMD ["sh", "-c", "nginx -g 'daemon off; worker_processes $NGINX_WORKER_PROCESSES;'"] 
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"] 
