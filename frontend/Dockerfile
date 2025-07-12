@@ -32,10 +32,10 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY fonts/ /usr/share/nginx/html/fonts/
 
 # Fix permissions for nginx to read all files
-RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/nginx.conf
+RUN chmod -R 755 /usr/share/nginx/html && chmod 644 nginx.conf
 
-# Substitute $PORT in nginx.conf for Railway
-RUN envsubst '$PORT' < /etc/nginx/nginx.conf > /etc/nginx/conf.d/default.conf
+# Copy nginx config as template for Railway
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Expose port
 EXPOSE 80
