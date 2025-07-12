@@ -31,6 +31,9 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy fonts
 COPY fonts/ /usr/share/nginx/html/fonts/
 
+# Fix permissions for nginx to read all files
+RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/nginx.conf
+
 # Expose port
 EXPOSE 80
 
