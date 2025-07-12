@@ -25,6 +25,9 @@ FROM nginx:stable-alpine
 # Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Debug: List contents of the html directory
+RUN ls -l /usr/share/nginx/html
+
 # Copy fonts
 COPY fonts/ /usr/share/nginx/html/fonts/
 
