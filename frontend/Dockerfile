@@ -20,7 +20,7 @@ RUN npm run build
 RUN npm prune --production
 
 # Production stage
-FROM nginx:alpine
+FROM nginx:stable-alpine
 
 # Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
