@@ -25,17 +25,14 @@ FROM nginx:stable-alpine
 # Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
-
 # Copy fonts
 COPY fonts/ /usr/share/nginx/html/fonts/
 
-# Fix permissions for nginx to read all files
-RUN chmod -R 755 /usr/share/nginx/html && chmod 644 nginx.conf
-
 # Copy nginx config as template for Railway
 COPY nginx.conf /etc/nginx/templates/default.conf.template
+
+# Fix permissions for nginx to read all files
+RUN chmod -R 755 /usr/share/nginx/html && chmod 644 /etc/nginx/templates/default.conf.template
 
 # Expose port
 EXPOSE 80
