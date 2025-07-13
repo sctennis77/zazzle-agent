@@ -90,3 +90,40 @@ def test_get_generated_products_error_handling(monkeypatch):
     data = response.json()
     assert "detail" in data
     assert "Internal server error" in data["detail"]
+
+
+def test_cors_allows_allowed_origins():
+    client = TestClient(app)
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "https://frontend-production-f4ae.up.railway.app",
+        "https://clouvel.ai",
+        "https://www.clouvel.ai",
+    ]
+    for origin in allowed_origins:
+        response = client.options(
+            "/api/generated_products",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers.get("access-control-allow-origin") == origin
+
+def test_cors_blocks_disallowed_origin():
+    client = TestClient(app)
+    disallowed_origin = "https://notallowed.example.com"
+    response = client.options(
+        "/api/generated_products",
+        headers={
+            "Origin": disallowed_origin,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    # Should return 400 for disallowed origins (FastAPI/Starlette behavior)
+    assert response.status_code == 400
+    assert response.headers.get("access-control-allow-origin") is None

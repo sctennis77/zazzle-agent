@@ -47,15 +47,21 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Development origins
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
         "http://localhost:5176",
-    ],  # Allow all common Vite dev ports
+        # Production origins
+        "https://frontend-production-f4ae.up.railway.app",
+        "https://clouvel.ai",
+        "https://www.clouvel.ai",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# CORS policy: Only the above origins are allowed for cross-origin requests. This covers all dev and production frontends.
 
 # Initialize Stripe service
 stripe_service = StripeService()
