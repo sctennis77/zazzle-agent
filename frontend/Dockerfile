@@ -1,6 +1,9 @@
 # Frontend Dockerfile for Railway
 FROM node:18-alpine AS builder
 
+# Accept VITE_API_BASE_URL as a build argument
+ARG VITE_API_BASE_URL
+
 # Set working directory
 WORKDIR /app
 
@@ -12,6 +15,9 @@ RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Set VITE_API_BASE_URL as an environment variable for the build
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Print environment variables for debugging
 RUN printenv
