@@ -36,6 +36,7 @@ export interface ProductInfo {
   prompt_version: string;
   product_type: string;
   design_description: string;
+  image_quality: string;
   affiliate_link?: string;
   donation_info?: DonationInfo;
 }

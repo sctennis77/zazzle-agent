@@ -215,6 +215,7 @@ class ProductInfo(Base):
     prompt_version = Column(String(32))
     product_type = Column(String(64), index=True)
     design_description = Column(Text)
+    image_quality = Column(String(16), default="standard", index=True)  # Image quality: standard, hd
 
     pipeline_run = relationship("PipelineRun", back_populates="products")
     reddit_post = relationship("RedditPost", back_populates="products")

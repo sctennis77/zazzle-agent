@@ -43,8 +43,10 @@ class AsyncImageGenerator:
     DEFAULT_SIZE = {"dall-e-2": "256x256", "dall-e-3": "1024x1024"}
     VALID_MODELS = {"dall-e-2", "dall-e-3"}
     DEFAULT_STYLES = {"dall-e-3": "vivid", "dall-e-2": "vivid"}
+    VALID_QUALITIES = {"standard", "hd"}
+    DEFAULT_QUALITY = "standard"
 
-    def __init__(self, model: str = "dall-e-3", style: Optional[str] = None) -> None:
+    def __init__(self, model: str = "dall-e-3", style: Optional[str] = None, quality: Optional[str] = None) -> None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY must be set")
@@ -58,13 +60,23 @@ class AsyncImageGenerator:
             self.style = style or self.DEFAULT_STYLES[model]
         else:
             self.style = None
-        logger.info(f"Initialized AsyncImageGenerator with model: {model} and style: {self.style}")
+        
+        # Quality is only supported for DALL-E 3
+        if quality and model == "dall-e-2":
+            logger.warning("Quality parameter is not supported for DALL-E 2, ignoring")
+            self.quality = self.DEFAULT_QUALITY
+        else:
+            self.quality = quality or self.DEFAULT_QUALITY
+            if self.quality not in self.VALID_QUALITIES:
+                raise ValueError(f"Invalid quality. Must be one of: {', '.join(self.VALID_QUALITIES)}")
+        
+        logger.info(f"Initialized AsyncImageGenerator with model: {model}, style: {self.style}, quality: {self.quality}")
 
     def get_prompt_info(self) -> Dict[str, str]:
         return IMAGE_GENERATION_BASE_PROMPTS[self.model]
 
     async def generate_image(
-        self, prompt: str, size: Optional[str] = None, template_id: Optional[str] = None, stamp_image: bool = True
+        self, prompt: str, size: Optional[str] = None, template_id: Optional[str] = None, stamp_image: bool = True, quality: Optional[str] = None
     ) -> Tuple[str, str]:
         """
         Generate an image using DALL-E asynchronously and store it both locally and on Imgur.
@@ -75,8 +87,15 @@ class AsyncImageGenerator:
             raise ValueError(
                 f"Invalid size '{size}' for model '{self.model}'. Allowed: {', '.join(self.VALID_SIZES[self.model])}"
             )
+        # Use quality parameter if provided, otherwise use instance default
+        image_quality = quality if quality is not None else self.quality
+        
+        # Validate quality for the model
+        if image_quality not in self.VALID_QUALITIES:
+            raise ValueError(f"Invalid quality '{image_quality}'. Must be one of: {', '.join(self.VALID_QUALITIES)}")
+        
         try:
-            logger.info(f"[Async] Generating image for prompt: '{prompt}' with size: {size} with model: {self.model}")
+            logger.info(f"[Async] Generating image for prompt: '{prompt}' with size: {size}, quality: {image_quality}, model: {self.model}")
             base_prompt = IMAGE_GENERATION_BASE_PROMPTS[self.model]["prompt"]
             full_prompt = f"{base_prompt} {prompt}"
             if self.model == "dall-e-3":
@@ -86,9 +105,11 @@ class AsyncImageGenerator:
                     size=size,
                     n=1,
                     style="vivid",
+                    quality=image_quality,
                     response_format="b64_json",
                 )
             else:
+                # DALL-E 2 doesn't support quality parameter
                 response = await self.client.images.generate(
                     model=self.model,
                     prompt=full_prompt,
@@ -101,14 +122,14 @@ class AsyncImageGenerator:
             if not image_data_b64:
                 raise ImageGenerationError("DALL-E did not return base64 image data.")
             logger.info("[Async] Image data successfully retrieved from DALL-E response.")
-            return await self._process_and_store_image(response, template_id, size, stamp_image=stamp_image)
+            return await self._process_and_store_image(response, template_id, size, stamp_image=stamp_image, quality=image_quality)
         except Exception as e:
             error_msg = f"[Async] Failed to generate or store image: {str(e)}"
             logger.error(error_msg)
             raise ImageGenerationError(error_msg) from e
 
     async def _process_and_store_image(
-        self, response: ImagesResponse, template_id: Optional[str], size: str, stamp_image: bool = True, qr_url: Optional[str] = None, product_idea: Optional[dict] = None
+        self, response: ImagesResponse, template_id: Optional[str], size: str, stamp_image: bool = True, qr_url: Optional[str] = None, product_idea: Optional[dict] = None, quality: Optional[str] = None
     ) -> Tuple[str, str]:
         """
         Process DALL-E response and store image locally and on Imgur.

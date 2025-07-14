@@ -787,6 +787,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                 >
                   <TIcon size={14} className={tDisplay.color} />
                   {tier.display_name}
+                  {(tier.name === 'sapphire' || tier.name === 'diamond') && (
+                    <span className="ml-1 px-1 py-0.5 bg-blue-100 text-blue-600 text-xs font-bold rounded uppercase">HD</span>
+                  )}
                   <span className="ml-1 text-gray-400">${tier.min_amount}</span>
                 </button>
               );
@@ -816,6 +819,12 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
           {isBelowMin && (
             <div className="text-xs text-red-500 mt-1">Minimum for {currentTier?.display_name} is ${minAmount.toFixed(2)}</div>
           )}
+          <div className="text-xs text-gray-500 mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-1 mb-1">
+              <span className="text-blue-600 font-semibold">✨ Premium Quality:</span>
+            </div>
+            <span>Sapphire ($25) and Diamond ($100) commissions include high-definition AI image generation for enhanced detail and quality.</span>
+          </div>
         </div>
         {/* Reddit Username and Anonymous Toggle */}
         <div className="flex items-center gap-3 mb-2">

@@ -220,6 +220,7 @@ class ZazzleProductDesigner:
                 reddit_context=reddit_context,
                 design_instructions=design_instructions.__dict__,
                 image_local_path=None,  # This would be set by the image generator
+                image_quality=design_instructions.image_quality,
             )
 
         except Exception as e:

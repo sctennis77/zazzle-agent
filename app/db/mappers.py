@@ -106,4 +106,5 @@ def product_info_to_db(product_info, pipeline_run_id, reddit_post_id):
             and isinstance(product_info.design_instructions, dict)
             else str(getattr(product_info, "design_instructions", ""))
         ),
+        image_quality=getattr(product_info, "image_quality", "standard"),
     )

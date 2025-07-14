@@ -64,12 +64,16 @@ class CommissionWorker:
         from app.models import PipelineConfig
         from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
         
+        # Get image quality from task data, default to standard
+        image_quality = task_data.get("image_quality", "standard")
+        
         self.config = PipelineConfig(
             model="dall-e-3",
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
             prompt_version="1.0.0",
+            image_quality=image_quality,
         )
         
         # Initialize components with proper configuration
@@ -210,11 +214,9 @@ class CommissionWorker:
             if error_message:
                 self.pipeline_task.error_message = error_message
             self.db.commit()
-            # Task status logging is now handled in TaskManager; demote here to DEBUG for local trace
-            logger.debug(f"Updated pipeline task {self.pipeline_task.id} status to {status} (donation_id={self.donation_id})")
+            # Remove duplicate logging - TaskManager handles status logs
             update = self._build_update_dict(status, error_message, progress, stage, message)
-            if update is not None:
-                logger.debug(f"[PROGRESS UPDATE] Task {self.pipeline_task.id}: {update}")
+            if update:
                 self._publish_task_update_simple(self.pipeline_task.id, update)
         except Exception as e:
             logger.error(f"Error updating task status for pipeline_task_id={getattr(self.pipeline_task, 'id', None)}: {str(e)}\n{traceback.format_exc()}")
@@ -237,7 +239,9 @@ class CommissionWorker:
             }
             # Publish to Redis
             r.publish("task_updates", json.dumps(message))
-            logger.debug(f"[SIMPLE REDIS] Published task update for {task_id}: {update}")
+            # Only log Redis publishing for errors or major status changes
+            if update.get("status") in ["completed", "failed"] or logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Published update for task {task_id}: {update.get('status', 'unknown')}")
         except Exception as e:
             logger.error(f"[SIMPLE REDIS] Failed to publish task update for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
 
@@ -491,8 +495,7 @@ class CommissionWorker:
     async def _progress_callback(self, stage: str, data: dict):
         """Callback for RedditAgent progress updates."""
         try:
-            logger.info(f"=== COMMISSION PROGRESS CALLBACK ===")
-            logger.info(f"Progress callback received: {stage} with data: {data}")
+            logger.debug(f"Progress callback: {stage} ({data.get('progress', 'no progress')}%)")
             
             if stage == "post_fetched":
                 post_title = data.get("post_title", "Unknown Post")

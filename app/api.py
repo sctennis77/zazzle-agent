@@ -43,6 +43,16 @@ from app.subreddit_publisher import SubredditPublisher
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
+def get_image_quality_for_tier(tier: str) -> str:
+    """
+    Determine image quality based on donation tier.
+    Sapphire and Diamond tiers get HD quality, others get standard.
+    """
+    if tier in ["sapphire", "diamond"]:
+        return "hd"
+    return "standard"
+
 app = FastAPI()
 
 # Add CORS middleware
@@ -1224,6 +1234,7 @@ async def handle_payment_intent_succeeded(payment_intent):
                     "commission_type": donation.commission_type,
                     "commission_message": donation.commission_message,
                     "post_id": donation.post_id,
+                    "image_quality": get_image_quality_for_tier(donation.tier),
                 }
                 # Create task using TaskManager (this will automatically run in background thread if K8s not available)
                 task_id = task_manager.create_commission_task(donation.id, task_data)
@@ -1323,6 +1334,7 @@ async def create_commission_task(donation_id: int, db: Session = Depends(get_db)
             "commission_type": donation.commission_type,
             "commission_message": donation.commission_message,
             "post_id": donation.post_id,
+            "image_quality": get_image_quality_for_tier(donation.tier),
         }
         
         # Create task using TaskManager (this will automatically run in background thread if K8s not available)
@@ -1676,6 +1688,7 @@ async def manual_create_commission(
         "commission_type": donation.commission_type,
         "commission_message": donation.commission_message,
         "post_id": donation.post_id,
+        "image_quality": get_image_quality_for_tier(donation.tier),
     }
 
     # Create commission task using TaskManager

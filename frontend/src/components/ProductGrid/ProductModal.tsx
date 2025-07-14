@@ -335,6 +335,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             <span className="font-semibold text-gray-700">Clouvel</span>
             <span>with</span>
             <span className="font-semibold text-gray-700">{product.product_info.model}</span>
+            {product.product_info.image_quality === 'hd' && (
+              <>
+                <span>in</span>
+                <span className="font-semibold text-blue-600 uppercase">HD</span>
+              </>
+            )}
             <span>at</span>
             <span className="font-mono text-gray-600">
               {product.pipeline_run && product.pipeline_run.end_time ?
