@@ -1,45 +1,51 @@
-# Zazzle Agent 🤖
+# Clouvel 🤖
 
 > **AI-Powered Product Generation from Reddit Trends**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Railway](https://img.shields.io/badge/Railway-Deployed-purple.svg)](https://railway.app/)
 
-Zazzle Agent is an intelligent automation system that discovers trending content on Reddit and automatically generates unique products for sale on Zazzle. Using AI-powered content analysis and image generation, it creates market-ready products with affiliate links in minutes.
+Clouvel is an intelligent automation platform that discovers trending content on Reddit and generates commissioned products through AI-powered content analysis and image generation. Users can commission custom products from trending Reddit posts, supporting creators through our donation system.
 
 ## ✨ Features
 
+- **💡 Commission-Based Product Generation**: Users can commission custom products from trending Reddit posts
 - **🤖 AI-Powered Content Analysis**: Uses GPT models to analyze Reddit posts and generate product ideas
 - **🎨 Automated Image Generation**: Creates unique product images using DALL-E 3
 - **🛍️ Zazzle Integration**: Automatically creates products with affiliate links
-- **📊 Multi-Subreddit Support**: Monitors multiple subreddits for trending content
-- **🔄 Automated Pipeline**: Runs continuously to discover and create products
-- **📱 Modern Web Interface**: React frontend for monitoring and management
-- **🐳 Docker Ready**: Complete containerized deployment
-- **📈 Usage Tracking**: Comprehensive OpenAI API usage monitoring
-- **🛡️ Error Handling**: Robust error handling and retry mechanisms
-- **💳 Donation System**: Accepts donations via Stripe to support the project
+- **💳 Stripe Payment Processing**: Secure donation and commission system
+- **📊 Real-Time Progress Updates**: WebSocket-powered live updates during product creation
+- **📱 Modern Web Interface**: React TypeScript frontend with product grid and commission tracking
+- **🚂 Railway Deployment**: Cloud-native deployment on Railway platform
+- **📈 Usage Tracking**: Comprehensive OpenAI API usage monitoring and cost management
+- **🛡️ Robust Task Management**: Queue-based processing with error handling and retries
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Live Application
 
-- Docker and Docker Compose
+Visit **[clouvel.ai](https://clouvel.ai)** to use the application immediately - no setup required!
+
+### Local Development
+
+#### Prerequisites
+
+- Python 3.12 with Poetry
+- Node.js 18+ with npm
 - OpenAI API key
-- Reddit API credentials
-- Zazzle affiliate ID
-- Stripe account (for donation features)
+- Reddit API credentials  
+- Stripe account (for commission features)
 
-### 1. Clone the Repository
+#### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/zazzle-agent.git
+git clone https://github.com/sctennis77/zazzle-agent.git
 cd zazzle-agent
 ```
 
-### 2. Set Up Environment
+#### 2. Set Up Environment
 
 ```bash
 # Copy environment template
@@ -56,24 +62,32 @@ REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
 REDDIT_USER_AGENT=your_reddit_user_agent
 ZAZZLE_AFFILIATE_ID=your_zazzle_affiliate_id
-IMGUR_CLIENT_ID=your_imgur_client_id
-IMGUR_CLIENT_SECRET=your_imgur_client_secret
 STRIPE_SECRET_KEY=your_stripe_secret_key
 STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
 ```
 
-### 3. Deploy with Docker
+#### 3. Install Dependencies
 
 ```bash
-# Start all services
-make deploy
+# Install Python dependencies
+make install-deps
 
-# Check status
-make status
+# Install frontend dependencies  
+cd frontend && npm install && cd ..
 ```
 
-### 4. Access the Application
+#### 4. Start Development Servers
+
+```bash
+# Start API server (port 8000)
+make run-api
+
+# In another terminal, start frontend (port 5173)
+make frontend-dev
+```
+
+#### 5. Access the Application
 
 - **Frontend**: http://localhost:5173
 - **API**: http://localhost:8000
@@ -81,37 +95,43 @@ make status
 
 ## 🏗️ Architecture
 
-Zazzle Agent is built as a microservices architecture with the following components:
+Clouvel is built as a modern microservices architecture deployed on Railway:
 
 ### Core Services
 
-- **API Service** (`app/api.py`): FastAPI backend serving product data and management endpoints
-- **Pipeline Service** (`app/pipeline.py`): Main automation pipeline for product generation
-- **Interaction Service** (`app/interaction_scheduler.py`): Handles Reddit interactions and engagement
-- **Frontend** (`frontend/`): React-based web interface for monitoring and management
-- **Database**: SQLite database with Alembic migrations
+- **API Service** (`app/api.py`): FastAPI backend with commission endpoints, real-time WebSocket updates, and Stripe integration
+- **Commission Worker** (`app/commission_worker.py`): Processes commissioned product generation tasks
+- **Task Manager** (`app/task_manager.py`): Queue-based task processing with retry logic and progress tracking
+- **Frontend** (`frontend/`): React TypeScript interface with product grid, commission modals, and real-time progress
+- **Database**: PostgreSQL with SQLAlchemy ORM and Alembic migrations (deployed on Railway)
 
 ### Key Components
 
-- **Reddit Agent** (`app/agents/reddit_agent.py`): Discovers and analyzes trending Reddit content
-- **Content Generator** (`app/content_generator.py`): Uses AI to generate product ideas and descriptions
-- **Image Generator** (`app/image_generator.py`): Creates product images using DALL-E 3
-- **Zazzle Product Designer** (`app/zazzle_product_designer.py`): Integrates with Zazzle API
-- **Affiliate Linker** (`app/affiliate_linker.py`): Generates affiliate links for products
+- **Reddit Agent** (`app/agents/reddit_agent.py`): Discovers and analyzes trending Reddit content for commissioned products
+- **Content Generator** (`app/content_generator.py`): Uses GPT models to generate product ideas and descriptions
+- **Image Generator** (`app/async_image_generator.py`): Creates product images using DALL-E 3 with async processing
+- **Zazzle Product Designer** (`app/zazzle_product_designer.py`): Integrates with Zazzle API for product creation
+- **Stripe Service** (`app/services/stripe_service.py`): Handles secure payment processing for commissions
+- **WebSocket Manager** (`app/websocket_manager.py`): Real-time progress updates to frontend clients
 
 ## 📊 API Endpoints
 
-### Products
-- `GET /api/generated_products` - List all generated products
+### Products & Commissions
+- `GET /api/generated_products` - List all generated products with commission details
 - `GET /api/generated_products/{product_id}` - Get specific product details
+- `POST /api/donations/create-checkout-session` - Create commission payment session
+- `POST /api/commissions/validate` - Validate commission request before payment
 
-### Health & Status
+### Real-Time Updates
+- `WS /ws` - WebSocket connection for real-time commission progress updates
+
+### Health & Status  
 - `GET /health` - Service health check
-- `GET /api/status` - System status and metrics
+- `GET /api/status` - System status and task queue metrics
 
-### Pipeline Management
-- `POST /api/pipeline/run` - Manually trigger pipeline run
-- `GET /api/pipeline/status` - Current pipeline status
+### Task Management
+- `GET /api/tasks` - List current tasks in queue
+- `POST /api/tasks/commission` - Create new commission task
 
 ## 🛠️ Development
 
@@ -119,72 +139,80 @@ Zazzle Agent is built as a microservices architecture with the following compone
 
 ```bash
 # Install Python dependencies
-poetry install
+make install-deps
 
 # Install frontend dependencies
-cd frontend && npm install
+cd frontend && npm install && cd ..
 
-# Run database migrations
-alembic upgrade head
+# Setup fresh database with migrations
+make setup-fresh-db
 
 # Start development servers
-make dev
+make run-api          # API server (port 8000)
+make frontend-dev     # Frontend dev server (port 5173)
 ```
 
 ### Testing
 
 ```bash
-# Run all tests
+# Run all tests with coverage
 make test
 
-# Run specific test categories
-pytest tests/test_pipeline.py
-pytest tests/test_api.py
-pytest tests/test_reddit_agent.py
+# Run specific test files
+make test-pattern tests/test_api.py
+make test-pattern tests/test_reddit_agent.py
+
+# Test commission workflow end-to-end
+make test-commission-flow SUBREDDIT=golf AMOUNT=25
 ```
 
 ### Code Quality
 
 ```bash
-# Format code
+# Format code with black and isort
 make format
 
-# Lint code
+# Lint code with flake8
 make lint
 
-# Type checking
-mypy app/
+# Type checking with mypy
+make type-check
 ```
 
 ## 📦 Deployment
 
-### Docker Deployment
+### Railway Deployment (Production)
+
+Clouvel is deployed on Railway with automatic GitHub integration:
 
 ```bash
-# Production deployment
+# Deploy using Railway CLI
+./scripts/deploy-railway.sh
+
+# Monitor deployment
+railway logs --service api
+railway logs --service frontend
+
+# Check service status
+railway status
+```
+
+**Live Application**: [clouvel.ai](https://clouvel.ai)
+
+### Local Docker Deployment
+
+```bash
+# Start all services with Docker Compose
 make deploy
 
-# Quick deployment (no cache)
-make deploy-clean
-
-# Stop all services
-make stop-all
+# Check deployment status
+make deployment-status
 
 # View logs
 make show-logs
-```
 
-### Kubernetes Deployment
-
-```bash
-# Deploy to Kubernetes
-make k8s-deploy
-
-# Check status
-make k8s-status
-
-# View logs
-make k8s-logs
+# Health check
+make health-check
 ```
 
 ### Environment Variables
@@ -196,86 +224,84 @@ make k8s-logs
 | `REDDIT_CLIENT_SECRET` | Reddit API client secret | Yes |
 | `REDDIT_USER_AGENT` | Reddit API user agent | Yes |
 | `ZAZZLE_AFFILIATE_ID` | Zazzle affiliate ID | Yes |
-| `IMGUR_CLIENT_ID` | Imgur client ID | No |
-| `IMGUR_CLIENT_SECRET` | Imgur client secret | No |
-| `STRIPE_SECRET_KEY` | Stripe secret key | No |
-| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key | No |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook secret | No |
-| `OPENAI_IDEA_MODEL` | GPT model for idea generation (default: gpt-3.5-turbo) | No |
-| `DATABASE_URL` | Database connection string | No |
+| `STRIPE_SECRET_KEY` | Stripe secret key for commission processing | Yes |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for frontend | Yes |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook secret for payment events | Yes |
+| `DATABASE_URL` | PostgreSQL connection string (Railway provides) | Yes |
+| `REDIS_URL` | Redis connection string (Railway provides) | Yes |
+| `OPENAI_IDEA_MODEL` | GPT model for idea generation (default: gpt-4o-mini) | No |
 
 ## 📈 Monitoring & Management
 
 ### Health Monitoring
 
 ```bash
-# Check system health
+# Essential health check
 make health-check
 
-# View service status
-make status
+# Deployment status check
+make deployment-status
 
-# Monitor logs
+# View all service logs
 make show-logs
+
+# View specific service logs
+make show-logs-api
 ```
 
 ### Database Management
 
 ```bash
-# Backup database
+# Create database backup
 make backup-db
 
-# Restore database
-make restore-db
+# Restore from backup
+make restore-db DB=backup_filename.db
 
-# List backups
-make list-backups
+# List available backups
+make backup-list
+
+# Check database contents
+make check-db
 ```
 
-### Pipeline Management
+### Commission System Management
 
 ```bash
-# Run pipeline manually
-make run-pipeline
+# Test commission workflow
+make test-commission-flow SUBREDDIT=golf AMOUNT=25
 
-# Check pipeline status
-make deployment-status
+# View task queue status
+make show-task-queue
 
-# View pipeline logs
-make show-logs-pipeline
+# Clean up stuck tasks
+make cleanup-stuck-tasks
 ```
 
 ## 🔧 Configuration
 
-### Subreddit Configuration
+### Commission System
 
-Edit `app/products_config.template.json` to configure which subreddits to monitor:
+Clouvel operates on a commission-based model where users pay to generate products from trending Reddit posts:
 
-```json
-{
-  "subreddits": [
-    "golf",
-    "interiordesign", 
-    "digitalart",
-    "baking",
-    "hiking"
-  ],
-  "post_filters": {
-    "min_score": 100,
-    "max_age_hours": 24,
-    "prefer_text_posts": true
-  }
-}
-```
+- **Commission Tiers**: $25 (standard), $50 (premium), $100 (deluxe)
+- **Processing**: Queue-based with real-time progress updates
+- **Payment**: Secure Stripe checkout with webhook confirmation
+- **Products**: Automatically posted to relevant subreddits with affiliate links
 
-### Pipeline Configuration
+### Subreddit Support
 
-The pipeline runs automatically every 6 hours and can be configured in the pipeline scheduler:
+Currently supports trending posts from popular subreddits:
+- golf, hiking, baking, interiordesign, digitalart
+- Posts are filtered by engagement and content quality
+- Custom subreddit requests can be added via configuration
 
-- **Product Generation**: Every 6 hours
-- **Reddit Interactions**: Every 2 hours
-- **Error Retries**: 3 attempts with exponential backoff
-- **Rate Limiting**: Respects OpenAI and Reddit API limits
+### Task Queue Configuration
+
+- **Retry Logic**: 3 attempts with exponential backoff
+- **Rate Limiting**: Respects OpenAI and Reddit API limits  
+- **Progress Tracking**: Real-time WebSocket updates to frontend
+- **Error Handling**: Comprehensive logging and failure recovery
 
 ## 🤝 Contributing
 
@@ -366,92 +392,77 @@ The Zazzle Agent includes a fully integrated donation system powered by Stripe:
 
 ---
 
-**Made with ❤️ by the Zazzle Agent Team**
+**Made with ❤️ by the Clouvel Team**
 
-*Transform Reddit trends into profitable products with AI-powered automation.*
+*Transform Reddit trends into commissioned products with AI-powered automation.*
 
-## Dual Implementation: Legacy vs Task-Based Product Generation
+## How Clouvel Works
 
-This codebase now supports two independent implementations for finding trending Reddit posts and generating products:
+### Commission Workflow
 
-### 1. Legacy Implementation
-- **Method:** `RedditAgent._find_trending_post`
-- **Pipeline:** `Pipeline.run_pipeline`
-- **Testing:** Legacy tests in `tests/test_reddit_agent.py` (e.g., `test_find_trending_post`, `test_find_reddit_post_skips_processed`)
-- **Usage:** Used by the original pipeline and API endpoints for random or legacy product generation.
+1. **Browse Products**: Users view the product grid showing generated items from trending Reddit posts
+2. **Commission Request**: Users select a product and choose a commission tier ($25, $50, or $100)
+3. **Secure Payment**: Stripe checkout processes the payment securely
+4. **Task Queue**: Commission is added to the processing queue with real-time progress tracking
+5. **AI Generation**: Reddit content is analyzed, product ideas generated, and images created using DALL-E 3
+6. **Product Creation**: Zazzle products are automatically created with affiliate links
+7. **Completion**: Users receive their commissioned product with purchase links
 
-### 2. Task-Based Implementation
-- **Method:** `RedditAgent._find_trending_post_for_task`
-- **Pipeline:** `Pipeline.run_task_pipeline_specific`
-- **Testing:** Task-based tests in `tests/test_reddit_agent.py` (e.g., `test_find_trending_post_for_task_simple`, `test_get_product_info_for_task_simple`)
-- **Usage:** Used by the new task queue, task runner, and event-driven product generation.
+### Technical Implementation
 
-**Both implementations are fully tested and can be maintained or refactored independently.**
+- **Task-Based Processing**: All product generation uses a queue-based system with retry logic
+- **Real-Time Updates**: WebSocket connections provide live progress updates during commission processing  
+- **Secure Payments**: Stripe handles all payment processing with webhook confirmation
+- **AI Integration**: OpenAI GPT models analyze Reddit content and DALL-E 3 generates product images
+- **Automated Publishing**: Products are automatically posted to relevant subreddits with affiliate tracking
 
-### How to Run Tests
-- To run all tests: `make test`
-- To run only Reddit agent tests: `make test-pattern tests/test_reddit_agent.py`
-- To run only pipeline tests: `make test-pattern tests/test_pipeline.py`
+## Commission API Reference
 
----
+### Create Commission Checkout Session
 
-For more details, see the docstrings in `app/agents/reddit_agent.py` and `app/pipeline.py`.
-
-## Creating a Donation via API for an Existing Post
-
-To create a donation (support or commission) for an existing Reddit post, use the following API endpoint:
+Create a commission payment session for an existing Reddit post:
 
 ```
 POST /api/donations/create-checkout-session
 ```
 
-### Request Body Example (Support Donation)
-```json
-{
-  "amount_usd": "5.00",
-  "subreddit": "hiking",
-  "donation_type": "support",
-  "post_id": "<REDDIT_POST_ID>",
-  "customer_email": "your@email.com",
-  "customer_name": "Your Name",
-  "reddit_username": "your_reddit_username",
-  "is_anonymous": false,
-  "message": "Test support"
-}
-```
-
-### Request Body Example (Commission Donation)
+### Request Body Example
 ```json
 {
   "amount_usd": "25.00",
-  "subreddit": "hiking",
+  "subreddit": "hiking", 
   "donation_type": "commission",
   "post_id": "<REDDIT_POST_ID>",
   "customer_email": "your@email.com",
   "customer_name": "Your Name",
   "reddit_username": "your_reddit_username",
   "is_anonymous": false,
-  "commission_message": "Create a beautiful product from an amazing hiking post!"
+  "commission_message": "Create a beautiful product from this hiking post!"
 }
 ```
 
-- `donation_type` must be either `support` or `commission`.
-- For support donations, `message` is used. For commission donations, use `commission_message`.
-- `post_id` is required for both types when donating to an existing post.
+### Commission Tiers
+- `$25` - Standard commission (basic product generation)
+- `$50` - Premium commission (enhanced quality and options)
+- `$100` - Deluxe commission (premium features and priority processing)
 
 ### Response
-A successful request returns a Stripe Checkout session URL for payment.
+Returns a Stripe Checkout session URL for secure payment processing.
 
 ---
 
-## Progress Update (2025-06-27)
+## Recent Updates
 
-**Today's UI improvements:**
-- The Product Detail modal now always displays a "Commissioned by" section at the top, showing commission donor info and message.
-- A "Sponsored by" section appears beneath if there are any support donations, listing all sponsors and their messages.
-- Fallback logic for fake sponsors has been removed for clarity and accuracy.
-- The UI is now more consistent and visually clear for both commission and support donations.
+### Railway Deployment (2025)
+- ✅ Successfully deployed on Railway platform at [clouvel.ai](https://clouvel.ai)
+- ✅ PostgreSQL and Redis integration with Railway plugins
+- ✅ Automatic GitHub deployment pipeline
+- ✅ Custom domain configuration with SSL
+- ✅ Commission workflow fully operational in production
 
-**Screenshot:**
-
-![Product Detail Modal with Commissioned and Sponsored Sections](frontend/docs/assets/progress_2025_06_27.png)
+### Commission System Enhancements
+- ✅ Real-time progress tracking via WebSocket connections
+- ✅ Queue-based task processing with retry logic
+- ✅ Secure Stripe payment integration with webhook confirmation
+- ✅ Product detail modals with commission and sponsor information
+- ✅ Mobile-responsive design for commission flow
