@@ -277,23 +277,6 @@ const FundraisingPage: React.FC = () => {
         {/* Leaderboard Table */}
         <DonationsLeaderboardTable data={data} />
 
-        {/* Legend */}
-        <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Donation Tiers</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(TIER_COLORS).map(([tier, color]) => (
-              <div key={tier} className="flex items-center">
-                <div 
-                  className="w-4 h-4 rounded mr-3" 
-                  style={{ backgroundColor: color }}
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  {TIER_NAMES[tier as keyof typeof TIER_NAMES]}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
