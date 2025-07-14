@@ -136,8 +136,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
               <div className="flex-1 flex flex-col justify-between">
                 <div className="space-y-2 flex flex-col h-full justify-between">
                   <div className="bg-orange-50 rounded-xl p-2 border border-orange-200 flex flex-col justify-between h-full">
-                    {/* Header: Orange Reddit button, subreddit, timestamp, author */}
-                    <div className="flex items-start gap-3 mb-2">
+                    {/* Header: Reddit icon, post title */}
+                    <div className="flex items-center gap-3 mb-0.5">
                       <a
                         href={product.reddit_post.url}
                         target="_blank"
@@ -147,68 +147,68 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                       >
                         <FaReddit size={20} className="text-orange-500" />
                       </a>
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-bold text-gray-900 text-base truncate">
-                            r/{product.reddit_post.subreddit}
-                          </span>
-                          {product.pipeline_run && product.pipeline_run.start_time && (
-                            <span className="text-sm text-gray-600">
-                              &nbsp;• {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                          <FaUser size={12} className="text-gray-400" />
-                          <span className="font-medium text-gray-700">{product.reddit_post.author ? `u/${product.reddit_post.author}` : <span className='italic text-gray-400'>[unknown]</span>}</span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Body: Post title, post content, then Community Discussion */}
-                    <div className="flex-1 flex flex-col overflow-y-auto max-h-72">
                       {product.reddit_post.title && (
-                        <div className="font-bold text-gray-900 text-base">
-                          {product.reddit_post.title}
-                        </div>
+                        <span className="font-bold text-gray-900 text-lg break-words leading-snug">{product.reddit_post.title}</span>
                       )}
-                      {product.reddit_post.content && (
-                        <div className="text-sm text-gray-700 whitespace-pre-line">
-                          {product.reddit_post.content}
-                        </div>
+                    </div>
+                    {/* Subheader: author • subreddit • timestamp, now directly under title */}
+                    <div className="ml-1 mt-0.5 mb-0 text-sm text-gray-700 flex items-center gap-2 flex-wrap">
+                      <span className="flex items-center gap-1 font-medium">
+                        <FaUser size={12} className="text-gray-400" />
+                        {product.reddit_post.author ? `u/${product.reddit_post.author}` : <span className='italic text-gray-400'>[unknown]</span>}
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span className="font-semibold text-orange-700">r/{product.reddit_post.subreddit}</span>
+                      <span className="text-gray-400">•</span>
+                      {product.pipeline_run && product.pipeline_run.start_time && (
+                        <span className="text-xs text-gray-500">
+                          {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
                       )}
-                      {/* Community Discussion as inner section */}
-                      <div className="mt-1">
-                        <div className="bg-white rounded-lg border border-gray-200 p-2">
-                          <h5 className="font-semibold text-gray-900 mb-1 text-sm">Community Discussion</h5>
-                          {/* Comments Summary */}
-                          {product.reddit_post.comment_summary && (
-                            <div>
-                              <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
+                    </div>
+                    {/* Separator line now below subtitle */}
+                    <div className="ml-1 flex items-center my-1">
+                      <span className="flex-grow border-t border-gray-200"></span>
+                    </div>
+                    {/* Body: post content or dash, then community discussion */}
+                    <div>
+                      <div className="mb-2 text-sm text-gray-800 whitespace-pre-line min-h-[1.5em] mt-0">
+                        {product.reddit_post.content ? (
+                          product.reddit_post.content
+                        ) : (
+                          <span className="italic text-xs text-gray-400">No post content</span>
+                        )}
+                      </div>
+                      <div className="bg-white rounded-lg border border-gray-200 p-2">
+                        <h5 className="font-semibold text-gray-900 mb-1 text-sm">Community Discussion</h5>
+                        {/* Comments Summary */}
+                        {product.reddit_post.comment_summary && (
+                          <div>
+                            <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
+                          </div>
+                        )}
+                        {/* Reddit post metadata */}
+                        <div className="flex items-center gap-4 text-sm pt-1 border-t border-gray-100 flex-wrap">
+                          {product.reddit_post.score !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <FaThumbsUp size={12} className="text-gray-500" />
+                              <span className="text-gray-600">Score:</span>
+                              <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
                             </div>
                           )}
-                          {/* Reddit post metadata */}
-                          <div className="flex items-center gap-4 text-sm pt-1 border-t border-gray-100 flex-wrap">
-                            {product.reddit_post.score !== undefined && (
-                              <div className="flex items-center gap-1">
-                                <FaThumbsUp size={12} className="text-gray-500" />
-                                <span className="text-gray-600">Score:</span>
-                                <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
-                              </div>
-                            )}
-                            {product.reddit_post.num_comments !== undefined && (
-                              <div className="flex items-center gap-1">
-                                <FaComment size={12} className="text-gray-500" />
-                                <span className="text-gray-600">Comments:</span>
-                                <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
-                              </div>
-                            )}
-                          </div>
+                          {product.reddit_post.num_comments !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <FaComment size={12} className="text-gray-500" />
+                              <span className="text-gray-600">Comments:</span>
+                              <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -261,7 +261,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 {/* Username and subtext */}
                 <div className="flex flex-col min-w-0">
                   <span className="font-semibold text-gray-900 text-base truncate">
-                    {commissionInfo.reddit_username}
+                    {commissionInfo.is_anonymous
+                      ? 'Anonymous'
+                      : commissionInfo.reddit_username
+                        ? `u/${commissionInfo.reddit_username}`
+                        : ''}
                   </span>
                   <span className="text-xs text-gray-400 font-medium">Commission</span>
                 </div>
