@@ -110,6 +110,13 @@ def mock_reddit():
         subreddit_mock.id = "hiking"
         subreddit_mock.name = "hiking"
         subreddit_mock.display_name = "Hiking"
+        subreddit_mock.description = "A community for hiking enthusiasts"
+        subreddit_mock.description_html = "<p>A community for hiking enthusiasts</p>"
+        subreddit_mock.public_description = "Share your hiking adventures"
+        subreddit_mock.created_utc = 1234567890
+        subreddit_mock.subscribers = 100000
+        subreddit_mock.over18 = False
+        subreddit_mock.spoilers_enabled = False
         
         # Mock post
         post = MagicMock()
@@ -514,3 +521,292 @@ class TestCommissionWorkflowIntegration:
                 assert task.donation_id == donation.id
         finally:
             db.close() 
+
+
+class TestManualCommissionWorkflowE2E:
+    """Test manual commission workflow end-to-end without Stripe."""
+
+    @pytest.mark.asyncio
+    async def test_manual_commission_workflow_random_subreddit(
+        self,
+        sample_subreddit,
+        mock_openai,
+        mock_reddit,
+        mock_imgur,
+        mock_zazzle,
+        mock_image_generator,
+        patch_task_manager
+    ):
+        """Test complete manual commission workflow for random subreddit."""
+        from app.api import manual_create_commission
+        from app.models import CommissionRequest
+        from app.db.models import Donation, SourceType
+        from app.db.database import SessionLocal
+
+        # Create manual commission request
+        commission_request = CommissionRequest(
+            amount_usd=25.0,
+            customer_email="manual@test.com",
+            customer_name="Manual Commissioner",
+            subreddit="hiking",
+            reddit_username="manual_commissioner",
+            is_anonymous=False,
+            post_id="",
+            commission_message="Create something amazing from a hiking post!"
+        )
+
+        # Mock the request object for admin secret check
+        mock_request = MagicMock()
+        mock_request.headers = {"x-admin-secret": "testsecret123"}
+        
+        # Set admin secret environment variable
+        import os
+        os.environ["ADMIN_SECRET"] = "testsecret123"
+
+        # Create database session
+        db = SessionLocal()
+        try:
+            # Call the manual commission endpoint
+            result = await manual_create_commission(
+                commission_request=commission_request,
+                request=mock_request,
+                db=db
+            )
+            
+            # Verify the response
+            assert result["status"] == "manual commission created"
+            assert "donation_id" in result
+            assert "task_id" in result
+            
+            donation_id = result["donation_id"]
+            task_id = result["task_id"]
+            
+            # Verify donation was created correctly
+            donation = db.query(Donation).filter_by(id=donation_id).first()
+            assert donation is not None
+            assert donation.source == SourceType.MANUAL
+            assert donation.donation_type == "commission"
+            assert donation.status == "succeeded"
+            assert donation.amount_usd == Decimal("25.00")
+            assert donation.customer_email == "manual@test.com"
+            assert donation.customer_name == "Manual Commissioner"
+            assert donation.subreddit.subreddit_name == "hiking"
+            assert donation.reddit_username == "manual_commissioner"
+            assert donation.is_anonymous is False
+            assert donation.commission_message == "Create something amazing from a hiking post!"
+            assert donation.stripe_payment_intent_id.startswith("manual-")
+            
+            # Verify task was created (mocked)
+            assert patch_task_manager.create_commission_task.called
+            call_args = patch_task_manager.create_commission_task.call_args
+            assert call_args[0][0] == donation_id
+            
+        finally:
+            db.close()
+
+    @pytest.mark.asyncio
+    async def test_manual_commission_workflow_specific_post(
+        self,
+        sample_subreddit,
+        mock_openai,
+        mock_reddit,
+        mock_imgur,
+        mock_zazzle,
+        mock_image_generator,
+        patch_task_manager
+    ):
+        """Test manual commission workflow for specific post."""
+        from app.api import manual_create_commission
+        from app.models import CommissionRequest
+        from app.db.models import Donation, SourceType
+        from app.db.database import SessionLocal
+
+        # Create manual commission request for specific post
+        commission_request = CommissionRequest(
+            amount_usd=15.0,
+            customer_email="specific@test.com",
+            customer_name="Specific Post Commissioner",
+            subreddit="hiking",
+            reddit_username="specific_commissioner",
+            is_anonymous=False,
+            post_id="test_post_123",
+            commission_message="Create a print from this specific post!"
+        )
+
+        # Mock the request object for admin secret check
+        mock_request = MagicMock()
+        mock_request.headers = {"x-admin-secret": "testsecret123"}
+        
+        # Set admin secret environment variable
+        import os
+        os.environ["ADMIN_SECRET"] = "testsecret123"
+
+        # Create database session
+        db = SessionLocal()
+        try:
+            # Call the manual commission endpoint
+            result = await manual_create_commission(
+                commission_request=commission_request,
+                request=mock_request,
+                db=db
+            )
+            
+            # Verify the response
+            assert result["status"] == "manual commission created"
+            assert "donation_id" in result
+            assert "task_id" in result
+            
+            donation_id = result["donation_id"]
+            
+            # Verify donation was created correctly
+            donation = db.query(Donation).filter_by(id=donation_id).first()
+            assert donation is not None
+            assert donation.source == SourceType.MANUAL
+            assert donation.donation_type == "commission"
+            assert donation.status == "succeeded"
+            assert donation.amount_usd == Decimal("15.00")
+            assert donation.post_id == "test_post_123"
+            assert donation.commission_message == "Create a print from this specific post!"
+            
+        finally:
+            db.close()
+
+    @pytest.mark.asyncio
+    async def test_manual_commission_workflow_anonymous(
+        self,
+        sample_subreddit,
+        mock_openai,
+        mock_reddit,
+        mock_imgur,
+        mock_zazzle,
+        mock_image_generator,
+        patch_task_manager
+    ):
+        """Test manual commission workflow for anonymous donation."""
+        from app.api import manual_create_commission
+        from app.models import CommissionRequest
+        from app.db.models import Donation, SourceType
+        from app.db.database import SessionLocal
+
+        # Create anonymous manual commission request
+        commission_request = CommissionRequest(
+            amount_usd=50.0,
+            customer_email="anonymous@test.com",
+            customer_name="Anonymous Donor",
+            subreddit="hiking",
+            reddit_username="",
+            is_anonymous=True,
+            post_id="",
+            commission_message="Anonymous commission for hiking community!"
+        )
+
+        # Mock the request object for admin secret check
+        mock_request = MagicMock()
+        mock_request.headers = {"x-admin-secret": "testsecret123"}
+        
+        # Set admin secret environment variable
+        import os
+        os.environ["ADMIN_SECRET"] = "testsecret123"
+
+        # Create database session
+        db = SessionLocal()
+        try:
+            # Call the manual commission endpoint
+            result = await manual_create_commission(
+                commission_request=commission_request,
+                request=mock_request,
+                db=db
+            )
+            
+            # Verify the response
+            assert result["status"] == "manual commission created"
+            assert "donation_id" in result
+            assert "task_id" in result
+            
+            donation_id = result["donation_id"]
+            
+            # Verify donation was created correctly
+            donation = db.query(Donation).filter_by(id=donation_id).first()
+            assert donation is not None
+            assert donation.source == SourceType.MANUAL
+            assert donation.donation_type == "commission"
+            assert donation.status == "succeeded"
+            assert donation.amount_usd == Decimal("50.00")
+            assert donation.is_anonymous is True
+            assert donation.reddit_username == ""
+            assert donation.commission_message == "Anonymous commission for hiking community!"
+            
+        finally:
+            db.close()
+
+    @pytest.mark.asyncio
+    async def test_manual_commission_different_tiers(
+        self,
+        sample_subreddit,
+        patch_task_manager
+    ):
+        """Test manual commission creation with different donation tiers."""
+        from app.api import manual_create_commission
+        from app.models import CommissionRequest, get_tier_from_amount
+        from app.db.models import Donation, SourceType
+        from app.db.database import SessionLocal
+
+        # Test different amounts and their corresponding tiers
+        test_cases = [
+            (5.0, "silver"),
+            (15.0, "gold"), 
+            (25.0, "platinum"),
+            (50.0, "emerald"),
+            (100.0, "ruby")
+        ]
+
+        # Mock the request object for admin secret check
+        mock_request = MagicMock()
+        mock_request.headers = {"x-admin-secret": "testsecret123"}
+        
+        # Set admin secret environment variable
+        import os
+        os.environ["ADMIN_SECRET"] = "testsecret123"
+
+        for amount, expected_tier in test_cases:
+            # Create manual commission request
+            commission_request = CommissionRequest(
+                amount_usd=amount,
+                customer_email=f"tier{amount}@test.com",
+                customer_name=f"Tier {amount} Donor",
+                subreddit="hiking",
+                reddit_username="tier_test",
+                is_anonymous=False,
+                post_id="",
+                commission_message=f"Test commission for {expected_tier} tier"
+            )
+
+            # Create database session
+            db = SessionLocal()
+            try:
+                # Call the manual commission endpoint
+                result = await manual_create_commission(
+                    commission_request=commission_request,
+                    request=mock_request,
+                    db=db
+                )
+                
+                # Verify the response
+                assert result["status"] == "manual commission created"
+                
+                donation_id = result["donation_id"]
+                
+                # Verify donation was created with correct tier
+                donation = db.query(Donation).filter_by(id=donation_id).first()
+                assert donation is not None
+                assert donation.source == SourceType.MANUAL
+                assert donation.donation_type == "commission"
+                assert donation.status == "succeeded"
+                assert donation.amount_usd == Decimal(str(amount))
+                
+                # Verify tier calculation
+                calculated_tier = get_tier_from_amount(amount)
+                assert calculated_tier.value == expected_tier
+                
+            finally:
+                db.close() 

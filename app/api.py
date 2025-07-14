@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import traceback
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -17,11 +18,12 @@ from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask, ProductSubredditPost
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask, ProductSubredditPost, SourceType
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus,
-    CheckoutSessionResponse, ProductInfoSchema, RedditContext, ProductSubredditPostSchema
+    CheckoutSessionResponse, ProductInfoSchema, RedditContext, ProductSubredditPostSchema, CommissionValidationRequest, CommissionRequest,
+    get_tier_from_amount
 )
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import RedditPostSchema
@@ -1604,6 +1606,83 @@ async def get_available_products_for_publishing(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error getting available products: {e}")
         raise HTTPException(status_code=500, detail="Failed to get available products")
+
+
+@app.post("/api/commissions/manual-create")
+async def manual_create_commission(
+    commission_request: CommissionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Protected endpoint for admins to create a commission donation and task without Stripe.
+    Requires X-Admin-Secret header to match ADMIN_SECRET env var.
+    """
+    admin_secret = os.getenv("ADMIN_SECRET")
+    provided_secret = request.headers.get("x-admin-secret")
+    if not admin_secret or provided_secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid admin secret")
+
+    # For manual commissions, we skip the complex validation since we're bypassing Stripe
+    # The CommissionRequest model already validates the basic fields
+    req = commission_request
+
+    # Find or create subreddit
+    subreddit_service = get_subreddit_service()
+    subreddit = subreddit_service.get_or_create_subreddit(req.subreddit, db)
+
+    # Create the Donation entry
+
+    # Use a fake payment intent id for manual commissions
+    payment_intent_id = f"manual-{uuid.uuid4()}"
+    tier = get_tier_from_amount(req.amount_usd)
+
+    donation = Donation(
+        stripe_payment_intent_id=payment_intent_id,
+        amount_cents=int(req.amount_usd * 100),
+        amount_usd=req.amount_usd,
+        currency="usd",
+        status=DonationStatus.SUCCEEDED.value,  # Mark as completed
+        tier=tier.value,
+        customer_email=req.customer_email,
+        customer_name=req.customer_name,
+        message=None,
+        subreddit_id=subreddit.id,
+        reddit_username=req.reddit_username,
+        stripe_metadata=None,
+        is_anonymous=req.is_anonymous,
+        donation_type="commission",
+        commission_type=None,  # Set below
+        post_id=req.post_id,
+        commission_message=req.commission_message,
+        source=SourceType.MANUAL,
+    )
+    # Set commission_type if provided
+    if hasattr(req, "commission_type") and req.commission_type:
+        donation.commission_type = req.commission_type
+    db.add(donation)
+    db.commit()
+    db.refresh(donation)
+
+    # Prepare task data (same as Stripe flow)
+    task_data = {
+        "donation_id": donation.id,
+        "donation_amount": float(donation.amount_usd),
+        "tier": donation.tier,
+        "customer_name": donation.customer_name,
+        "reddit_username": donation.reddit_username,
+        "is_anonymous": donation.is_anonymous,
+        "donation_type": donation.donation_type,
+        "commission_type": donation.commission_type,
+        "commission_message": donation.commission_message,
+        "post_id": donation.post_id,
+    }
+
+    # Create commission task using TaskManager
+    task_id = task_manager.create_commission_task(donation.id, task_data, db)
+    logger.info(f"Manual commission task {task_id} created for donation {donation.id} (user: {donation.customer_name}, type: {donation.commission_type}, tier: {donation.tier})")
+
+    return {"status": "manual commission created", "donation_id": donation.id, "task_id": task_id}
 
 
 if __name__ == "__main__":

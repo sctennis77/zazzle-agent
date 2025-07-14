@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+import enum
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric, Boolean
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, Numeric, Boolean, Enum
 from sqlalchemy.orm import declarative_base, relationship, backref
 
 from app.models import (
@@ -83,6 +84,11 @@ class PipelineRunUsage(Base):
     pipeline_run = relationship("PipelineRun", backref="usage", uselist=False)
 
 
+class SourceType(enum.Enum):
+    STRIPE = "stripe"
+    MANUAL = "manual"
+
+
 class Donation(Base):
     __tablename__ = "donations"
     id = Column(Integer, primary_key=True)
@@ -106,6 +112,7 @@ class Donation(Base):
     commission_type = Column(String(32), nullable=True, index=True)  # "specific_post" or "random_subreddit"
     post_id = Column(String(32), nullable=True, index=True)  # Reddit post ID for commissioning specific posts
     commission_message = Column(Text, nullable=True)  # Optional message to display with commission badge
+    source = Column(Enum(SourceType, name="source_type"), nullable=True)  # 'stripe' or 'manual' or null
 
     # Relationships
     subreddit = relationship("Subreddit", back_populates="donations")

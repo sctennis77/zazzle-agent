@@ -3,9 +3,50 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.db.models import Base, Donation, SourceType
+from app.api import app, get_db
 
-from app.api import app, fetch_successful_pipeline_runs
-from app.db.models import PipelineRun, ProductInfo, RedditPost
+import os
+import uuid
+
+ADMIN_SECRET = "testsecret123"
+os.environ["ADMIN_SECRET"] = ADMIN_SECRET
+os.environ["TESTING"] = "true"
+
+# Create a single in-memory engine and session for this test file
+engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_database():
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture
+def db_session():
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+@pytest.fixture
+def client(db_session):
+    # Dependency override
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
 
 
 def test_get_generated_products_successful(monkeypatch):
@@ -127,3 +168,98 @@ def test_cors_blocks_disallowed_origin():
     # Should return 400 for disallowed origins (FastAPI/Starlette behavior)
     assert response.status_code == 400
     assert response.headers.get("access-control-allow-origin") is None
+
+
+def test_manual_create_commission_requires_secret():
+    """Test that manual commission endpoint requires admin secret"""
+    client = TestClient(app)
+    payload = {
+        "amount_usd": 10.0,
+        "customer_email": "admin@example.com",
+        "customer_name": "Admin User",
+        "subreddit": "testsubreddit",
+        "reddit_username": "adminuser",
+        "is_anonymous": False,
+        "post_id": "testpostid",
+        "commission_message": "Test commission!"
+    }
+    # No secret header
+    resp = client.post("/api/commissions/manual-create", json=payload)
+    assert resp.status_code == 403
+    # Wrong secret
+    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": "wrong"})
+    assert resp.status_code == 403
+
+
+def test_manual_create_commission_success(client, db_session):
+    """Test successful manual commission creation"""
+    payload = {
+        "amount_usd": 10.0,
+        "customer_email": "admin@example.com",
+        "customer_name": "Admin User",
+        "subreddit": "testsubreddit",
+        "reddit_username": "adminuser",
+        "is_anonymous": False,
+        "post_id": "testpostid",
+        "commission_message": "Test commission!"
+    }
+    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": ADMIN_SECRET})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "manual commission created"
+    donation_id = data["donation_id"]
+    # Check DB for donation using the same session as the API
+    donation = db_session.query(Donation).filter_by(id=donation_id).first()
+    assert donation is not None
+    assert donation.source == SourceType.MANUAL
+    assert donation.donation_type == "commission"
+    assert donation.status == "succeeded"
+    # Note: commission_type will be None since it's not in CommissionRequest
+
+
+def test_manual_create_commission_invalid_payload():
+    """Test validation of commission request payload"""
+    client = TestClient(app)
+    # Missing required fields
+    payload = {
+        "amount_usd": 10.0,
+        # Missing customer_email, customer_name, etc.
+    }
+    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": ADMIN_SECRET})
+    assert resp.status_code == 422  # Validation error
+
+
+def test_manual_create_commission_missing_secret():
+    """Test 403 when no secret header provided"""
+    client = TestClient(app)
+    payload = {
+        "amount_usd": 10.0,
+        "customer_email": "admin@example.com",
+        "customer_name": "Admin User",
+        "subreddit": "testsubreddit",
+        "reddit_username": "adminuser",
+        "is_anonymous": False,
+        "post_id": "testpostid",
+        "commission_message": "Test commission!"
+    }
+    resp = client.post("/api/commissions/manual-create", json=payload)
+    assert resp.status_code == 403
+    assert "Forbidden" in resp.json()["detail"]
+
+
+def test_manual_create_commission_wrong_secret():
+    """Test 403 when wrong secret provided"""
+    client = TestClient(app)
+    payload = {
+        "amount_usd": 10.0,
+        "customer_email": "admin@example.com",
+        "customer_name": "Admin User",
+        "subreddit": "testsubreddit",
+        "reddit_username": "adminuser",
+        "is_anonymous": False,
+        "post_id": "testpostid",
+        "commission_message": "Test commission!"
+    }
+    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": "wrongsecret"})
+    assert resp.status_code == 403
+    assert "Forbidden" in resp.json()["detail"]

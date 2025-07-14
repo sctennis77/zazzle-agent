@@ -15,6 +15,7 @@ import asyncio
 import traceback
 
 from app.db.database import SessionLocal
+from sqlalchemy.orm import Session
 from app.db.models import Donation, PipelineTask
 from app.k8s_job_manager import K8sJobManager
 from app.commission_worker import CommissionWorker
@@ -41,19 +42,20 @@ class TaskManager:
         self.use_k8s = self.k8s_manager.enabled
         logger.info(f"Task Manager initialized - K8s available: {self.use_k8s}")
     
-    def create_commission_task(self, donation_id: int, task_data: Dict[str, Any]) -> str:
+    def create_commission_task(self, donation_id: int, task_data: Dict[str, Any], db: Optional[Session] = None) -> str:
         """
         Create a commission task using either K8s Jobs or direct execution.
         
         Args:
             donation_id: The donation ID
             task_data: Task configuration data
+            db: Optional database session to use (if not provided, creates a new one)
             
         Returns:
             Task ID
         """
         # Create the pipeline task in the database
-        task_id = self._create_pipeline_task(donation_id, task_data)
+        task_id = self._create_pipeline_task(donation_id, task_data, db)
         
         if self.use_k8s:
             # Use Kubernetes Jobs
@@ -66,9 +68,12 @@ class TaskManager:
         
         return task_id
     
-    def _create_pipeline_task(self, donation_id: int, task_data: Dict[str, Any]) -> str:
+    def _create_pipeline_task(self, donation_id: int, task_data: Dict[str, Any], db: Optional[Session] = None) -> str:
         """Create a pipeline task in the database."""
-        db = SessionLocal()
+        should_close_db = False
+        if db is None:
+            db = SessionLocal()
+            should_close_db = True
         try:
             # Check if a task already exists for this donation
             existing_task = db.query(PipelineTask).filter_by(donation_id=donation_id).first()
@@ -99,7 +104,8 @@ class TaskManager:
             logger.error(f"Error creating pipeline task for donation_id={donation_id}: {str(e)}\n{traceback.format_exc()}")
             raise
         finally:
-            db.close()
+            if should_close_db:
+                db.close()
     
     def _run_commission_task_directly(self, task_id: str, donation_id: int, task_data: Dict[str, Any]):
         """
