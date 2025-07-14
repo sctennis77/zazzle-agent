@@ -5,6 +5,7 @@ import { ProductCard } from './ProductCard';
 import { ProductModal } from './ProductModal';
 import { CommissionStatusBanner } from './CommissionStatusBanner';
 import { InProgressProductCard } from './InProgressProductCard';
+import { CompletedProductCard } from './CompletedProductCard';
 import CommissionModal from '../common/CommissionModal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
@@ -22,12 +23,38 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [activeTasks, setActiveTasks] = useState<Task[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<Map<string, { task: Task; completedAt: number; transitioning: boolean }>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
   const [websocketError, setWebsocketError] = useState<string | null>(null);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
+  const [justCompletedIds, setJustCompletedIds] = useState<Set<number>>(new Set());
+  
+  // Cleanup completed tasks after a maximum time to prevent them from getting stuck
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      setCompletedTasks(prev => {
+        const newMap = new Map(prev);
+        let hasChanges = false;
+        
+        for (const [taskId, taskData] of newMap.entries()) {
+          // Remove tasks that have been in completed state for more than 10 seconds
+          if (now - taskData.completedAt > 10000) {
+            newMap.delete(taskId);
+            hasChanges = true;
+            console.warn('Removing stuck completed task:', taskId);
+          }
+        }
+        
+        return hasChanges ? newMap : prev;
+      });
+    }, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(cleanupInterval);
+  }, []);
   const [fabAnimation, setFabAnimation] = useState(false);
   const [failedTask, setFailedTask] = useState<Task | null>(null);
   const [showFailedModal, setShowFailedModal] = useState(false);
@@ -128,20 +155,71 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             return updatedTasks;
           });
           if (message.data.status === 'completed') {
-            console.log('Task completed, refreshing product list...');
+            // Prevent duplicate processing
+            setCompletedTasks(prev => {
+              if (prev.has(message.task_id)) {
+                return prev; // Already processing this task
+              }
+              
+              // Create the completed task data
+              const completedTaskData = {
+                task_id: message.task_id,
+                status: 'completed',
+                ...message.data,
+                justCompleted: true,
+                completedAt: Date.now()
+              };
+              
+              // Add to completed tasks immediately
+              const newMap = new Map(prev);
+              newMap.set(message.task_id, {
+                task: completedTaskData as Task,
+                completedAt: Date.now(),
+                transitioning: false
+              });
+              return newMap;
+            });
             
-            // Refresh the product list to show the new product
+            // Remove from active tasks
+            setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
+            
+            // Start the transition sequence with a longer delay for smoother experience
             setTimeout(async () => {
               try {
                 await fetchNewProduct();
+                
+                // Start transition animation with longer delay
+                setTimeout(() => {
+                  setCompletedTasks(prev => {
+                    const newMap = new Map(prev);
+                    const taskData = newMap.get(message.task_id);
+                    if (taskData && !taskData.transitioning) {
+                      newMap.set(message.task_id, { ...taskData, transitioning: true });
+                    }
+                    return newMap;
+                  });
+                  
+                  // Remove completed task after transition animation
+                  setTimeout(() => {
+                    setCompletedTasks(prev => {
+                      const newMap = new Map(prev);
+                      newMap.delete(message.task_id);
+                      return newMap;
+                    });
+                  }, 600); // Slightly longer transition
+                }, 500); // Longer delay before starting transition
               } catch (error) {
-                console.error('ProductGrid: Error refreshing products:', error);
+                console.error('Error during completion transition:', error);
+                // Fallback: remove the completed task
+                setTimeout(() => {
+                  setCompletedTasks(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(message.task_id);
+                    return newMap;
+                  });
+                }, 2000);
               }
-            }, 1000);
-            
-            setTimeout(() => {
-              setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
-            }, 7000);
+            }, 800); // Longer initial delay
           }
           // Handle failed commission task
           if (message.data.status === 'failed') {
@@ -226,6 +304,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     }
   };
 
+  // Helper function to check if a product is newly completed
+  const isProductJustCompleted = (product: GeneratedProduct) => {
+    return Array.from(completedTasks.values()).some(
+      ({ task }) => task.task_id === product.reddit_post.post_id
+    );
+  };
+
   const fetchDonationDetails = async (donationId: number) => {
     try {
       // Get all donations and find the one with matching ID
@@ -274,6 +359,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   );
 
   const hasActiveCommissions = inProgressTasks.length > 0;
+  
+
 
   // Notify parent of commission progress state
   useEffect(() => {
@@ -411,21 +498,30 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
               onCancel={handleCancelTask}
             />
           ))}
+          {/* Completed commission cards (transitioning) */}
+          {Array.from(completedTasks.values()).map(({ task, transitioning }) => (
+            <CompletedProductCard
+              key={task.task_id}
+              task={task}
+              transitioning={transitioning}
+            />
+          ))}
           {/* Generated product cards */}
           {[...products]
             .sort((a, b) => b.product_info.id - a.product_info.id)
             .map((product) => (
-            <ProductCard
-              key={product.product_info.id}
-              product={product}
-              activeTasks={activeTasks}
-              justPublished={justPublishedId === product.product_info.id}
-            />
-          ))}
+              <ProductCard
+                key={product.product_info.id}
+                product={product}
+                activeTasks={activeTasks}
+                justPublished={justPublishedId === product.product_info.id}
+                justCompleted={isProductJustCompleted(product)}
+              />
+            ))}
         </div>
 
         {/* Empty state - simplified */}
-        {products.length === 0 && inProgressTasks.length === 0 && (
+        {products.length === 0 && inProgressTasks.length === 0 && completedTasks.size === 0 && (
           <div className="text-center py-24">
             <div className="text-6xl mb-4">🎨</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Products Yet</h2>
