@@ -54,16 +54,10 @@ export const DonationTierProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Map tier name to icon/color (string names for icons, actual icons used in components)
   const getTierDisplay = (tierName: string) => {
     const tier = tierName.toLowerCase();
-    if (tier === 'sapphire') {
+    if (tier === 'diamond') {
+      return { name: 'Diamond', icon: 'FaCrown', color: 'text-purple-600', bgColor: 'bg-purple-100', borderColor: 'border-purple-200', display_name: 'Diamond' };
+    } else if (tier === 'sapphire') {
       return { name: 'Sapphire', icon: 'FaCrown', color: 'text-blue-600', bgColor: 'bg-blue-100', borderColor: 'border-blue-200', display_name: 'Sapphire' };
-    } else if (tier === 'ruby') {
-      return { name: 'Ruby', icon: 'FaCrown', color: 'text-red-600', bgColor: 'bg-red-100', borderColor: 'border-red-200', display_name: 'Ruby' };
-    } else if (tier === 'topaz') {
-      return { name: 'Topaz', icon: 'FaCrown', color: 'text-yellow-500', bgColor: 'bg-yellow-100', borderColor: 'border-yellow-200', display_name: 'Topaz' };
-    } else if (tier === 'emerald') {
-      return { name: 'Emerald', icon: 'FaCrown', color: 'text-green-600', bgColor: 'bg-green-100', borderColor: 'border-green-200', display_name: 'Emerald' };
-    } else if (tier === 'platinum') {
-      return { name: 'Platinum', icon: 'FaCrown', color: 'text-gray-700', bgColor: 'bg-gray-200', borderColor: 'border-gray-300', display_name: 'Platinum' };
     } else if (tier === 'gold') {
       return { name: 'Gold', icon: 'FaStar', color: 'text-yellow-600', bgColor: 'bg-yellow-100', borderColor: 'border-yellow-200', display_name: 'Gold' };
     } else if (tier === 'silver') {

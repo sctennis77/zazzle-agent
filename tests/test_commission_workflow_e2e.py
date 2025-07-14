@@ -454,7 +454,7 @@ class TestCommissionWorkflowIntegration:
                 amount_usd=Decimal('25.00'),
                 currency="usd",
                 status=DonationStatus.SUCCEEDED.value,
-                tier=DonationTier.PLATINUM,
+                tier=DonationTier.SAPPHIRE,
                 customer_email="stripe@test.com",
                 customer_name="Stripe Test",
                 subreddit_id=sample_subreddit.id,
@@ -488,7 +488,7 @@ class TestCommissionWorkflowIntegration:
                 amount_usd=Decimal('25.00'),
                 currency="usd",
                 status=DonationStatus.SUCCEEDED.value,
-                tier=DonationTier.PLATINUM,
+                tier=DonationTier.SAPPHIRE,
                 customer_email="manager@test.com",
                 customer_name="Manager Test",
                 subreddit_id=sample_subreddit.id,
@@ -755,9 +755,8 @@ class TestManualCommissionWorkflowE2E:
         test_cases = [
             (5.0, "silver"),
             (15.0, "gold"), 
-            (25.0, "platinum"),
-            (50.0, "emerald"),
-            (100.0, "ruby")
+            (25.0, "sapphire"),
+            (100.0, "diamond")
         ]
 
         # Mock the request object for admin secret check

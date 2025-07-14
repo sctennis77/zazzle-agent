@@ -32,15 +32,12 @@ logger = get_logger(__name__)
 
 # Tier System Constants
 class DonationTier(str, Enum):
-    """Donation tiers based on amount, using earth metals."""
+    """Donation tiers based on amount."""
     BRONZE = "bronze"      # $1
     SILVER = "silver"      # $5
     GOLD = "gold"          # $10
-    PLATINUM = "platinum"  # $25
-    EMERALD = "emerald"    # $50
-    TOPAZ = "topaz"        # $75
-    RUBY = "ruby"          # $100
-    SAPPHIRE = "sapphire"  # $250
+    SAPPHIRE = "sapphire"  # $25
+    DIAMOND = "diamond"    # $100
 
 
 # Tier amount mappings
@@ -48,11 +45,8 @@ TIER_AMOUNTS = {
     DonationTier.BRONZE: Decimal("1.00"),
     DonationTier.SILVER: Decimal("5.00"),
     DonationTier.GOLD: Decimal("10.00"),
-    DonationTier.PLATINUM: Decimal("25.00"),
-    DonationTier.EMERALD: Decimal("50.00"),
-    DonationTier.TOPAZ: Decimal("75.00"),
-    DonationTier.RUBY: Decimal("100.00"),
-    DonationTier.SAPPHIRE: Decimal("250.00"),
+    DonationTier.SAPPHIRE: Decimal("25.00"),
+    DonationTier.DIAMOND: Decimal("100.00"),
 }
 
 # Commission type minimum tier requirements
@@ -213,6 +207,7 @@ class ProductInfoSchema(BaseModel):
     prompt_version: str
     product_type: str
     design_description: Optional[str] = None
+    image_quality: str = "standard"
     available_actions: Optional[Dict[str, int]] = (
         None  # Maps action_type to remaining count
     )
@@ -371,6 +366,7 @@ class PipelineConfig:
     zazzle_tracking_code: str
     zazzle_affiliate_id: str = os.getenv("ZAZZLE_AFFILIATE_ID", "")
     prompt_version: str = "1.0.0"
+    image_quality: str = "standard"
 
     def log(self) -> None:
         """
@@ -553,6 +549,7 @@ class ProductInfo:
     image_title: Optional[str] = None
     image_local_path: Optional[str] = None
     affiliate_link: Optional[str] = None
+    image_quality: str = "standard"
 
     def log(self) -> None:
         """
@@ -728,6 +725,7 @@ class DesignInstructions:
     template_id: Optional[str] = None
     model: Optional[str] = None
     prompt_version: Optional[str] = None
+    image_quality: str = "standard"
 
 
 @dataclass
