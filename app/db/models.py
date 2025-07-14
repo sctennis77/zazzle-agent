@@ -113,6 +113,7 @@ class Donation(Base):
     post_id = Column(String(32), nullable=True, index=True)  # Reddit post ID for commissioning specific posts
     commission_message = Column(Text, nullable=True)  # Optional message to display with commission badge
     source = Column(Enum(SourceType, name="source_type"), nullable=True)  # 'stripe' or 'manual' or null
+    stripe_refund_id = Column(String(255), nullable=True, index=True)  # Stripe refund ID if refunded
 
     # Relationships
     subreddit = relationship("Subreddit", back_populates="donations")

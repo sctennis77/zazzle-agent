@@ -29,6 +29,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
   const [fabAnimation, setFabAnimation] = useState(false);
+  const [failedTask, setFailedTask] = useState<Task | null>(null);
+  const [showFailedModal, setShowFailedModal] = useState(false);
+  const [failedDonation, setFailedDonation] = useState<any>(null);
 
   // Handle query parameter for opening specific product
   useEffect(() => {
@@ -70,7 +73,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     
     return () => {
       if (wsRef.current) {
-        wsRef.current.close();
+        // Only close if open or connecting, and suppress onclose to avoid browser warning
+        if (
+          wsRef.current.readyState === WebSocket.OPEN ||
+          wsRef.current.readyState === WebSocket.CONNECTING
+        ) {
+          wsRef.current.onclose = null;
+          wsRef.current.close();
+        }
       }
     };
   }, []);
@@ -133,6 +143,21 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
               setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
             }, 7000);
           }
+          // Handle failed commission task
+          if (message.data.status === 'failed') {
+            setFailedTask({
+              task_id: message.task_id,
+              status: message.data.status || 'failed',
+              donation_id: message.data.donation_id || 0,
+              ...message.data
+            } as Task);
+            setShowFailedModal(true);
+            
+            // Fetch donation details for refund information
+            if (message.data.donation_id) {
+              fetchDonationDetails(message.data.donation_id);
+            }
+          }
         } else if (message.type === 'task_created') {
           setActiveTasks(prevTasks => dedupeTasks([message.task_info, ...prevTasks]));
           // Subscribe to the new task
@@ -161,8 +186,12 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       }
     };
     ws.onerror = (error) => {
-      setWebsocketError('WebSocket connection failed. Live updates are unavailable.');
-      console.error('WebSocket error:', error);
+      // Only show/log the error if there are active tasks (i.e., user expects live updates)
+      if (activeTasks.length > 0) {
+        setWebsocketError('WebSocket connection failed. Live updates are unavailable.');
+        console.error('WebSocket error:', error);
+      }
+      // Otherwise, suppress the error
     };
     ws.onclose = (event) => {
       console.log('WebSocket disconnected:', event);
@@ -194,6 +223,22 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       await refreshProducts();
     } catch (error) {
       console.error('Failed to fetch new product:', error);
+    }
+  };
+
+  const fetchDonationDetails = async (donationId: number) => {
+    try {
+      // Get all donations and find the one with matching ID
+      const response = await fetch(`${API_BASE}/api/donations`);
+      if (response.ok) {
+        const donations = await response.json();
+        const donation = donations.find((d: any) => d.id === donationId);
+        if (donation) {
+          setFailedDonation(donation);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch donation details:', error);
     }
   };
 
@@ -322,6 +367,36 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       )}
       {websocketError && (
         <div className="bg-red-100 text-red-700 px-4 py-2 text-center">{websocketError}</div>
+      )}
+      {/* Error Modal for Failed Commission Task */}
+      {showFailedModal && failedTask && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Commission Failed</h2>
+            <p className="mb-4">
+              Clouvel ran into unexpected issues processing this commission.<br/>
+              {failedDonation ? (
+                <span className="font-semibold">
+                  Your donation {failedDonation.customer_email} ({failedDonation.stripe_payment_intent_id}) has been fully refunded.
+                </span>
+              ) : (
+                <span className="font-semibold">
+                  Your donation has been fully refunded.
+                </span>
+              )}
+              <br/>Please try supporting Clouvel again.
+            </p>
+            <button
+              className="mt-4 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={() => {
+                setShowFailedModal(false);
+                setFailedDonation(null);
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
       {/* Removed sticky header banner for active commissions - will try something different later */}
 

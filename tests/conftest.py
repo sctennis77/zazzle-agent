@@ -101,13 +101,25 @@ def patch_database():
     # Set testing environment variable
     os.environ["TESTING"] = "true"
 
-    # Create a test engine using a file-based database to avoid threading issues
-    test_db_path = Path("/tmp/test_zazzle_agent.db")
+    # Create a test engine using a file-based database for thread safety
+    # SQLite in-memory databases are not thread-safe and can't be shared across threads
+    test_db_path = "/tmp/zazzle_test.db"
     test_engine = create_engine(f"sqlite:///{test_db_path}")
     TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
     # Create all tables from models
     Base.metadata.create_all(bind=test_engine)
+
+    # Clean up test database file after tests
+    import atexit
+    def cleanup_test_db():
+        try:
+            import os
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+        except Exception:
+            pass  # Ignore cleanup errors
+    atexit.register(cleanup_test_db)
 
     # Patch the app's database engine/session to use the test DB
     with (
@@ -120,10 +132,6 @@ def patch_database():
         # Store the test session for use in other fixtures
         patch_database.test_session = TestSessionLocal
         yield
-    
-    # Cleanup: remove the test database file
-    if test_db_path.exists():
-        test_db_path.unlink()
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -199,6 +207,17 @@ def test_output_dir(tmp_path_factory):
     yield test_dir
     # Cleanup after all tests are done
     shutil.rmtree(test_dir)
+
+
+@pytest.fixture
+def db():
+    """Provide a database session for tests."""
+    from app.db.database import SessionLocal
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @pytest.fixture(autouse=True)

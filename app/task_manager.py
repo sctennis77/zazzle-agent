@@ -166,6 +166,11 @@ class TaskManager:
                 if error_message:
                     task.error_message = error_message
                 db.commit()
+                
+                # Handle refund for failed commission tasks
+                if status == "failed" and task.donation_id:
+                    self._handle_failed_commission_refund(db, task, error_message)
+                
                 # Fetch related donation and subreddit for extra info
                 donation = task.donation
                 subreddit = task.subreddit
@@ -204,6 +209,40 @@ class TaskManager:
             logger.error(f"Failed to update task status for task_id={task_id}: {str(e)}\n{traceback.format_exc()}")
         finally:
             db.close()
+    
+    def _handle_failed_commission_refund(self, db: Session, task: PipelineTask, error_message: str):
+        """Handle refund for failed commission tasks."""
+        try:
+            donation = task.donation
+            if not donation:
+                logger.warning(f"No donation found for failed task {task.id}")
+                return
+            
+            # Only refund if this is a commission donation with a Stripe payment
+            if donation.donation_type != "commission" or not donation.stripe_payment_intent_id:
+                logger.info(f"Skipping refund for non-commission or manual donation {donation.id}")
+                return
+            
+            # Only refund if donation was successful (not already failed/refunded)
+            if donation.status != "succeeded":
+                logger.info(f"Skipping refund for donation {donation.id} with status {donation.status}")
+                return
+            
+            # Process refund
+            from app.services.stripe_service import StripeService
+            stripe_service = StripeService()
+            
+            refund_reason = f"Commission failed: {error_message}" if error_message else "Commission processing failed"
+            refund_result = stripe_service.refund_payment_intent(db, donation.stripe_payment_intent_id, refund_reason)
+            
+            if refund_result:
+                logger.info(f"Successfully refunded commission task {task.id} for donation {donation.id} "
+                          f"(amount: ${refund_result['amount_refunded']}, customer: {refund_result['customer_email']})")
+            else:
+                logger.error(f"Failed to refund commission task {task.id} for donation {donation.id}")
+                
+        except Exception as e:
+            logger.error(f"Error handling refund for failed commission task {task.id}: {str(e)}\n{traceback.format_exc()}")
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get task status from the database."""
@@ -315,4 +354,36 @@ class TaskManager:
             
             return result
         finally:
-            db.close() 
+            db.close()
+
+    def handle_task_failure(self, db: Session, task_id: int, error_message: str):
+        """
+        Handle task failure and trigger refund if appropriate.
+        
+        Args:
+            db: Database session
+            task_id: ID of the failed task
+            error_message: Error message describing the failure
+        """
+        try:
+            # Get the task
+            task = db.query(PipelineTask).filter_by(id=task_id).first()
+            if not task:
+                logger.warning(f"Task {task_id} not found for failure handling")
+                return
+            
+            # Update task status to failed
+            task.status = TaskStatus.FAILED.value
+            task.completed_at = datetime.now()
+            task.error_message = error_message
+            db.commit()
+            
+            # Handle refund for failed commission tasks
+            if task.donation_id:
+                self._handle_failed_commission_refund(db, task, error_message)
+            
+            logger.info(f"Handled failure for task {task_id}: {error_message}")
+            
+        except Exception as e:
+            logger.error(f"Error handling task failure for task {task_id}: {str(e)}\n{traceback.format_exc()}")
+            db.rollback() 

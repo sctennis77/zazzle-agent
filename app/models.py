@@ -780,6 +780,7 @@ class DonationStatus(str, Enum):
     FAILED = "failed"
     CANCELED = "canceled"
     PROCESSING = "processing"
+    REFUNDED = "refunded"
 
 
 class DonationRequest(BaseModel):

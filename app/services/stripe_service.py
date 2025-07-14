@@ -535,4 +535,190 @@ class StripeService:
             
         except Exception as e:
             logger.error(f"Error getting donation summary: {str(e)}")
-            raise 
+            raise
+
+    def refund_payment_intent(self, db: Session, payment_intent_id: str, reason: str = "Commission processing failed") -> Optional[Dict]:
+        """
+        Refund a payment intent and update the donation status.
+        
+        Args:
+            db: Database session
+            payment_intent_id: Stripe payment intent ID to refund
+            reason: Reason for the refund (for Stripe metadata)
+            
+        Returns:
+            Dict containing refund information or None if refund failed
+        """
+        try:
+            # First, get the donation to verify it exists and can be refunded
+            donation = db.query(Donation).filter_by(stripe_payment_intent_id=payment_intent_id).first()
+            if not donation:
+                logger.error(f"No donation found for payment intent {payment_intent_id}")
+                return None
+            
+            # Check if donation is already refunded
+            if donation.status == "refunded":
+                logger.info(f"Donation {donation.id} already refunded for payment intent {payment_intent_id}")
+                return {
+                    "refund_id": donation.stripe_refund_id,
+                    "amount_refunded": float(donation.amount_usd),
+                    "status": "already_refunded"
+                }
+            
+            # Check if donation was successful (can only refund successful payments)
+            if donation.status != DonationStatus.SUCCEEDED.value:
+                logger.warning(f"Cannot refund donation {donation.id} with status {donation.status}")
+                return None
+            
+            # Create refund in Stripe
+            refund = stripe.Refund.create(
+                payment_intent=payment_intent_id,
+                metadata={
+                    "reason": reason,
+                    "donation_id": str(donation.id),
+                    "customer_email": donation.customer_email or "unknown"
+                }
+            )
+            
+            # Update donation status in database
+            donation.status = "refunded"
+            donation.stripe_refund_id = refund.id
+            donation.message = f"Refunded: {reason}"
+            db.commit()
+            
+            logger.info(f"Successfully refunded payment intent {payment_intent_id} for donation {donation.id} "
+                      f"(amount: ${donation.amount_usd}, customer: {donation.customer_email})")
+            
+            return {
+                "refund_id": refund.id,
+                "amount_refunded": float(donation.amount_usd),
+                "status": "refunded",
+                "customer_email": donation.customer_email,
+                "customer_name": donation.customer_name
+            }
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error refunding payment intent {payment_intent_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error refunding payment intent {payment_intent_id}: {str(e)}")
+            db.rollback()
+            return None
+
+    def get_refund_status(self, refund_id: str) -> Optional[Dict]:
+        """
+        Get refund status from Stripe.
+        
+        Args:
+            refund_id: Stripe refund ID
+            
+        Returns:
+            Dict containing refund status or None if not found
+        """
+        try:
+            refund = stripe.Refund.retrieve(refund_id)
+            return {
+                "id": refund.id,
+                "amount": refund.amount,
+                "currency": refund.currency,
+                "status": refund.status,
+                "reason": refund.reason,
+                "metadata": refund.metadata,
+                "created": refund.created
+            }
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error retrieving refund {refund_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving refund {refund_id}: {str(e)}")
+            return None
+
+    def refund_donation(self, db: Session, donation_id: int, amount_usd: Optional[float] = None, reason: str = "requested_by_customer") -> Dict:
+        """
+        Refund a donation by donation ID.
+        
+        Args:
+            db: Database session
+            donation_id: Database ID of the donation to refund
+            amount_usd: Optional amount to refund (partial refund). If None, refunds full amount.
+            reason: Reason for the refund (for Stripe metadata)
+            
+        Returns:
+            Dict containing refund result with success status and details
+        """
+        try:
+            # Get the donation
+            donation = db.query(Donation).filter_by(id=donation_id).first()
+            if not donation:
+                return {
+                    "success": False,
+                    "error": f"Donation {donation_id} not found"
+                }
+            
+            # Check if already refunded
+            if donation.status == DonationStatus.REFUNDED.value:
+                return {
+                    "success": False,
+                    "error": f"Donation {donation_id} is already refunded"
+                }
+            
+            # Check if donation can be refunded
+            if donation.status not in [DonationStatus.SUCCEEDED.value]:
+                return {
+                    "success": False,
+                    "error": f"Cannot refund donation with status '{donation.status}'"
+                }
+            
+            # Validate amount for partial refund
+            if amount_usd is not None:
+                if amount_usd <= 0:
+                    return {
+                        "success": False,
+                        "error": "Invalid amount: must be positive"
+                    }
+                if amount_usd > float(donation.amount_usd):
+                    return {
+                        "success": False,
+                        "error": f"Refund amount ${amount_usd} exceeds donation amount ${donation.amount_usd}"
+                    }
+                refund_amount_cents = int(amount_usd * 100)
+            else:
+                refund_amount_cents = int(float(donation.amount_usd) * 100)
+            
+            # Create refund in Stripe
+            refund_params = {
+                "payment_intent": donation.stripe_payment_intent_id,
+                "reason": reason
+            }
+            if amount_usd is not None:
+                refund_params["amount"] = refund_amount_cents
+            
+            refund = stripe.Refund.create(**refund_params)
+            
+            # Update donation in database
+            donation.status = DonationStatus.REFUNDED.value
+            donation.stripe_refund_id = refund.id
+            db.commit()
+            
+            logger.info(f"Successfully refunded donation {donation_id} (refund_id: {refund.id})")
+            
+            return {
+                "success": True,
+                "refund_id": refund.id,
+                "amount_usd": amount_usd or float(donation.amount_usd),
+                "donation_id": donation_id
+            }
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error refunding donation {donation_id}: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Stripe API error: {str(e)}"
+            }
+        except Exception as e:
+            logger.error(f"Database error refunding donation {donation_id}: {str(e)}")
+            db.rollback()
+            return {
+                "success": False,
+                "error": f"Database error: {str(e)}"
+            } 
