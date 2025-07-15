@@ -22,6 +22,27 @@ interface FundraisingData {
   [subreddit: string]: SubredditDonations;
 }
 
+interface SubredditGoal {
+  id: number;
+  subreddit_id: number;
+  subreddit_name: string;
+  goal_amount: number;
+  current_amount: number;
+  status: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+interface FundraisingProgress {
+  overall_raised: number;
+  overall_goal: number;
+  overall_progress_percentage: number;
+  overall_reward: string;
+  subreddit_goals: SubredditGoal[];
+  subreddit_goal_amount: number;
+  subreddit_goal_reward: string;
+}
+
 interface TierSummary {
   count: number;
   amount: number;
@@ -78,9 +99,10 @@ function summarizeLeaderboard(data: FundraisingData): LeaderboardRow[] {
 
 interface Props {
   data: FundraisingData;
+  fundraisingProgress: FundraisingProgress | null;
 }
 
-const DonationsLeaderboardTable: React.FC<Props> = ({ data }) => {
+const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress }) => {
   const [mode, setMode] = useState<'count' | 'amount'>('amount');
   const rows = summarizeLeaderboard(data);
   // Find which tiers are present in the data
@@ -124,7 +146,8 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data }) => {
             {presentTiers.map(tier => (
               <th key={tier} className="text-center px-2 py-2 font-semibold" style={{ color: TIER_COLORS[tier] }}>{TIER_NAMES[tier]}</th>
             ))}
-            <th className="text-right px-2 py-2 font-semibold text-gray-700">Total {mode === 'amount' ? '($)' : '(#)'}</th>
+            <th className="text-right px-2 py-2 font-semibold text-gray-700">{mode === 'amount' ? 'Total / Goal ($)' : 'Total (#)'}</th>
+            {mode === 'amount' && <th className="text-right px-2 py-2 font-semibold text-gray-700">Progress (%)</th>}
           </tr>
         </thead>
         <tbody>
@@ -194,8 +217,40 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data }) => {
                   );
                 })}
                 <td className="text-right px-2 py-2 font-bold text-gray-900">
-                  {mode === 'count' ? totalDisplay : `$${totalDisplay.toFixed(2)}`}
+                  {mode === 'count' 
+                    ? totalDisplay 
+                    : fundraisingProgress 
+                      ? `$${totalDisplay.toFixed(2)} / $${Number(fundraisingProgress.subreddit_goal_amount).toFixed(0)}`
+                      : `$${totalDisplay.toFixed(2)}`
+                  }
                 </td>
+                {mode === 'amount' && fundraisingProgress && (
+                  <td className="text-right px-2 py-2">
+                    {(() => {
+                      const goal = fundraisingProgress.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
+                      const goalAmount = Number(fundraisingProgress.subreddit_goal_amount);
+                      const currentAmount = row.total;
+                      const progressPercentage = Math.min((currentAmount / goalAmount) * 100, 100);
+                      
+                      return (
+                        <div className="flex items-center justify-end space-x-1">
+                          <span className={`font-medium ${
+                            goal?.status === 'completed' 
+                              ? 'text-green-600' 
+                              : progressPercentage >= 50 
+                                ? 'text-blue-600'
+                                : 'text-gray-700'
+                          }`}>
+                            {progressPercentage.toFixed(1)}%
+                          </span>
+                          {goal?.status === 'completed' && (
+                            <span className="text-green-600 text-xs">✓</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                )}
               </tr>
             );
           })}
