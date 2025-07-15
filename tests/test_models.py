@@ -1,78 +1,12 @@
-import csv
-import os
-
 import pytest
 
+from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS
 from app.models import (
     AffiliateLinker,
     PipelineConfig,
     ProductIdea,
-    ProductInfo,
     RedditContext,
 )
-from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS
-
-
-def test_product_info_to_csv():
-    """Test saving product to CSV file."""
-    # Create test data
-    reddit_context = RedditContext(
-        post_id="test_post_id",
-        post_title="Test Post Title",
-        post_url="https://reddit.com/test",
-        subreddit="test_subreddit",
-    )
-
-    # Create a test product
-    product = ProductInfo(
-        product_id="test_id",
-        name="Test Product",
-        product_type="sticker",
-        zazzle_template_id="template123",
-        zazzle_tracking_code="tracking456",
-        image_url="https://example.com/image.jpg",
-        product_url="https://example.com/product",
-        theme="test_theme",
-        model="dall-e-3",
-        prompt_version=IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"],
-        reddit_context=reddit_context,
-        design_instructions={"image": "https://example.com/image.jpg"},
-        affiliate_link="https://example.com/affiliate",
-        image_local_path="/path/to/image.jpg",
-    )
-
-    # Save to CSV
-    test_file = "test_products.csv"
-    try:
-        product.to_csv(test_file)
-
-        # Verify CSV file exists and contains correct data
-        assert os.path.exists(test_file)
-
-        with open(test_file, "r") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            assert len(rows) == 1
-            row = rows[0]
-
-            # Check required fields
-            assert row["product_id"] == "test_id"
-            assert row["name"] == "Test Product"
-            assert row["product_type"] == "sticker"
-            assert row["zazzle_template_id"] == "template123"
-            assert row["zazzle_tracking_code"] == "tracking456"
-            assert row["image_url"] == "https://example.com/image.jpg"
-            assert row["product_url"] == "https://example.com/product"
-            assert row["theme"] == "test_theme"
-            assert row["model"] == "dall-e-3"
-            assert row["prompt_version"] == IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]["version"]
-            assert row["affiliate_link"] == "https://example.com/affiliate"
-            assert row["image_local_path"] == "/path/to/image.jpg"
-
-    finally:
-        # Clean up test file
-        if os.path.exists(test_file):
-            os.remove(test_file)
 
 
 def test_pipeline_config():

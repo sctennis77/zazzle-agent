@@ -95,7 +95,7 @@ def test_get_generated_products_error_handling(client, monkeypatch):
 
 
 def test_cors_allows_allowed_origins(client):
-    """Test CORS allows configured origins."""
+    """Test CORS allows configured origins - prevents debugging nightmares."""
     allowed_origins = [
         "http://localhost:5173",
         "http://localhost:5174",
@@ -120,7 +120,7 @@ def test_cors_allows_allowed_origins(client):
 
 
 def test_cors_blocks_disallowed_origins(client):
-    """Test CORS blocks non-configured origins."""
+    """Test CORS blocks non-configured origins - security check."""
     disallowed_origin = "https://malicious-site.com"
     
     response = client.options(
