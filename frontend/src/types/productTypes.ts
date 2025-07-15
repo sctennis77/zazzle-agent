@@ -13,6 +13,7 @@ export interface DonationInfo {
   tier_min_amount: number;
   donation_amount: number;
   is_anonymous: boolean;
+  source?: string; // 'stripe' or 'manual' or null
 }
 
 export interface CommissionInfo {

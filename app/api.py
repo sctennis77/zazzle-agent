@@ -237,6 +237,7 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                             "is_anonymous": donation.is_anonymous,
                             "donation_type": donation.donation_type,
                             "commission_type": donation.commission_type,
+                            "source": donation.source.value if donation.source else None,
                         }
 
                 # Get subreddit name for reddit context

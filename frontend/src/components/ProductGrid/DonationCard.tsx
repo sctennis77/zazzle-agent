@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
 import { FaCrown, FaStar, FaGem, FaHeart, FaArrowLeft, FaHeart as FaSupport } from 'react-icons/fa';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
+import logo from '../../assets/logo.png';
 
 interface DonationCardProps {
   product: GeneratedProduct;
@@ -61,6 +62,9 @@ export const DonationCard: React.FC<DonationCardProps> = ({
   const commissionTierDisplay = getTierDisplay(commissionTierName);
   const CommissionIconComponent = commissionTierDisplay && commissionTierDisplay.icon ? 
     iconMap[commissionTierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart : FaHeart;
+  
+  // Check if this is a manual commission to show clouvel icon instead of tier badge
+  const isManualCommission = product.product_info.donation_info?.source === 'manual';
 
   // Helper for aligned row with hover message
   const renderRow = (
@@ -112,12 +116,14 @@ export const DonationCard: React.FC<DonationCardProps> = ({
       <div className="px-6 pt-6 pb-2">
         <div className="text-xs text-gray-500 mb-2 font-semibold tracking-wide">Commissioned by</div>
         {commissionInfo && renderRow(
-          <CommissionIconComponent size={15} className={commissionTierDisplay.color} />, 
+          isManualCommission ? 
+            <img src={logo} alt="Clouvel" className="w-4 h-4 rounded-full" /> : 
+            <CommissionIconComponent size={15} className={commissionTierDisplay.color} />, 
           commissionInfo.is_anonymous ? 'Anonymous' : commissionInfo.reddit_username || '-',
           commissionInfo.donation_amount,
           product.pipeline_run.end_time,
           commissionInfo.commission_message,
-          commissionTierDisplay.color,
+          isManualCommission ? 'text-blue-600' : commissionTierDisplay.color,
           'bg-blue-50 border border-blue-100',
           'commission'
         )}
