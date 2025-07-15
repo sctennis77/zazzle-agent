@@ -5,6 +5,6 @@ This package contains service modules that provide business logic
 and functionality for various application features.
 """
 
-from .image_processor import ImageProcessor, ImageProcessingError
+from .image_processor import ImageProcessingError, ImageProcessor
 
-__all__ = ["ImageProcessor", "ImageProcessingError"] 
+__all__ = ["ImageProcessor", "ImageProcessingError"]

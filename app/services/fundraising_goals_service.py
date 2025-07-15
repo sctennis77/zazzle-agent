@@ -62,9 +62,7 @@ class FundraisingGoalsService:
         for goal in goals:
             # Calculate current progress dynamically
             current_amount = (
-                self.session.query(
-                    func.coalesce(func.sum(Donation.amount_usd), 0)
-                )
+                self.session.query(func.coalesce(func.sum(Donation.amount_usd), 0))
                 .filter(
                     and_(
                         Donation.subreddit_id == goal.subreddit_id,
@@ -99,8 +97,9 @@ class FundraisingGoalsService:
             self.session.query(Subreddit)
             .filter(
                 ~Subreddit.id.in_(
-                    self.session.query(SubredditFundraisingGoal.subreddit_id)
-                    .filter(SubredditFundraisingGoal.status == "active")
+                    self.session.query(SubredditFundraisingGoal.subreddit_id).filter(
+                        SubredditFundraisingGoal.status == "active"
+                    )
                 )
             )
             .all()
@@ -161,9 +160,7 @@ class FundraisingGoalsService:
         for goal in goals:
             # Calculate current progress
             current_amount = (
-                self.session.query(
-                    func.coalesce(func.sum(Donation.amount_usd), 0)
-                )
+                self.session.query(func.coalesce(func.sum(Donation.amount_usd), 0))
                 .filter(
                     and_(
                         Donation.subreddit_id == goal.subreddit_id,
@@ -181,9 +178,7 @@ class FundraisingGoalsService:
                 goal.completed_at = func.now()
                 goal.current_amount = current_amount
 
-                subreddit = self.session.query(Subreddit).get(
-                    goal.subreddit_id
-                )
+                subreddit = self.session.query(Subreddit).get(goal.subreddit_id)
                 completed_goals.append(
                     SubredditFundraisingGoalSchema(
                         id=goal.id,

@@ -13,6 +13,7 @@ interface ProductCardProps {
   product: GeneratedProduct;
   activeTasks?: Task[];
   justPublished?: boolean;
+  justCompleted?: boolean;
 }
 
 // Map icon string to actual icon component
@@ -23,7 +24,7 @@ const iconMap = {
   heart: FaHeart,
 };
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [], justPublished }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [], justPublished, justCompleted }) => {
   const [showModal, setShowModal] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
@@ -133,7 +134,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   return (
     <>
       {!isFlipped ? (
-        <div className="group relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col border border-gray-100 h-full overflow-hidden transform hover:-translate-y-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-50">
+        <div className={`group relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col border border-gray-100 h-full overflow-hidden transform hover:-translate-y-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-50 ${
+          justCompleted ? 'product-appear' : ''
+        }`}>
           {/* Image Container with Enhanced Styling */}
           <div className="relative w-full aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
             {/* Loading State */}

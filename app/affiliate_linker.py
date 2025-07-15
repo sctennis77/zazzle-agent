@@ -105,9 +105,7 @@ class ZazzleAffiliateLinker:
             return affiliate_link
         except Exception as e:
             logger.error(f"Error generating affiliate link: {e}")
-            raise ZazzleAffiliateLinkerError(
-                f"Failed to generate affiliate link: {e}"
-            )
+            raise ZazzleAffiliateLinkerError(f"Failed to generate affiliate link: {e}")
 
     async def generate_links_batch(
         self, products: List[ProductInfo]

@@ -89,3 +89,8 @@ The application uses a task-based commission system:
 - `pyproject.toml`: Poetry dependencies and tool configuration
 - `Makefile`: Comprehensive command reference for all operations
 - `docker-compose.yml`: Multi-service containerized deployment
+
+## AI Interaction Guidelines
+- Only ask for permission to perform actions if it is absolutely necessary
+- Manage context intelligently, including clearing it if no longer needed
+- Compact context as appropriate to maintain efficiency

@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.db.database import SessionLocal
 from app.redis_service import redis_service
 from app.services.scheduler_service import SchedulerService
 from app.task_manager import TaskManager
@@ -25,7 +25,7 @@ class BackgroundScheduler:
     async def initialize(self) -> None:
         """Initialize the scheduler with dependencies."""
         # Import here to avoid circular imports
-        from app.task_manager import task_manager
+        from app.api import task_manager
 
         self.task_manager = task_manager
         self.scheduler_service = SchedulerService(redis_service, task_manager)
@@ -55,7 +55,7 @@ class BackgroundScheduler:
 
     async def _check_and_run_scheduled_commission(self) -> None:
         """Check if we should run a scheduled commission and execute it."""
-        with self._get_db_session() as db:
+        async with self._get_db_session() as db:
             try:
                 # Check if we should run
                 should_run = (

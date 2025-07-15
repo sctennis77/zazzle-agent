@@ -23,7 +23,7 @@ from openai import OpenAI
 
 from app.models import PipelineConfig, ProductIdea, ProductInfo, RedditContext
 from app.utils.logging_config import get_logger
-from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
+from app.utils.openai_usage_tracker import log_session_summary, track_openai_call
 
 load_dotenv()
 
@@ -61,16 +61,15 @@ class ContentGenerator:
     def _make_openai_call(self, prompt: str) -> str:
         """
         Make an OpenAI API call with tracking.
-        
+
         Args:
             prompt: The prompt to send to OpenAI
-            
+
         Returns:
             str: The response content
         """
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo", 
-            messages=[{"role": "user", "content": prompt}]
+            model="gpt-3.5-turbo", messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content.strip()
 
@@ -93,20 +92,20 @@ class ContentGenerator:
         """
         try:
             prompt = f"Create a content for the product: {product_name}"
-            
+
             logger.info(f"Generating content for product: {product_name}")
             content = self._make_openai_call(prompt)
-            
+
             try:
                 # Validate that the content is valid JSON
                 json.loads(content)
             except json.JSONDecodeError:
                 logger.error(f"Generated content is not valid JSON for {product_name}")
                 return "Error generating content"
-            
+
             logger.info(f"Successfully generated content for {product_name}")
             return content
-            
+
         except Exception as e:
             logger.error(f"Error generating content for {product_name}: {e}")
             return "Error generating content"
@@ -135,7 +134,7 @@ class ContentGenerator:
                 processed_products.append(product)
             except Exception as e:
                 logger.error(f"Error processing product {product.product_id}: {e}")
-        
+
         # Log session summary after batch processing
         log_session_summary()
         return processed_products

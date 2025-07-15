@@ -5,15 +5,16 @@ Revises: 3d8aa5ef0b11
 Create Date: 2025-07-14 19:53:24.564978
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'cac58179b196'
-down_revision: Union[str, Sequence[str], None] = '3d8aa5ef0b11'
+revision: str = "cac58179b196"
+down_revision: Union[str, Sequence[str], None] = "3d8aa5ef0b11"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,51 +24,105 @@ def upgrade() -> None:
     # Define the initial subreddit list from the codebase
     initial_subreddits = [
         # Nature & Outdoors
-        "nature", "earthporn", "landscapephotography", "hiking", "camping", 
-        "gardening", "plants", "succulents",
+        "nature",
+        "earthporn",
+        "landscapephotography",
+        "hiking",
+        "camping",
+        "gardening",
+        "plants",
+        "succulents",
         # Space & Science
-        "space", "astrophotography", "nasa", "science", "physics", "chemistry", "biology",
+        "space",
+        "astrophotography",
+        "nasa",
+        "science",
+        "physics",
+        "chemistry",
+        "biology",
         # Sports & Recreation
-        "golf", "soccer", "basketball", "tennis", "baseball", "hockey", 
-        "fishing", "surfing", "skiing", "rockclimbing",
+        "golf",
+        "soccer",
+        "basketball",
+        "tennis",
+        "baseball",
+        "hockey",
+        "fishing",
+        "surfing",
+        "skiing",
+        "rockclimbing",
         # Animals & Pets
-        "aww", "cats", "dogs", "puppies", "kittens", "wildlife", "birding", "aquariums",
+        "aww",
+        "cats",
+        "dogs",
+        "puppies",
+        "kittens",
+        "wildlife",
+        "birding",
+        "aquariums",
         # Food & Cooking
-        "food", "foodporn", "cooking", "baking", "coffee", "tea", "wine",
+        "food",
+        "foodporn",
+        "cooking",
+        "baking",
+        "coffee",
+        "tea",
+        "wine",
         # Art & Design
-        "art", "design", "architecture", "interiordesign", "streetart", "digitalart",
+        "art",
+        "design",
+        "architecture",
+        "interiordesign",
+        "streetart",
+        "digitalart",
         # Technology & Gaming
-        "programming", "gaming", "pcgaming", "retrogaming", "cyberpunk", "futurology",
+        "programming",
+        "gaming",
+        "pcgaming",
+        "retrogaming",
+        "cyberpunk",
+        "futurology",
         # Travel & Culture
-        "travel", "backpacking", "photography", "cityporn", "history",
+        "travel",
+        "backpacking",
+        "photography",
+        "cityporn",
+        "history",
         # Lifestyle & Wellness
-        "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan",
+        "fitness",
+        "yoga",
+        "meditation",
+        "minimalism",
+        "sustainability",
+        "vegan",
     ]
-    
+
     # Create table reference
-    subreddits_table = sa.table('subreddits',
-        sa.column('subreddit_name', sa.String),
-        sa.column('display_name', sa.String),
-        sa.column('over18', sa.Boolean),
-        sa.column('spoilers_enabled', sa.Boolean),
-        sa.column('created_at', sa.DateTime),
-        sa.column('updated_at', sa.DateTime)
+    subreddits_table = sa.table(
+        "subreddits",
+        sa.column("subreddit_name", sa.String),
+        sa.column("display_name", sa.String),
+        sa.column("over18", sa.Boolean),
+        sa.column("spoilers_enabled", sa.Boolean),
+        sa.column("created_at", sa.DateTime),
+        sa.column("updated_at", sa.DateTime),
     )
-    
+
     # Insert initial subreddits
     from datetime import datetime, timezone
+
     current_time = datetime.now(timezone.utc)
-    
+
     # Only insert if subreddits don't already exist
     connection = op.get_bind()
-    
+
     for subreddit_name in initial_subreddits:
         # Check if subreddit already exists
         result = connection.execute(
             sa.text("SELECT COUNT(*) FROM subreddits WHERE subreddit_name = :name"),
-            {"name": subreddit_name}
+            {"name": subreddit_name},
         ).scalar()
-        
+
         if result == 0:
             op.execute(
                 subreddits_table.insert().values(
@@ -76,7 +131,7 @@ def upgrade() -> None:
                     over18=False,
                     spoilers_enabled=False,
                     created_at=current_time,
-                    updated_at=current_time
+                    updated_at=current_time,
                 )
             )
 
@@ -86,30 +141,82 @@ def downgrade() -> None:
     # Define the same subreddit list for removal
     initial_subreddits = [
         # Nature & Outdoors
-        "nature", "earthporn", "landscapephotography", "hiking", "camping", 
-        "gardening", "plants", "succulents",
+        "nature",
+        "earthporn",
+        "landscapephotography",
+        "hiking",
+        "camping",
+        "gardening",
+        "plants",
+        "succulents",
         # Space & Science
-        "space", "astrophotography", "nasa", "science", "physics", "chemistry", "biology",
+        "space",
+        "astrophotography",
+        "nasa",
+        "science",
+        "physics",
+        "chemistry",
+        "biology",
         # Sports & Recreation
-        "golf", "soccer", "basketball", "tennis", "baseball", "hockey", 
-        "fishing", "surfing", "skiing", "rockclimbing",
+        "golf",
+        "soccer",
+        "basketball",
+        "tennis",
+        "baseball",
+        "hockey",
+        "fishing",
+        "surfing",
+        "skiing",
+        "rockclimbing",
         # Animals & Pets
-        "aww", "cats", "dogs", "puppies", "kittens", "wildlife", "birding", "aquariums",
+        "aww",
+        "cats",
+        "dogs",
+        "puppies",
+        "kittens",
+        "wildlife",
+        "birding",
+        "aquariums",
         # Food & Cooking
-        "food", "foodporn", "cooking", "baking", "coffee", "tea", "wine",
+        "food",
+        "foodporn",
+        "cooking",
+        "baking",
+        "coffee",
+        "tea",
+        "wine",
         # Art & Design
-        "art", "design", "architecture", "interiordesign", "streetart", "digitalart",
+        "art",
+        "design",
+        "architecture",
+        "interiordesign",
+        "streetart",
+        "digitalart",
         # Technology & Gaming
-        "programming", "gaming", "pcgaming", "retrogaming", "cyberpunk", "futurology",
+        "programming",
+        "gaming",
+        "pcgaming",
+        "retrogaming",
+        "cyberpunk",
+        "futurology",
         # Travel & Culture
-        "travel", "backpacking", "photography", "cityporn", "history",
+        "travel",
+        "backpacking",
+        "photography",
+        "cityporn",
+        "history",
         # Lifestyle & Wellness
-        "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan",
+        "fitness",
+        "yoga",
+        "meditation",
+        "minimalism",
+        "sustainability",
+        "vegan",
     ]
-    
+
     # Remove only the initial subreddits (in case custom ones were added)
     for subreddit_name in initial_subreddits:
         op.execute(
             sa.text("DELETE FROM subreddits WHERE subreddit_name = :name"),
-            {"name": subreddit_name}
+            {"name": subreddit_name},
         )

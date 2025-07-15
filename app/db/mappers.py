@@ -43,8 +43,11 @@ def reddit_context_to_db(
 ) -> ORMRedditPost:
     # Use SubredditService to get or create the Subreddit ORM instance by name
     from app.subreddit_service import get_subreddit_service
+
     subreddit_service = get_subreddit_service()
-    subreddit_obj = subreddit_service.get_or_create_subreddit(reddit_context.subreddit, db)
+    subreddit_obj = subreddit_service.get_or_create_subreddit(
+        reddit_context.subreddit, db
+    )
     subreddit_id = subreddit_obj.id if subreddit_obj else None
     return ORMRedditPost(
         pipeline_run_id=pipeline_run_id,
@@ -72,7 +75,11 @@ def db_to_reddit_context(orm_reddit_post: ORMRedditPost) -> RedditContext:
         post_id=orm_reddit_post.post_id,
         post_title=orm_reddit_post.title,
         post_url=orm_reddit_post.url,
-        subreddit=orm_reddit_post.subreddit.subreddit_name if orm_reddit_post.subreddit else None,
+        subreddit=(
+            orm_reddit_post.subreddit.subreddit_name
+            if orm_reddit_post.subreddit
+            else None
+        ),
         post_content=orm_reddit_post.content,
         permalink=orm_reddit_post.permalink,
         author=orm_reddit_post.author,

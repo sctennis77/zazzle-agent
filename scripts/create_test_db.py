@@ -15,7 +15,15 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.db.database import SessionLocal, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, Subreddit, Donation, SponsorTier, Sponsor
+from app.db.models import (
+    Donation,
+    PipelineRun,
+    ProductInfo,
+    RedditPost,
+    Sponsor,
+    SponsorTier,
+    Subreddit,
+)
 from app.pipeline_status import PipelineStatus
 
 
@@ -47,7 +55,7 @@ def create_test_database(db_path=None):
             description="A test subreddit for testing purposes",
             subscribers=1000,
             over18=False,
-            spoilers_enabled=False
+            spoilers_enabled=False,
         )
         db.add(subreddit)
         db.commit()
@@ -58,21 +66,21 @@ def create_test_database(db_path=None):
             name="Bronze",
             min_amount=5.00,
             benefits="Basic sponsorship benefits",
-            description="Bronze level sponsorship"
+            description="Bronze level sponsorship",
         )
         silver_tier = SponsorTier(
-            name="Silver", 
+            name="Silver",
             min_amount=10.00,
             benefits="Enhanced sponsorship benefits",
-            description="Silver level sponsorship"
+            description="Silver level sponsorship",
         )
         gold_tier = SponsorTier(
             name="Gold",
             min_amount=25.00,
-            benefits="Premium sponsorship benefits", 
-            description="Gold level sponsorship"
+            benefits="Premium sponsorship benefits",
+            description="Gold level sponsorship",
         )
-        
+
         db.add_all([bronze_tier, silver_tier, gold_tier])
         db.commit()
         db.refresh(bronze_tier)
@@ -92,14 +100,14 @@ def create_test_database(db_path=None):
             subreddit_id=subreddit.id,
             reddit_username="test_sponsor",
             is_anonymous=False,
-            donation_type="sponsor"
+            donation_type="sponsor",
         )
-        
+
         commission_donation = Donation(
             stripe_payment_intent_id="pi_test_commission_456",
             amount_cents=2500,  # $25.00
             amount_usd=25.00,
-            currency="usd", 
+            currency="usd",
             status="succeeded",
             customer_email="commissioner@test.com",
             customer_name="Test Commissioner",
@@ -109,9 +117,9 @@ def create_test_database(db_path=None):
             is_anonymous=False,
             donation_type="commission",
             post_id="test_post_123",
-            commission_message="Commissioned by a generous supporter!"
+            commission_message="Commissioned by a generous supporter!",
         )
-        
+
         db.add_all([sponsor_donation, commission_donation])
         db.commit()
         db.refresh(sponsor_donation)
@@ -122,9 +130,9 @@ def create_test_database(db_path=None):
             donation_id=sponsor_donation.id,
             tier_id=silver_tier.id,
             subreddit_id=subreddit.id,
-            status="active"
+            status="active",
         )
-        
+
         db.add(sponsor)
         db.commit()
         db.refresh(sponsor)
@@ -139,7 +147,7 @@ def create_test_database(db_path=None):
             metrics={"products_generated": 3},
             duration=120,
             retry_count=0,
-            version="1.0.0"
+            version="1.0.0",
         )
         db.add(pipeline_run)
         db.commit()
@@ -157,7 +165,7 @@ def create_test_database(db_path=None):
             pipeline_run_id=pipeline_run.id,
             comment_summary="Test comment summary",
             author="test_user",
-            num_comments=50
+            num_comments=50,
         )
         db.add(reddit_post)
         db.commit()

@@ -3,9 +3,10 @@
 Test script to simulate a Stripe webhook event for successful checkout session completion.
 """
 
-import requests
 import json
 import time
+
+import requests
 
 # Mock checkout session data
 checkout_session_data = {
@@ -22,9 +23,9 @@ checkout_session_data = {
         "message": "",
         "customer_name": "Test User",
         "reddit_username": "",
-        "is_anonymous": "false"
+        "is_anonymous": "false",
     },
-    "status": "complete"
+    "status": "complete",
 }
 
 # Mock webhook event
@@ -32,23 +33,22 @@ webhook_event = {
     "id": "evt_test_1234567890",
     "object": "event",
     "type": "checkout.session.completed",
-    "data": {
-        "object": checkout_session_data
-    }
+    "data": {"object": checkout_session_data},
 }
+
 
 def test_webhook():
     """Test the webhook endpoint with a mock event."""
     url = "http://localhost:8000/api/donations/webhook"
-    
+
     # For testing, we'll skip signature verification by commenting out the signature check
     # In production, you would need a proper signature
-    
+
     headers = {
         "Content-Type": "application/json",
-        "stripe-signature": "test_signature"  # Mock signature for testing
+        "stripe-signature": "test_signature",  # Mock signature for testing
     }
-    
+
     try:
         response = requests.post(url, json=webhook_event, headers=headers)
         print(f"Response status: {response.status_code}")
@@ -58,10 +58,11 @@ def test_webhook():
         print(f"Error: {e}")
         return False
 
+
 if __name__ == "__main__":
     print("Testing webhook with mock checkout session completion...")
     success = test_webhook()
     if success:
         print("Webhook test successful!")
     else:
-        print("Webhook test failed!") 
+        print("Webhook test failed!")
