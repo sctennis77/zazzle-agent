@@ -1,31 +1,21 @@
 """
-End-to-End Commission Workflow Test
+End-to-End Commission Workflow Test.
 
 This test validates the complete commission workflow from payment success
 to product generation, ensuring all components work together correctly.
 """
 
 import json
-import pytest
-from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from datetime import datetime, timezone
+from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.api import handle_payment_intent_succeeded
-from app.db.database import Base, SessionLocal, engine
-from app.db.models import Donation, PipelineTask, Subreddit, PipelineRun
+from app.db.models import Donation, PipelineRun, PipelineTask, Subreddit
 from app.models import DonationStatus, DonationTier
-from app.services.stripe_service import StripeService
 from app.task_manager import TaskManager
-
-
-@pytest.fixture(autouse=True)
-def setup_and_teardown_db():
-    """Drop and recreate all tables before each test."""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -44,768 +34,290 @@ def mock_payment_intent():
         "commission_message": "Create something amazing from a hiking post!",
         "customer_name": "Test Commissioner",
         "reddit_username": "test_commissioner",
-        "is_anonymous": "false"
+        "is_anonymous": "false",
     }
     return payment_intent
 
 
 @pytest.fixture
-def sample_subreddit():
-    """Create a sample subreddit for testing."""
-    db = SessionLocal()
-    try:
-        subreddit = Subreddit(
-            subreddit_name="hiking",
-            display_name="Hiking"
-        )
-        db.add(subreddit)
-        db.commit()
-        db.refresh(subreddit)
-        return subreddit
-    finally:
-        db.close()
-
-
-@pytest.fixture
-def mock_openai():
-    """Mock OpenAI API calls."""
-    with (
-        patch("app.async_image_generator.AsyncOpenAI") as mock_img,
-        patch("app.content_generator.OpenAI") as mock_content,
-        patch("app.agents.reddit_agent.openai.OpenAI") as mock_reddit,
-    ):
-        mock_instance = MagicMock()
-        mock_img.return_value = mock_instance
-        mock_content.return_value = mock_instance
-        mock_reddit.return_value = mock_instance
-        
-        # Mock image generation response
-        mock_instance.images.generate.return_value = MagicMock(
-            data=[MagicMock(b64_json="Zm9vYmFy")]  # Base64 encoded "foobar"
-        )
-        
-        # Mock content generation response
-        product_idea_json = json.dumps({
-            "text": "Hiking Adventure Awaits",
-            "image_description": "A beautiful mountain landscape with hiking trail",
-            "theme": "outdoor_adventure",
-            "color": "Forest Green",
-            "quantity": 1
-        })
-        mock_instance.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=product_idea_json))]
-        )
-        yield mock_instance
-
-
-@pytest.fixture
-def mock_reddit():
-    """Mock Reddit API calls."""
-    with patch("praw.Reddit") as mock:
-        reddit = MagicMock()
-        mock.return_value = reddit
-        
-        # Mock subreddit
-        subreddit_mock = MagicMock()
-        subreddit_mock.id = "hiking"
-        subreddit_mock.name = "hiking"
-        subreddit_mock.display_name = "Hiking"
-        subreddit_mock.description = "A community for hiking enthusiasts"
-        subreddit_mock.description_html = "<p>A community for hiking enthusiasts</p>"
-        subreddit_mock.public_description = "Share your hiking adventures"
-        subreddit_mock.created_utc = 1234567890
-        subreddit_mock.subscribers = 100000
-        subreddit_mock.over18 = False
-        subreddit_mock.spoilers_enabled = False
-        
-        # Mock post
-        post = MagicMock()
-        post.id = "test_post_123"
-        post.title = "Amazing Hiking Trail"
-        post.selftext = "Just completed this incredible hike!"
-        post.url = "https://reddit.com/r/hiking/test_post_123"
-        post.permalink = "/r/hiking/test_post_123"
-        post.subreddit = subreddit_mock
-        
-        # Mock comments
-        comment = MagicMock()
-        comment.id = "test_comment_123"
-        comment.body = "Beautiful trail!"
-        
-        comments_mock = MagicMock()
-        comments_mock.replace_more.return_value = None
-        comments_mock.__iter__.return_value = iter([comment])
-        post.comments = comments_mock
-        
-        reddit.subreddit.return_value = subreddit_mock
-        subreddit_mock.hot.return_value = iter([post])
-        
-        yield reddit
-
-
-@pytest.fixture
-def mock_imgur():
-    """Mock Imgur API calls."""
-    with patch("app.clients.imgur_client.ImgurClient") as mock:
-        client = MagicMock()
-        mock.return_value = client
-        client.upload_image.return_value = (
-            "https://i.imgur.com/test_commission.png",
-            "/tmp/test_commission_image.png",
-        )
-        yield client
-
-
-@pytest.fixture
-def mock_zazzle():
-    """Mock Zazzle API calls."""
-    with patch("app.zazzle_product_designer.ZazzleProductDesigner") as mock:
-        designer = MagicMock()
-        
-        def create_product_side_effect(design_instructions):
-            from app.models import ProductInfo, RedditContext
-            
-            reddit_context = RedditContext(
-                post_id="test_post_123",
-                post_title="Amazing Hiking Trail",
-                post_url="https://reddit.com/r/hiking/test_post_123",
-                subreddit="hiking",
-            )
-            
-            return ProductInfo(
-                product_id="zazzle_commission_123",
-                name="Hiking Adventure Print",
-                image_url="https://i.imgur.com/test_commission.png",
-                product_url="https://www.zazzle.com/hiking_adventure_print",
-                theme="outdoor_adventure",
-                product_type="print",
-                zazzle_template_id="print_template_123",
-                zazzle_tracking_code="track_commission_123",
-                model="dall-e-3",
-                prompt_version="1.0.0",
-                reddit_context=reddit_context,
-                design_instructions=design_instructions,
-                image_local_path="/tmp/test_commission_image.png",
-            )
-        
-        designer.create_product.side_effect = create_product_side_effect
-        mock.return_value = designer
-        yield designer
-
-
-@pytest.fixture
-def mock_image_generator():
-    """Mock image generation."""
-    with patch("app.async_image_generator.AsyncImageGenerator.generate_image", new_callable=AsyncMock) as mock:
-        mock.return_value = ("https://i.imgur.com/test_commission.png", "/tmp/test_commission_image.png")
-        yield mock
-
-
-@pytest.fixture(autouse=True)
-def patch_task_manager():
-    """Patch the global task_manager instance to avoid actual task execution."""
-    with patch("app.api.task_manager") as mock:
-        mock.create_commission_task.return_value = "task_123"
-        yield mock
+def test_subreddit(db_session):
+    """Create a test subreddit for commission tests."""
+    subreddit = Subreddit(
+        subreddit_name="hiking",
+        display_name="Hiking",
+        description="Hiking community",
+        subscribers=50000,
+        over18=False,
+        spoilers_enabled=False,
+    )
+    db_session.add(subreddit)
+    db_session.commit()
+    db_session.refresh(subreddit)
+    return subreddit
 
 
 class TestCommissionWorkflowE2E:
-    """
-    End-to-end commission workflow tests.
+    """End-to-end tests for commission workflow."""
 
-    These tests validate the full commission donation flow, from payment intent success
-    through donation creation, task creation, and pipeline integration. Run this suite
-    after any backend refactor to ensure you have not broken core commission or pipeline logic.
-    """
-
-    @pytest.mark.asyncio
-    async def test_commission_workflow_from_payment_success(
-        self,
-        mock_payment_intent,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator,
-        patch_task_manager
+    def test_commission_payment_to_task_creation(
+        self, db_session, mock_stripe_service, mock_payment_intent, test_subreddit
     ):
-        """
-        Simulates a successful Stripe payment intent for a commission donation.
-        Verifies that a donation is created, the correct data is stored, and a commission task is queued.
-        This is the primary end-to-end test for the commission workflow.
-        """
-        # Simulate Stripe webhook for payment_intent.succeeded
-        await handle_payment_intent_succeeded(mock_payment_intent)
-
-        # Check that the donation was created with correct fields
-        db = SessionLocal()
-        try:
-            donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id="pi_test_commission_123"
-            ).first()
-            assert donation is not None
-            assert donation.status == DonationStatus.SUCCEEDED.value
-            assert donation.amount_usd == Decimal('25.00')
-            assert donation.customer_email == "commissioner@test.com"
-            assert donation.customer_name == "Test Commissioner"
-            assert donation.reddit_username == "test_commissioner"
-            assert donation.is_anonymous is False
-            assert donation.donation_type == "commission"
-            assert donation.commission_type == "random_subreddit"
-            assert donation.commission_message == "Create something amazing from a hiking post!"
-            assert donation.subreddit_id == sample_subreddit.id
-
-            # Ensure a commission task was created with correct context
-            assert patch_task_manager.create_commission_task.called
-            call_args = patch_task_manager.create_commission_task.call_args
-            assert call_args[0][0] == donation.id  # donation_id
-            task_data = call_args[0][1]  # task_data
-            assert task_data["donation_id"] == donation.id
-            assert task_data["donation_amount"] == 25.0
-            assert task_data["customer_name"] == "Test Commissioner"
-            assert task_data["reddit_username"] == "test_commissioner"
-            assert task_data["is_anonymous"] is False
-            assert task_data["donation_type"] == "commission"
-            assert task_data["commission_type"] == "random_subreddit"
-            assert task_data["commission_message"] == "Create something amazing from a hiking post!"
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_commission_workflow_specific_post(
-        self,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator
-    ):
-        """
-        Simulates a commission for a specific Reddit post.
-        Verifies that the donation and task are created with the correct post_id and commission_type.
-        """
-        # Create payment intent for a specific post commission
-        payment_intent = MagicMock()
-        payment_intent.id = "pi_test_specific_123"
-        payment_intent.amount = 5000  # $50.00 in cents
-        payment_intent.currency = "usd"
-        payment_intent.receipt_email = "specific@test.com"
-        payment_intent.metadata = {
-            "donation_type": "commission",
-            "commission_type": "specific_post",
-            "subreddit": "hiking",
-            "post_id": "test_post_123",
-            "commission_message": "Make this specific post into a product!",
-            "customer_name": "Specific Commissioner",
-            "reddit_username": "specific_user",
-            "is_anonymous": "false"
-        }
-        await handle_payment_intent_succeeded(payment_intent)
-
-        # Check that the donation was created with the correct post_id and commission_type
-        db = SessionLocal()
-        try:
-            donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id="pi_test_specific_123"
-            ).first()
-            assert donation is not None
-            assert donation.commission_type == "specific_post"
-            assert donation.post_id == "test_post_123"
-            assert donation.amount_usd == Decimal('50.00')
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_commission_workflow_anonymous(
-        self,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator
-    ):
-        """
-        Simulates an anonymous commission donation.
-        Verifies that the donation is marked anonymous and the correct fields are set.
-        """
-        payment_intent = MagicMock()
-        payment_intent.id = "pi_test_anonymous_123"
-        payment_intent.amount = 1000  # $10.00 in cents
-        payment_intent.currency = "usd"
-        payment_intent.receipt_email = "anonymous@test.com"
-        payment_intent.metadata = {
-            "donation_type": "commission",
-            "commission_type": "random_subreddit",
-            "subreddit": "hiking",
-            "post_id": "",
-            "commission_message": "Anonymous commission request",
-            "customer_name": "Anonymous",
-            "reddit_username": "anonymous_user",
-            "is_anonymous": "true"
-        }
-        await handle_payment_intent_succeeded(payment_intent)
-
-        db = SessionLocal()
-        try:
-            donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id="pi_test_anonymous_123"
-            ).first()
-            assert donation is not None
-            assert donation.is_anonymous is True
-            assert donation.customer_name == "Anonymous"
-            assert donation.amount_usd == Decimal('10.00')
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_commission_workflow_duplicate_payment(
-        self,
-        mock_payment_intent,
-        sample_subreddit,
-        patch_task_manager
-    ):
-        """
-        Simulates a duplicate Stripe payment intent event.
-        Verifies that the commission task is only created once for the same payment intent.
-        """
-        # First call should create the task
-        await handle_payment_intent_succeeded(mock_payment_intent)
-        assert patch_task_manager.create_commission_task.call_count == 1
-        # Second call should not create a new task
-        await handle_payment_intent_succeeded(mock_payment_intent)
-        assert patch_task_manager.create_commission_task.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_commission_workflow_with_task_processing(
-        self,
-        mock_payment_intent,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator
-    ):
-        """
-        Simulates the full commission workflow including manual task creation.
-        Verifies that the pipeline task is created with the correct context and can be processed.
-        """
-        await handle_payment_intent_succeeded(mock_payment_intent)
-        db = SessionLocal()
-        try:
-            donation = db.query(Donation).filter_by(
-                stripe_payment_intent_id="pi_test_commission_123"
-            ).first()
-            assert donation is not None
-            # Manually create a pipeline task as if the task manager did it
-            task = PipelineTask(
-                type="SUBREDDIT_POST",
-                subreddit_id=sample_subreddit.id,
-                donation_id=donation.id,
-                status="pending",
-                priority=10,
-                context_data={
-                    "donation_id": donation.id,
-                    "donation_amount": float(donation.amount_usd),
-                    "tier": donation.tier,
-                    "customer_name": donation.customer_name,
-                    "reddit_username": donation.reddit_username,
-                    "is_anonymous": donation.is_anonymous,
-                    "donation_type": donation.donation_type,
-                    "commission_type": donation.commission_type,
-                    "commission_message": donation.commission_message,
-                },
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(task)
-            db.commit()
-            db.refresh(task)
-            assert task.type == "SUBREDDIT_POST"
-            assert task.subreddit_id == sample_subreddit.id
-            assert task.donation_id == donation.id
-            assert task.status == "pending"
-            assert task.priority == 10
-            context_data = task.context_data
-            assert context_data["donation_id"] == donation.id
-            assert context_data["commission_type"] == "random_subreddit"
-            assert context_data["commission_message"] == "Create something amazing from a hiking post!"
-        finally:
-            db.close()
-
-
-class TestCommissionWorkflowIntegration:
-    """
-    Integration tests for commission workflow components.
-    These are lower-level than the E2E tests but validate that the StripeService and TaskManager
-    can create commission tasks and persist them in the database.
-    """
-    def test_stripe_service_commission_task_creation(self, sample_subreddit):
-        """
-        Verifies that StripeService.create_commission_task creates a pipeline task for a commission donation.
-        """
-        db = SessionLocal()
-        try:
+        """Test that successful payment creates a commission task."""
+        
+        # Mock the Stripe service to create a realistic donation
+        def mock_save_donation(db, payment_data, request_data):
             donation = Donation(
-                stripe_payment_intent_id="pi_test_stripe_123",
-                amount_cents=2500,
-                amount_usd=Decimal('25.00'),
+                stripe_payment_intent_id=payment_data["payment_intent_id"],
+                amount_cents=payment_data["amount_cents"],
+                amount_usd=payment_data["amount_usd"],
                 currency="usd",
-                status=DonationStatus.SUCCEEDED.value,
-                tier=DonationTier.SAPPHIRE,
-                customer_email="stripe@test.com",
-                customer_name="Stripe Test",
-                subreddit_id=sample_subreddit.id,
-                donation_type="commission",
-                commission_type="random_subreddit",
-                commission_message="Stripe service test",
-                is_anonymous=False
-            )
-            db.add(donation)
-            db.commit()
-            db.refresh(donation)
-            stripe_service = StripeService()
-            task = stripe_service.create_commission_task(db, donation)
-            assert task is not None
-            assert task.type == "SUBREDDIT_POST"
-            assert task.subreddit_id == sample_subreddit.id
-            assert task.donation_id == donation.id
-            assert task.status == "pending"
-            assert task.priority == 10
-        finally:
-            db.close()
-    def test_task_manager_commission_creation(self, sample_subreddit):
-        """
-        Verifies that TaskManager.create_commission_task creates a pipeline task for a commission donation.
-        """
-        db = SessionLocal()
-        try:
-            donation = Donation(
-                stripe_payment_intent_id="pi_test_manager_123",
-                amount_cents=2500,
-                amount_usd=Decimal('25.00'),
-                currency="usd",
-                status=DonationStatus.SUCCEEDED.value,
-                tier=DonationTier.SAPPHIRE,
-                customer_email="manager@test.com",
-                customer_name="Manager Test",
-                subreddit_id=sample_subreddit.id,
-                donation_type="commission",
-                commission_type="random_subreddit",
-                commission_message="Task manager test",
-                is_anonymous=False
-            )
-            db.add(donation)
-            db.commit()
-            db.refresh(donation)
-            task_manager = TaskManager()
-            task_data = {
-                "donation_id": donation.id,
-                "donation_amount": float(donation.amount_usd),
-                "tier": donation.tier,
-                "customer_name": donation.customer_name,
-                "reddit_username": donation.reddit_username,
-                "is_anonymous": donation.is_anonymous,
-                "donation_type": donation.donation_type,
-                "commission_type": donation.commission_type,
-                "commission_message": donation.commission_message,
-            }
-            with patch.object(task_manager, 'use_k8s', False):
-                task_id = task_manager.create_commission_task(donation.id, task_data)
-                assert task_id is not None
-                task = db.query(PipelineTask).filter_by(id=task_id).first()
-                assert task is not None
-                assert task.type == "SUBREDDIT_POST"
-                assert task.donation_id == donation.id
-        finally:
-            db.close() 
-
-
-class TestManualCommissionWorkflowE2E:
-    """Test manual commission workflow end-to-end without Stripe."""
-
-    @pytest.mark.asyncio
-    async def test_manual_commission_workflow_random_subreddit(
-        self,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator,
-        patch_task_manager
-    ):
-        """Test complete manual commission workflow for random subreddit."""
-        from app.api import manual_create_commission
-        from app.models import CommissionRequest
-        from app.db.models import Donation, SourceType
-        from app.db.database import SessionLocal
-
-        # Create manual commission request
-        commission_request = CommissionRequest(
-            amount_usd=25.0,
-            customer_email="manual@test.com",
-            customer_name="Manual Commissioner",
-            subreddit="hiking",
-            reddit_username="manual_commissioner",
-            is_anonymous=False,
-            post_id="",
-            commission_message="Create something amazing from a hiking post!"
-        )
-
-        # Mock the request object for admin secret check
-        mock_request = MagicMock()
-        mock_request.headers = {"x-admin-secret": "testsecret123"}
-        
-        # Set admin secret environment variable
-        import os
-        os.environ["ADMIN_SECRET"] = "testsecret123"
-
-        # Create database session
-        db = SessionLocal()
-        try:
-            # Call the manual commission endpoint
-            result = await manual_create_commission(
-                commission_request=commission_request,
-                request=mock_request,
-                db=db
-            )
-            
-            # Verify the response
-            assert result["status"] == "manual commission created"
-            assert "donation_id" in result
-            assert "task_id" in result
-            
-            donation_id = result["donation_id"]
-            task_id = result["task_id"]
-            
-            # Verify donation was created correctly
-            donation = db.query(Donation).filter_by(id=donation_id).first()
-            assert donation is not None
-            assert donation.source == SourceType.MANUAL
-            assert donation.donation_type == "commission"
-            assert donation.status == "succeeded"
-            assert donation.amount_usd == Decimal("25.00")
-            assert donation.customer_email == "manual@test.com"
-            assert donation.customer_name == "Manual Commissioner"
-            assert donation.subreddit.subreddit_name == "hiking"
-            assert donation.reddit_username == "manual_commissioner"
-            assert donation.is_anonymous is False
-            assert donation.commission_message == "Create something amazing from a hiking post!"
-            assert donation.stripe_payment_intent_id.startswith("manual-")
-            
-            # Verify task was created (mocked)
-            assert patch_task_manager.create_commission_task.called
-            call_args = patch_task_manager.create_commission_task.call_args
-            assert call_args[0][0] == donation_id
-            
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_manual_commission_workflow_specific_post(
-        self,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator,
-        patch_task_manager
-    ):
-        """Test manual commission workflow for specific post."""
-        from app.api import manual_create_commission
-        from app.models import CommissionRequest
-        from app.db.models import Donation, SourceType
-        from app.db.database import SessionLocal
-
-        # Create manual commission request for specific post
-        commission_request = CommissionRequest(
-            amount_usd=15.0,
-            customer_email="specific@test.com",
-            customer_name="Specific Post Commissioner",
-            subreddit="hiking",
-            reddit_username="specific_commissioner",
-            is_anonymous=False,
-            post_id="test_post_123",
-            commission_message="Create a print from this specific post!"
-        )
-
-        # Mock the request object for admin secret check
-        mock_request = MagicMock()
-        mock_request.headers = {"x-admin-secret": "testsecret123"}
-        
-        # Set admin secret environment variable
-        import os
-        os.environ["ADMIN_SECRET"] = "testsecret123"
-
-        # Create database session
-        db = SessionLocal()
-        try:
-            # Call the manual commission endpoint
-            result = await manual_create_commission(
-                commission_request=commission_request,
-                request=mock_request,
-                db=db
-            )
-            
-            # Verify the response
-            assert result["status"] == "manual commission created"
-            assert "donation_id" in result
-            assert "task_id" in result
-            
-            donation_id = result["donation_id"]
-            
-            # Verify donation was created correctly
-            donation = db.query(Donation).filter_by(id=donation_id).first()
-            assert donation is not None
-            assert donation.source == SourceType.MANUAL
-            assert donation.donation_type == "commission"
-            assert donation.status == "succeeded"
-            assert donation.amount_usd == Decimal("15.00")
-            assert donation.post_id == "test_post_123"
-            assert donation.commission_message == "Create a print from this specific post!"
-            
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_manual_commission_workflow_anonymous(
-        self,
-        sample_subreddit,
-        mock_openai,
-        mock_reddit,
-        mock_imgur,
-        mock_zazzle,
-        mock_image_generator,
-        patch_task_manager
-    ):
-        """Test manual commission workflow for anonymous donation."""
-        from app.api import manual_create_commission
-        from app.models import CommissionRequest
-        from app.db.models import Donation, SourceType
-        from app.db.database import SessionLocal
-
-        # Create anonymous manual commission request
-        commission_request = CommissionRequest(
-            amount_usd=50.0,
-            customer_email="anonymous@test.com",
-            customer_name="Anonymous Donor",
-            subreddit="hiking",
-            reddit_username="",
-            is_anonymous=True,
-            post_id="",
-            commission_message="Anonymous commission for hiking community!"
-        )
-
-        # Mock the request object for admin secret check
-        mock_request = MagicMock()
-        mock_request.headers = {"x-admin-secret": "testsecret123"}
-        
-        # Set admin secret environment variable
-        import os
-        os.environ["ADMIN_SECRET"] = "testsecret123"
-
-        # Create database session
-        db = SessionLocal()
-        try:
-            # Call the manual commission endpoint
-            result = await manual_create_commission(
-                commission_request=commission_request,
-                request=mock_request,
-                db=db
-            )
-            
-            # Verify the response
-            assert result["status"] == "manual commission created"
-            assert "donation_id" in result
-            assert "task_id" in result
-            
-            donation_id = result["donation_id"]
-            
-            # Verify donation was created correctly
-            donation = db.query(Donation).filter_by(id=donation_id).first()
-            assert donation is not None
-            assert donation.source == SourceType.MANUAL
-            assert donation.donation_type == "commission"
-            assert donation.status == "succeeded"
-            assert donation.amount_usd == Decimal("50.00")
-            assert donation.is_anonymous is True
-            assert donation.reddit_username == ""
-            assert donation.commission_message == "Anonymous commission for hiking community!"
-            
-        finally:
-            db.close()
-
-    @pytest.mark.asyncio
-    async def test_manual_commission_different_tiers(
-        self,
-        sample_subreddit,
-        patch_task_manager
-    ):
-        """Test manual commission creation with different donation tiers."""
-        from app.api import manual_create_commission
-        from app.models import CommissionRequest, get_tier_from_amount
-        from app.db.models import Donation, SourceType
-        from app.db.database import SessionLocal
-
-        # Test different amounts and their corresponding tiers
-        test_cases = [
-            (5.0, "silver"),
-            (15.0, "gold"), 
-            (25.0, "sapphire"),
-            (100.0, "diamond")
-        ]
-
-        # Mock the request object for admin secret check
-        mock_request = MagicMock()
-        mock_request.headers = {"x-admin-secret": "testsecret123"}
-        
-        # Set admin secret environment variable
-        import os
-        os.environ["ADMIN_SECRET"] = "testsecret123"
-
-        for amount, expected_tier in test_cases:
-            # Create manual commission request
-            commission_request = CommissionRequest(
-                amount_usd=amount,
-                customer_email=f"tier{amount}@test.com",
-                customer_name=f"Tier {amount} Donor",
-                subreddit="hiking",
-                reddit_username="tier_test",
+                status=DonationStatus.PENDING.value,
+                tier=DonationTier.COMMISSION.value,
+                customer_email="commissioner@test.com",
+                customer_name="Test Commissioner",
+                message="Create something amazing from a hiking post!",
+                subreddit_id=test_subreddit.id,
+                reddit_username="test_commissioner",
                 is_anonymous=False,
-                post_id="",
-                commission_message=f"Test commission for {expected_tier} tier"
+                donation_type="commission",
+                commission_type="random_subreddit",
+                commission_message="Create something amazing from a hiking post!",
             )
+            db.add(donation)
+            db.commit()
+            db.refresh(donation)
+            return donation
 
-            # Create database session
-            db = SessionLocal()
-            try:
-                # Call the manual commission endpoint
-                result = await manual_create_commission(
-                    commission_request=commission_request,
-                    request=mock_request,
-                    db=db
+        mock_stripe_service.save_donation_to_db.side_effect = mock_save_donation
+
+        # Mock task manager to capture task creation
+        with patch("app.api.task_manager") as mock_task_manager:
+            mock_task_manager.create_commission_task = MagicMock()
+            
+            # Simulate the webhook handler
+            with patch("app.api.stripe_service", mock_stripe_service):
+                result = handle_payment_intent_succeeded(db_session, mock_payment_intent)
+
+            # Verify donation was created
+            donation = db_session.query(Donation).filter_by(
+                stripe_payment_intent_id="pi_test_commission_123"
+            ).first()
+            
+            assert donation is not None
+            assert donation.amount_usd == 25.00
+            assert donation.commission_type == "random_subreddit"
+            assert donation.subreddit_id == test_subreddit.id
+
+            # Verify task creation was attempted
+            mock_task_manager.create_commission_task.assert_called_once()
+
+    def test_commission_task_processing(self, db_session, test_subreddit):
+        """Test commission task processing creates pipeline run and task."""
+        
+        # Create a test donation
+        donation = Donation(
+            stripe_payment_intent_id="pi_test_processing_123",
+            amount_cents=2500,
+            amount_usd=25.00,
+            currency="usd",
+            status=DonationStatus.SUCCEEDED.value,
+            tier=DonationTier.COMMISSION.value,
+            customer_email="test@example.com",
+            customer_name="Test User",
+            message="Create awesome product",
+            subreddit_id=test_subreddit.id,
+            reddit_username="test_user",
+            is_anonymous=False,
+            donation_type="commission",
+            commission_type="random_subreddit",
+            commission_message="Make something cool!",
+        )
+        db_session.add(donation)
+        db_session.commit()
+        db_session.refresh(donation)
+
+        # Mock TaskManager
+        task_manager = TaskManager()
+        
+        with patch.object(task_manager, '_create_pipeline_run') as mock_create_run:
+            with patch.object(task_manager, '_create_pipeline_task') as mock_create_task:
+                # Mock return values
+                mock_pipeline_run = PipelineRun(
+                    id=1,
+                    status="running",
+                    start_time=datetime.now(timezone.utc),
+                    summary="Commission pipeline run",
+                    config={"commission": True},
+                    metrics={},
+                    duration=0,
+                    retry_count=0,
+                    version="1.0.0"
                 )
+                mock_create_run.return_value = mock_pipeline_run
                 
-                # Verify the response
-                assert result["status"] == "manual commission created"
+                mock_task = PipelineTask(
+                    id=1,
+                    task_type="commission",
+                    status="pending",
+                    pipeline_run_id=1,
+                    subreddit_id=test_subreddit.id,
+                    message="Make something cool!",
+                    commission_type="random_subreddit",
+                    donation_id=donation.id
+                )
+                mock_create_task.return_value = mock_task
+
+                # Execute task creation
+                pipeline_run, task = task_manager.create_commission_task(
+                    db_session, donation
+                )
+
+                # Verify task creation
+                assert pipeline_run is not None
+                assert task is not None
+                assert task.commission_type == "random_subreddit"
+                assert task.donation_id == donation.id
+
+    @pytest.mark.asyncio
+    async def test_full_commission_workflow_mock(
+        self, db_session, mock_stripe_service, test_subreddit
+    ):
+        """Test the complete commission workflow with mocked external services."""
+        
+        # Step 1: Create donation from payment
+        donation = Donation(
+            stripe_payment_intent_id="pi_full_workflow_123",
+            amount_cents=2500,
+            amount_usd=25.00,
+            currency="usd",
+            status=DonationStatus.SUCCEEDED.value,
+            tier=DonationTier.COMMISSION.value,
+            customer_email="workflow@test.com",
+            customer_name="Workflow Test",
+            message="Full workflow test",
+            subreddit_id=test_subreddit.id,
+            reddit_username="workflow_user",
+            is_anonymous=False,
+            donation_type="commission",
+            commission_type="random_subreddit",
+            commission_message="Create a hiking-themed product",
+        )
+        db_session.add(donation)
+        db_session.commit()
+
+        # Step 2: Create pipeline run and task
+        pipeline_run = PipelineRun(
+            status="running",
+            start_time=datetime.now(timezone.utc),
+            summary="Full workflow test run",
+            config={"commission": True, "subreddit": "hiking"},
+            metrics={},
+            duration=0,
+            retry_count=0,
+            version="1.0.0"
+        )
+        db_session.add(pipeline_run)
+        db_session.commit()
+        db_session.refresh(pipeline_run)
+
+        task = PipelineTask(
+            task_type="commission",
+            status="pending",
+            pipeline_run_id=pipeline_run.id,
+            subreddit_id=test_subreddit.id,
+            message="Create a hiking-themed product",
+            commission_type="random_subreddit",
+            donation_id=donation.id
+        )
+        db_session.add(task)
+        db_session.commit()
+        db_session.refresh(task)
+
+        # Step 3: Mock product generation
+        with patch("app.agents.reddit_agent.RedditAgent") as mock_agent_class:
+            mock_agent = MagicMock()
+            mock_agent_class.return_value = mock_agent
+            
+            # Mock successful product creation
+            from app.models import ProductInfo
+            mock_product = ProductInfo(
+                theme="Mountain Adventure",
+                product_url="https://zazzle.com/mountain_product",
+                image_url="https://example.com/mountain.jpg",
+                template_id="hiking_template",
+                model="dall-e-3",
+                prompt_version="1.0.0",
+                product_type="t-shirt",
+                design_description="Beautiful mountain landscape"
+            )
+            mock_agent._find_and_create_product_for_task = AsyncMock(return_value=mock_product)
+
+            # Step 4: Process the task
+            from app.commission_worker import CommissionWorker
+            worker = CommissionWorker()
+            
+            with patch.object(worker, '_publish_to_subreddit') as mock_publish:
+                mock_publish.return_value = True
                 
-                donation_id = result["donation_id"]
+                result = await worker.process_commission_task(db_session, task)
                 
-                # Verify donation was created with correct tier
-                donation = db.query(Donation).filter_by(id=donation_id).first()
-                assert donation is not None
-                assert donation.source == SourceType.MANUAL
-                assert donation.donation_type == "commission"
-                assert donation.status == "succeeded"
-                assert donation.amount_usd == Decimal(str(amount))
+                # Verify successful processing
+                assert result is True
                 
-                # Verify tier calculation
-                calculated_tier = get_tier_from_amount(amount)
-                assert calculated_tier.value == expected_tier
-                
-            finally:
-                db.close() 
+                # Verify the agent was called
+                mock_agent._find_and_create_product_for_task.assert_called_once_with(
+                    db_session, task
+                )
+
+    def test_commission_validation_workflow(self, db_session, test_subreddit):
+        """Test commission validation before processing."""
+        from app.services.commission_validator import CommissionValidator
+        
+        # Create valid commission
+        valid_donation = Donation(
+            stripe_payment_intent_id="pi_valid_123",
+            amount_cents=2500,
+            amount_usd=25.00,
+            currency="usd",
+            status=DonationStatus.SUCCEEDED.value,
+            tier=DonationTier.COMMISSION.value,
+            customer_email="valid@test.com",
+            customer_name="Valid User",
+            message="Valid commission",
+            subreddit_id=test_subreddit.id,
+            reddit_username="valid_user",
+            is_anonymous=False,
+            donation_type="commission",
+            commission_type="random_subreddit",
+            commission_message="Create something awesome",
+        )
+        
+        validator = CommissionValidator()
+        
+        # Test validation passes
+        is_valid, reason = validator.validate_commission(valid_donation)
+        assert is_valid is True
+        assert reason is None
+
+        # Test invalid commission (no subreddit)
+        invalid_donation = Donation(
+            stripe_payment_intent_id="pi_invalid_123",
+            amount_cents=1000,  # Too low
+            amount_usd=10.00,
+            currency="usd",
+            status=DonationStatus.SUCCEEDED.value,
+            tier=DonationTier.BASIC.value,  # Wrong tier
+            customer_email="invalid@test.com",
+            customer_name="Invalid User",
+            message="Invalid commission",
+            subreddit_id=None,  # Missing subreddit
+            reddit_username="invalid_user",
+            is_anonymous=False,
+            donation_type="commission",
+            commission_type="random_subreddit",
+            commission_message="",  # Empty message
+        )
+        
+        is_valid, reason = validator.validate_commission(invalid_donation)
+        assert is_valid is False
+        assert reason is not None

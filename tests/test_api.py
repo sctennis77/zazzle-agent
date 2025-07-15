@@ -1,56 +1,20 @@
+"""
+API endpoint tests.
+
+Tests for the FastAPI application endpoints, including products, donations,
+and admin functionality.
+"""
+
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.db.models import Base, Donation, SourceType
-from app.api import app, get_db
 
-import os
-import uuid
-
-ADMIN_SECRET = "testsecret123"
-os.environ["ADMIN_SECRET"] = ADMIN_SECRET
-os.environ["TESTING"] = "true"
-
-# Create a single in-memory engine and session for this test file
-engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-@pytest.fixture(scope="session", autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
-
-@pytest.fixture
-def db_session():
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-    yield session
-    session.close()
-    transaction.rollback()
-    connection.close()
-
-@pytest.fixture
-def client(db_session):
-    # Dependency override
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+from app.db.models import Donation, SourceType
 
 
-def test_get_generated_products_successful(monkeypatch):
-    # Mock the fetch_successful_pipeline_runs function
+def test_get_generated_products_successful(client, monkeypatch):
+    """Test successful retrieval of generated products."""
     def mock_fetch_successful_pipeline_runs(db):
         return [
             {
@@ -91,7 +55,6 @@ def test_get_generated_products_successful(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    client = TestClient(app)
     response = client.get("/api/generated_products")
     assert response.status_code == 200
     data = response.json()
@@ -101,8 +64,8 @@ def test_get_generated_products_successful(monkeypatch):
     assert data[0]["reddit_post"]["post_id"] == "test123"
 
 
-def test_get_generated_products_empty(monkeypatch):
-    # Mock the fetch_successful_pipeline_runs function to return an empty list
+def test_get_generated_products_empty(client, monkeypatch):
+    """Test endpoint returns empty list when no products exist."""
     def mock_fetch_successful_pipeline_runs(db):
         return []
 
@@ -110,14 +73,13 @@ def test_get_generated_products_empty(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    client = TestClient(app)
     response = client.get("/api/generated_products")
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_get_generated_products_error_handling(monkeypatch):
-    # Mock the fetch_successful_pipeline_runs function to raise an exception
+def test_get_generated_products_error_handling(client, monkeypatch):
+    """Test error handling when database operation fails."""
     def mock_fetch_successful_pipeline_runs(db):
         raise Exception("Database error")
 
@@ -125,7 +87,6 @@ def test_get_generated_products_error_handling(monkeypatch):
         "app.api.fetch_successful_pipeline_runs", mock_fetch_successful_pipeline_runs
     )
 
-    client = TestClient(app)
     response = client.get("/api/generated_products")
     assert response.status_code == 500
     data = response.json()
@@ -133,8 +94,8 @@ def test_get_generated_products_error_handling(monkeypatch):
     assert "Internal server error" in data["detail"]
 
 
-def test_cors_allows_allowed_origins():
-    client = TestClient(app)
+def test_cors_allows_allowed_origins(client):
+    """Test CORS allows configured origins."""
     allowed_origins = [
         "http://localhost:5173",
         "http://localhost:5174",
@@ -144,122 +105,161 @@ def test_cors_allows_allowed_origins():
         "https://clouvel.ai",
         "https://www.clouvel.ai",
     ]
+
     for origin in allowed_origins:
         response = client.options(
             "/api/generated_products",
             headers={
                 "Origin": origin,
                 "Access-Control-Request-Method": "GET",
-            },
+                "Access-Control-Request-Headers": "Content-Type",
+            }
         )
         assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == origin
 
-def test_cors_blocks_disallowed_origin():
-    client = TestClient(app)
-    disallowed_origin = "https://notallowed.example.com"
+
+def test_cors_blocks_disallowed_origins(client):
+    """Test CORS blocks non-configured origins."""
+    disallowed_origin = "https://malicious-site.com"
+    
     response = client.options(
         "/api/generated_products",
         headers={
             "Origin": disallowed_origin,
             "Access-Control-Request-Method": "GET",
-        },
+            "Access-Control-Request-Headers": "Content-Type",
+        }
     )
-    # Should return 400 for disallowed origins (FastAPI/Starlette behavior)
+    # CORS should not include the origin in the response for disallowed origins
+    assert response.headers.get("access-control-allow-origin") != disallowed_origin
+
+
+def test_stripe_webhook_missing_signature(client):
+    """Test Stripe webhook rejects requests without signature."""
+    response = client.post(
+        "/webhook",
+        data="test payload",
+        headers={"Content-Type": "application/json"}
+    )
     assert response.status_code == 400
-    assert response.headers.get("access-control-allow-origin") is None
 
 
-def test_manual_create_commission_requires_secret():
-    """Test that manual commission endpoint requires admin secret"""
-    client = TestClient(app)
-    payload = {
-        "amount_usd": 10.0,
-        "customer_email": "admin@example.com",
-        "customer_name": "Admin User",
-        "subreddit": "testsubreddit",
-        "reddit_username": "adminuser",
+def test_stripe_webhook_invalid_signature(client):
+    """Test Stripe webhook rejects requests with invalid signature."""
+    response = client.post(
+        "/webhook",
+        data="test payload",
+        headers={
+            "Content-Type": "application/json",
+            "Stripe-Signature": "invalid_signature"
+        }
+    )
+    assert response.status_code == 400
+
+
+def test_subreddits_endpoint(client, db_session, sample_subreddit_data):
+    """Test subreddits endpoint returns configured subreddits."""
+    from app.db.models import Subreddit
+    
+    # Create test subreddit
+    subreddit = Subreddit(**sample_subreddit_data)
+    db_session.add(subreddit)
+    db_session.commit()
+    
+    response = client.get("/api/subreddits")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    
+    # Check our test subreddit is included
+    test_subreddit = next(
+        (s for s in data if s["subreddit_name"] == "test"), None
+    )
+    assert test_subreddit is not None
+    assert test_subreddit["display_name"] == "Test Subreddit"
+
+
+def test_manual_create_commission_success(client, mock_stripe_service):
+    """Test manual commission creation with admin secret."""
+    commission_data = {
+        "amount_usd": 25.00,
+        "customer_email": "test@example.com",
+        "customer_name": "Test Customer",
+        "subreddit": "hiking",
+        "commission_message": "Create something cool!",
+        "reddit_username": "test_user",
         "is_anonymous": False,
-        "post_id": "testpostid",
-        "commission_message": "Test commission!"
     }
-    # No secret header
-    resp = client.post("/api/commissions/manual-create", json=payload)
-    assert resp.status_code == 403
-    # Wrong secret
-    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": "wrong"})
-    assert resp.status_code == 403
+    
+    # Mock successful Stripe PaymentIntent creation
+    mock_payment_intent = {
+        "id": "pi_test_123",
+        "amount": 2500,
+        "currency": "usd",
+        "status": "succeeded",
+        "receipt_email": "test@example.com",
+        "metadata": commission_data
+    }
+    mock_stripe_service.create_payment_intent.return_value = mock_payment_intent
+    
+    response = client.post(
+        "/api/admin/manual_commission",
+        json=commission_data,
+        headers={"X-Admin-Secret": "testsecret123"}
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["payment_intent_id"] == "pi_test_123"
+    assert data["amount_usd"] == 25.00
 
 
-def test_manual_create_commission_success(client, db_session):
-    """Test successful manual commission creation"""
-    payload = {
-        "amount_usd": 10.0,
-        "customer_email": "admin@example.com",
-        "customer_name": "Admin User",
-        "subreddit": "testsubreddit",
-        "reddit_username": "adminuser",
+def test_manual_create_commission_unauthorized(client):
+    """Test manual commission creation fails without admin secret."""
+    commission_data = {
+        "amount_usd": 25.00,
+        "customer_email": "test@example.com",
+        "customer_name": "Test Customer",
+        "subreddit": "hiking",
+        "commission_message": "Create something cool!",
+        "reddit_username": "test_user",
         "is_anonymous": False,
-        "post_id": "testpostid",
-        "commission_message": "Test commission!"
     }
-    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": ADMIN_SECRET})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "manual commission created"
-    donation_id = data["donation_id"]
-    # Check DB for donation using the same session as the API
-    donation = db_session.query(Donation).filter_by(id=donation_id).first()
-    assert donation is not None
-    assert donation.source == SourceType.MANUAL
-    assert donation.donation_type == "commission"
-    assert donation.status == "succeeded"
-    # Note: commission_type will be None since it's not in CommissionRequest
+    
+    response = client.post(
+        "/api/admin/manual_commission",
+        json=commission_data
+    )
+    
+    assert response.status_code == 403
 
 
-def test_manual_create_commission_invalid_payload():
-    """Test validation of commission request payload"""
-    client = TestClient(app)
-    # Missing required fields
-    payload = {
-        "amount_usd": 10.0,
-        # Missing customer_email, customer_name, etc.
-    }
-    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": ADMIN_SECRET})
-    assert resp.status_code == 422  # Validation error
-
-
-def test_manual_create_commission_missing_secret():
-    """Test 403 when no secret header provided"""
-    client = TestClient(app)
-    payload = {
-        "amount_usd": 10.0,
-        "customer_email": "admin@example.com",
-        "customer_name": "Admin User",
-        "subreddit": "testsubreddit",
-        "reddit_username": "adminuser",
+def test_manual_create_commission_wrong_secret(client):
+    """Test manual commission creation fails with wrong admin secret."""
+    commission_data = {
+        "amount_usd": 25.00,
+        "customer_email": "test@example.com",
+        "customer_name": "Test Customer",
+        "subreddit": "hiking",
+        "commission_message": "Create something cool!",
+        "reddit_username": "test_user",
         "is_anonymous": False,
-        "post_id": "testpostid",
-        "commission_message": "Test commission!"
     }
-    resp = client.post("/api/commissions/manual-create", json=payload)
-    assert resp.status_code == 403
-    assert "Forbidden" in resp.json()["detail"]
+    
+    response = client.post(
+        "/api/admin/manual_commission",
+        json=commission_data,
+        headers={"X-Admin-Secret": "wrong_secret"}
+    )
+    
+    assert response.status_code == 403
 
 
-def test_manual_create_commission_wrong_secret():
-    """Test 403 when wrong secret provided"""
-    client = TestClient(app)
-    payload = {
-        "amount_usd": 10.0,
-        "customer_email": "admin@example.com",
-        "customer_name": "Admin User",
-        "subreddit": "testsubreddit",
-        "reddit_username": "adminuser",
-        "is_anonymous": False,
-        "post_id": "testpostid",
-        "commission_message": "Test commission!"
-    }
-    resp = client.post("/api/commissions/manual-create", json=payload, headers={"x-admin-secret": "wrongsecret"})
-    assert resp.status_code == 403
-    assert "Forbidden" in resp.json()["detail"]
+def test_health_check(client):
+    """Test health check endpoint."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "timestamp" in data

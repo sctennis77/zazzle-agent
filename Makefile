@@ -99,6 +99,28 @@ test-pattern:
 	fi
 	$(POETRY) run pytest $(filter-out $@,$(MAKECMDGOALS)) --cov=app
 
+# Quick test running for iterative development
+test-quick:
+	$(POETRY) run pytest tests/ -x --no-cov -q
+
+test-failing:
+	$(POETRY) run pytest tests/ --lf --no-cov -v
+
+test-single:
+	$(POETRY) run pytest -k "$(TEST)" --no-cov -v
+
+test-api:
+	$(POETRY) run pytest tests/test_api.py --no-cov -v
+
+test-reddit:
+	$(POETRY) run pytest tests/test_reddit_agent.py --no-cov -v
+
+test-commission:
+	$(POETRY) run pytest tests/test_commission_workflow_e2e.py --no-cov -v
+
+test-scheduler:
+	$(POETRY) run pytest tests/test_scheduler_service.py --no-cov -v
+
 # =====================
 # Core Application Commands
 # =====================
@@ -261,6 +283,10 @@ frontend-lint:
 
 frontend-clean:
 	rm -rf frontend/node_modules frontend/.vite frontend/dist
+
+frontend-tests:
+	@echo "🧪 Running frontend tests..."
+	cd frontend && npm run test:run
 
 # =====================
 # Database Management
