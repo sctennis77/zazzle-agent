@@ -114,8 +114,9 @@ class CommissionWorker:
                 )
                 return False
 
-            # Step 3: Mark task as in progress
+            # Step 3: Mark task as in progress and send initial heartbeat
             self._update_task_status("in_progress")
+            self._send_heartbeat()  # Ensure heartbeat is sent immediately
 
             # Step 4: Process commission (validation already done upstream)
             success = await self._process_commission(donation)

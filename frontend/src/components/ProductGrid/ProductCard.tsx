@@ -8,6 +8,7 @@ import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
 import { API_BASE } from '../../utils/apiBase';
+import logo from '../../assets/logo.png';
 
 interface ProductCardProps {
   product: GeneratedProduct;
@@ -224,15 +225,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             </div>
             
             {/* Enhanced Donation Display */}
-            {totalDonationAmount > 0 && (
+            {(totalDonationAmount > 0 || product.product_info.donation_info?.source === 'manual') && (
               <div className="text-center pt-2">
                 <button 
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md transform hover:scale-105 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                   onClick={handleDonationClick}
                 >
-                  <span className={totalTierDisplay.color}>
-                    <TotalIconComponent className={totalTierDisplay.color} size={16} />
-                  </span>
+                  {product.product_info.donation_info?.source === 'manual' ? (
+                    <img src={logo} alt="Clouvel" className="w-4 h-4 rounded-full" />
+                  ) : (
+                    <span className={totalTierDisplay.color}>
+                      <TotalIconComponent className={totalTierDisplay.color} size={16} />
+                    </span>
+                  )}
                   <span className="text-sm font-medium text-gray-700">({totalDonationCount})</span>
                 </button>
               </div>

@@ -331,11 +331,27 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     }
   };
 
-  // Helper function to check if a product is newly completed
-  const isProductJustCompleted = (product: GeneratedProduct) => {
+  // Helper function to check if a product should be hidden during completion transition
+  const shouldHideProduct = (product: GeneratedProduct) => {
     return Array.from(completingTasks.values()).some(
-      ({ task, stage }) => task.task_id === product.reddit_post.post_id && stage === 'completing'
+      ({ task, stage }) => task.task_id === product.reddit_post.post_id && (stage === 'completing' || stage === 'transitioning')
     );
+  };
+
+  // Helper function to check if a product is newly completed (should show with animation)
+  const isProductJustCompleted = (product: GeneratedProduct) => {
+    // Check if this product was recently completed (has a completion task that's in removing stage)
+    const completionTask = Array.from(completingTasks.values()).find(
+      ({ task }) => task.task_id === product.reddit_post.post_id
+    );
+    
+    if (completionTask) {
+      const timeSinceCompletion = Date.now() - completionTask.startTime;
+      // Show animation for products that appear after completion transition (1.8-3.0 seconds)
+      return timeSinceCompletion >= 1800 && timeSinceCompletion < 3000;
+    }
+    
+    return false;
   };
 
   const fetchDonationDetails = async (donationId: number) => {
@@ -536,6 +552,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           {/* Generated product cards */}
           {[...products]
             .sort((a, b) => b.product_info.id - a.product_info.id)
+            .filter(product => !shouldHideProduct(product))
             .map((product) => (
               <ProductCard
                 key={product.product_info.id}

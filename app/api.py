@@ -484,6 +484,11 @@ async def get_donation_summary(db: Session = Depends(get_db)):
                     reddit_username=donation.reddit_username,
                     is_anonymous=donation.is_anonymous,
                     status=donation.status,
+                    tier=donation.tier,
+                    donation_type=donation.donation_type,
+                    commission_type=donation.commission_type,
+                    post_id=donation.post_id,
+                    commission_message=donation.commission_message,
                     created_at=donation.created_at,
                     updated_at=donation.updated_at,
                 )
