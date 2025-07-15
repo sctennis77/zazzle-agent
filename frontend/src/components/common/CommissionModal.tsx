@@ -308,6 +308,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const [isValidatingSubreddit, setIsValidatingSubreddit] = useState(false);
   const [subredditValidationMessage, setSubredditValidationMessage] = useState('');
   const [showCustomSubredditInput, setShowCustomSubredditInput] = useState(false);
+  const [subredditSearchTerm, setSubredditSearchTerm] = useState('');
+  const [showSubredditDropdown, setShowSubredditDropdown] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [error, setError] = useState('');
   // Note: error state is used in error handling logic
   const [success, setSuccess] = useState(false);
@@ -401,6 +404,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setIsValidatingSubreddit(false);
       setSubredditValidationMessage('');
       setShowCustomSubredditInput(false);
+      setSubredditSearchTerm('');
+      setShowSubredditDropdown(false);
+      setHighlightedIndex(-1);
     }
   }, [isOpen]);
 
@@ -417,6 +423,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       validateCommission(type, '', '');
     } else if (type === COMMISSION_TYPES.SUBREDDIT) {
       setSubreddit(''); // Reset subreddit
+      setSubredditSearchTerm('');
+      setShowSubredditDropdown(false);
+      setHighlightedIndex(-1);
     } else if (type === COMMISSION_TYPES.SPECIFIC) {
       setPostId('');
       setSubreddit('');
@@ -467,13 +476,22 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     }
   };
 
+  // Filter subreddits based on search term
+  const filteredSubreddits = (availableSubreddits || []).filter(sub =>
+    sub.subreddit_name.toLowerCase().includes(subredditSearchTerm.toLowerCase()) ||
+    (sub.display_name && sub.display_name.toLowerCase().includes(subredditSearchTerm.toLowerCase()))
+  );
+
   // Handle selecting a subreddit from dropdown
   const handleSubredditSelect = (value: string) => {
     if (value === 'custom') {
       setShowCustomSubredditInput(true);
       setSubreddit('');
+      setShowSubredditDropdown(false);
     } else {
       setSubreddit(value);
+      setSubredditSearchTerm(`r/${value}`);
+      setShowSubredditDropdown(false);
       setShowCustomSubredditInput(false);
       setCustomSubreddit('');
       setSubredditValidationMessage('');
@@ -487,6 +505,48 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       if (value) {
         setTimeout(() => validateCommission(COMMISSION_TYPES.SUBREDDIT, value, ''), 100);
       }
+    }
+  };
+
+  // Handle search input change
+  const handleSubredditSearchChange = (value: string) => {
+    setSubredditSearchTerm(value);
+    setHighlightedIndex(-1);
+    if (value.trim() === '') {
+      setSubreddit('');
+      setShowSubredditDropdown(false);
+    } else {
+      setShowSubredditDropdown(true);
+    }
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSubredditDropdown) return;
+
+    const options = ['custom', ...filteredSubreddits.map(sub => sub.subreddit_name)];
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex(prev => prev < options.length - 1 ? prev + 1 : prev);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex(prev => prev > 0 ? prev - 1 : prev);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0) {
+          const selectedOption = options[highlightedIndex];
+          handleSubredditSelect(selectedOption);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowSubredditDropdown(false);
+        setHighlightedIndex(-1);
+        break;
     }
   };
 
@@ -815,21 +875,72 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
 
         {/* Subreddit Selection */}
         {commissionType === COMMISSION_TYPES.SUBREDDIT && (
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit</label>
-            <select
-              value={subreddit}
-              onChange={(e) => handleSubredditSelect(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">Select a subreddit...</option>
-              {availableSubreddits.map((sub) => (
-                <option key={sub.id} value={sub.subreddit_name}>
-                  r/{sub.subreddit_name} {sub.subscribers && `(${sub.subscribers.toLocaleString()} members)`}
-                </option>
-              ))}
-              <option value="custom">📝 Add a new subreddit...</option>
-            </select>
+            
+            {/* Search input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={subredditSearchTerm}
+                onChange={(e) => handleSubredditSearchChange(e.target.value)}
+                onFocus={() => setShowSubredditDropdown(true)}
+                onKeyDown={handleKeyDown}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 pr-8"
+                placeholder="Search or type subreddit name..."
+                autoComplete="off"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Dropdown */}
+            {showSubredditDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                {/* Add new subreddit option at the top */}
+                <button
+                  type="button"
+                  onClick={() => handleSubredditSelect('custom')}
+                  className={`w-full px-3 py-2 text-left border-b border-gray-100 text-purple-600 font-medium ${
+                    highlightedIndex === 0 ? 'bg-purple-50' : 'hover:bg-purple-50'
+                  }`}
+                >
+                  <span className="mr-2">📝</span>
+                  Add a new subreddit...
+                </button>
+                
+                {/* Filtered subreddits */}
+                {filteredSubreddits.length > 0 ? (
+                  filteredSubreddits.map((sub, index) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => handleSubredditSelect(sub.subreddit_name)}
+                      className={`w-full px-3 py-2 text-left ${
+                        highlightedIndex === index + 1 ? 'bg-gray-100' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-medium">r/{sub.subreddit_name}</span>
+                    </button>
+                  ))
+                ) : subredditSearchTerm && (
+                  <div className="px-3 py-2 text-gray-500 text-sm">
+                    No matching subreddits found. Try adding a new one above.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Click outside to close dropdown */}
+            {showSubredditDropdown && (
+              <div 
+                className="fixed inset-0 z-5" 
+                onClick={() => setShowSubredditDropdown(false)}
+              />
+            )}
             
             {/* Custom subreddit input */}
             {showCustomSubredditInput && (
