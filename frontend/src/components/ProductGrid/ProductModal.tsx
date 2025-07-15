@@ -85,9 +85,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
     }
   }, [isOpen, product.pipeline_run.id, product.product_info.id, getPublishedPost, publishProduct]);
 
+  // Create custom title with HD badge
+  const modalTitle = (
+    <div className="flex items-center gap-3">
+      <span>{product.product_info.image_title || product.product_info.theme}</span>
+      {product.product_info.image_quality === 'hd' && (
+        <span 
+          className="inline-flex items-center px-2.5 py-1 rounded-md bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold uppercase tracking-wider shadow-sm cursor-help"
+          title={`${product.product_info.donation_info?.tier_name || 'Sapphire'} tier posts are illustrated with HD quality`}
+        >
+          HD
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title={product.product_info.image_title || product.product_info.theme}>
+      <Modal isOpen={isOpen} onClose={onClose} title={modalTitle}>
         <div className="p-4 sm:p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             {/* Left Column: Image, Theme, Actions */}
