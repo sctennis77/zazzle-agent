@@ -456,7 +456,8 @@ SUBREDDIT_CRITERIA = {
 
 def pick_subreddit(db: Session = None) -> str:
     """
-    Pick a random subreddit from the database.
+    Pick a random subreddit, trying to fetch a new one from Reddit first,
+    then falling back to database or hardcoded list.
 
     Args:
         db: Database session. If None, creates a new session.
@@ -476,22 +477,67 @@ def pick_subreddit(db: Session = None) -> str:
         should_close = False
 
     try:
+        from app.clients.reddit_client import RedditClient
         from app.db.models import Subreddit
+        import logging
 
+        logger = logging.getLogger(__name__)
+
+        # Try to fetch a random subreddit from Reddit's API
+        reddit_client = RedditClient()
+        random_subreddit_name = reddit_client.fetch_random_subreddit()
+
+        if random_subreddit_name:
+            # Check if this subreddit already exists in our database
+            existing_subreddit = db.query(Subreddit).filter_by(
+                subreddit_name=random_subreddit_name
+            ).first()
+
+            if not existing_subreddit:
+                # Try to get subreddit info and add it to database
+                try:
+                    subreddit_info = reddit_client.get_subreddit_info(
+                        random_subreddit_name
+                    )
+                    
+                    # Create new subreddit entry
+                    new_subreddit = Subreddit(
+                        subreddit_name=random_subreddit_name,
+                        display_name=subreddit_info.get("display_name"),
+                        description=subreddit_info.get("description"),
+                        public_description=subreddit_info.get("public_description"),
+                        subscribers=subreddit_info.get("subscribers"),
+                        over18=subreddit_info.get("over18", False)
+                    )
+                    
+                    db.add(new_subreddit)
+                    db.commit()
+                    
+                    logger.info(
+                        f"Added new subreddit to database: {random_subreddit_name}"
+                    )
+                    
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get info for subreddit {random_subreddit_name}: {e}"
+                    )
+                    db.rollback()
+
+            return random_subreddit_name
+
+        # Fallback to existing database subreddits
         subreddits = db.query(Subreddit).all()
 
-        if not subreddits:
-            # Fallback to hardcoded list if database is empty
-            import logging
+        if subreddits:
+            selected_subreddit = random.choice(subreddits)
+            return selected_subreddit.subreddit_name
 
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                "No subreddits found in database, falling back to hardcoded list"
-            )
-            return random.choice(AVAILABLE_SUBREDDITS)
-
-        selected_subreddit = random.choice(subreddits)
-        return selected_subreddit.subreddit_name
+        # Final fallback to hardcoded list if database is empty
+        logger.warning(
+            "No subreddits found in database and failed to fetch from Reddit, "
+            "falling back to hardcoded list"
+        )
+        return random.choice(AVAILABLE_SUBREDDITS)
 
     finally:
         if should_close:
