@@ -19,9 +19,9 @@ import json
 import os
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -33,11 +33,12 @@ logger = get_logger(__name__)
 # Tier System Constants
 class DonationTier(str, Enum):
     """Donation tiers based on amount."""
-    BRONZE = "bronze"      # $1
-    SILVER = "silver"      # $5
-    GOLD = "gold"          # $10
+
+    BRONZE = "bronze"  # $1
+    SILVER = "silver"  # $5
+    GOLD = "gold"  # $10
     SAPPHIRE = "sapphire"  # $25
-    DIAMOND = "diamond"    # $100
+    DIAMOND = "diamond"  # $100
 
 
 # Tier amount mappings
@@ -51,29 +52,29 @@ TIER_AMOUNTS = {
 
 # Commission type minimum tier requirements
 COMMISSION_MINIMUM_TIERS = {
-    "specific_post": DonationTier.GOLD,      # $10 minimum
+    "specific_post": DonationTier.GOLD,  # $10 minimum
     "random_subreddit": DonationTier.SILVER,  # $5 minimum
-    "random_random": DonationTier.BRONZE,     # $1 minimum
+    "random_random": DonationTier.BRONZE,  # $1 minimum
 }
 
 
 def get_tier_from_amount(amount: Decimal) -> DonationTier:
     """
     Determine the donation tier based on the amount.
-    
+
     Args:
         amount: Donation amount in USD
-        
+
     Returns:
         DonationTier: The appropriate tier for the amount
     """
     # Sort tiers by amount in descending order to find the highest applicable tier
     sorted_tiers = sorted(TIER_AMOUNTS.items(), key=lambda x: x[1], reverse=True)
-    
+
     for tier, tier_amount in sorted_tiers:
         if amount >= tier_amount:
             return tier
-    
+
     # If amount is less than Bronze minimum, return Bronze
     return DonationTier.BRONZE
 
@@ -81,10 +82,10 @@ def get_tier_from_amount(amount: Decimal) -> DonationTier:
 def get_minimum_amount_for_tier(tier: DonationTier) -> Decimal:
     """
     Get the minimum amount required for a specific tier.
-    
+
     Args:
         tier: The donation tier
-        
+
     Returns:
         Decimal: Minimum amount required for the tier
     """
@@ -94,20 +95,20 @@ def get_minimum_amount_for_tier(tier: DonationTier) -> Decimal:
 def validate_commission_tier(amount: Decimal, commission_type: str) -> bool:
     """
     Validate that the donation amount meets the minimum tier requirement for the commission type.
-    
+
     Args:
         amount: Donation amount in USD
         commission_type: Type of commission being requested
-        
+
     Returns:
         bool: True if amount meets minimum tier requirement
     """
     if commission_type not in COMMISSION_MINIMUM_TIERS:
         return False
-    
+
     required_tier = COMMISSION_MINIMUM_TIERS[commission_type]
     required_amount = get_minimum_amount_for_tier(required_tier)
-    
+
     return amount >= required_amount
 
 
@@ -135,13 +136,13 @@ class RedditPostSchema(BaseModel):
         if isinstance(value, str):
             return value
         # Handle SQLAlchemy relationship object
-        if hasattr(value, 'subreddit_name'):
+        if hasattr(value, "subreddit_name"):
             return value.subreddit_name
         # Handle case where subreddit might be a different object
-        if hasattr(value, '__class__') and 'Subreddit' in str(value.__class__):
+        if hasattr(value, "__class__") and "Subreddit" in str(value.__class__):
             # Try to get subreddit_name attribute
             try:
-                return getattr(value, 'subreddit_name', str(value))
+                return getattr(value, "subreddit_name", str(value))
             except:
                 return str(value)
         return str(value)
@@ -783,43 +784,80 @@ class DonationStatus(str, Enum):
 
 class DonationRequest(BaseModel):
     """Request model for creating a donation payment intent."""
-    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
-    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
-    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
-    message: Optional[str] = Field(None, max_length=1000, description="Optional message from donor")
-    subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit for the commission. Required for specific_post and random_subreddit, optional for random_random.")
-    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor (if blank, donation is anonymous)")
-    is_anonymous: bool = Field(False, description="Whether the donation should be anonymous")
-    donation_type: str = Field(..., description="Type of donation: 'commission' or 'support'")
-    post_id: Optional[str] = Field(None, max_length=100, description="Reddit post ID (required for support donations, optional for commission)")
-    commission_message: Optional[str] = Field(None, max_length=1000, description="Optional commission message (for commission donations)")
-    commission_type: Optional[str] = Field(None, description="Type of commission: 'specific_post' or 'random_subreddit'")
 
-    @field_validator('donation_type')
+    amount_usd: Decimal = Field(
+        ..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)"
+    )
+    customer_email: Optional[str] = Field(
+        None, max_length=255, description="Customer email address"
+    )
+    customer_name: Optional[str] = Field(
+        None, max_length=255, description="Customer name"
+    )
+    message: Optional[str] = Field(
+        None, max_length=1000, description="Optional message from donor"
+    )
+    subreddit: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Subreddit for the commission. Required for specific_post and random_subreddit, optional for random_random.",
+    )
+    reddit_username: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Reddit username of the donor (if blank, donation is anonymous)",
+    )
+    is_anonymous: bool = Field(
+        False, description="Whether the donation should be anonymous"
+    )
+    donation_type: str = Field(
+        ..., description="Type of donation: 'commission' or 'support'"
+    )
+    post_id: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Reddit post ID (required for support donations, optional for commission)",
+    )
+    commission_message: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Optional commission message (for commission donations)",
+    )
+    commission_type: Optional[str] = Field(
+        None, description="Type of commission: 'specific_post' or 'random_subreddit'"
+    )
+
+    @field_validator("donation_type")
     @classmethod
     def validate_donation_type(cls, v):
         """Validate donation type."""
         if v not in ["commission", "support"]:
             raise ValueError("donation_type must be 'commission' or 'support'")
         return v
-    
-    @field_validator('commission_type')
+
+    @field_validator("commission_type")
     @classmethod
     def validate_commission_type(cls, v):
         """Validate commission type."""
-        if v is not None and v not in ["specific_post", "random_subreddit", "random_random"]:
-            raise ValueError("commission_type must be 'specific_post', 'random_subreddit', or 'random_random'")
+        if v is not None and v not in [
+            "specific_post",
+            "random_subreddit",
+            "random_random",
+        ]:
+            raise ValueError(
+                "commission_type must be 'specific_post', 'random_subreddit', or 'random_random'"
+            )
         return v
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def validate_post_id_for_support(self):
         """Validate that post_id is provided for support donations."""
         if self.donation_type == "support":
             if not self.post_id or self.post_id.strip() == "":
                 raise ValueError("post_id is required for support donations")
         return self
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def validate_commission_requirements(self):
         """Validate commission type and tier requirements."""
         if self.donation_type == "commission":
@@ -829,20 +867,28 @@ class DonationRequest(BaseModel):
             if not validate_commission_tier(self.amount_usd, self.commission_type):
                 required_tier = COMMISSION_MINIMUM_TIERS[self.commission_type]
                 required_amount = get_minimum_amount_for_tier(required_tier)
-                raise ValueError(f"Commission type '{self.commission_type}' requires minimum {required_tier.value} tier (${required_amount})")
+                raise ValueError(
+                    f"Commission type '{self.commission_type}' requires minimum {required_tier.value} tier (${required_amount})"
+                )
             # For all commission types, allow post_id to be provided (for new workflow)
             if self.commission_type == "random_random":
                 pass  # No validation on subreddit or post_id for random_random
             elif self.commission_type == "random_subreddit":
                 if not self.subreddit:
-                    raise ValueError("subreddit is required for random_subreddit commissions")
+                    raise ValueError(
+                        "subreddit is required for random_subreddit commissions"
+                    )
             elif self.commission_type == "specific_post":
                 if not self.subreddit:
-                    raise ValueError("subreddit is required for specific_post commissions")
+                    raise ValueError(
+                        "subreddit is required for specific_post commissions"
+                    )
                 if not self.post_id:
-                    raise ValueError("post_id is required for specific_post commissions")
+                    raise ValueError(
+                        "post_id is required for specific_post commissions"
+                    )
         return self
-    
+
     # Removed automatic is_anonymous validation - let frontend control this
     # @field_validator('reddit_username')
     # @classmethod
@@ -855,35 +901,71 @@ class DonationRequest(BaseModel):
 
 class CommissionRequest(BaseModel):
     """Request model for commissioning a post."""
-    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
-    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
-    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
-    subreddit: str = Field(..., max_length=100, description="Subreddit to commission from")
-    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
-    is_anonymous: bool = Field(False, description="Whether the commission should be anonymous")
-    post_id: Optional[str] = Field(None, max_length=32, description="Reddit post ID for Gold/Platinum tiers")
-    commission_message: Optional[str] = Field(None, max_length=500, description="Optional message to display with commission badge")
+
+    amount_usd: Decimal = Field(
+        ..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)"
+    )
+    customer_email: Optional[str] = Field(
+        None, max_length=255, description="Customer email address"
+    )
+    customer_name: Optional[str] = Field(
+        None, max_length=255, description="Customer name"
+    )
+    subreddit: str = Field(
+        ..., max_length=100, description="Subreddit to commission from"
+    )
+    reddit_username: Optional[str] = Field(
+        None, max_length=100, description="Reddit username of the donor"
+    )
+    is_anonymous: bool = Field(
+        False, description="Whether the commission should be anonymous"
+    )
+    post_id: Optional[str] = Field(
+        None, max_length=32, description="Reddit post ID for Gold/Platinum tiers"
+    )
+    commission_message: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Optional message to display with commission badge",
+    )
 
 
 class SponsorRequest(BaseModel):
     """Request model for sponsoring an existing post."""
-    amount_usd: Decimal = Field(..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)")
-    customer_email: Optional[str] = Field(None, max_length=255, description="Customer email address")
-    customer_name: Optional[str] = Field(None, max_length=255, description="Customer name")
-    reddit_username: Optional[str] = Field(None, max_length=100, description="Reddit username of the donor")
-    is_anonymous: bool = Field(False, description="Whether the sponsorship should be anonymous")
+
+    amount_usd: Decimal = Field(
+        ..., ge=0.50, le=10000.00, description="Amount in USD (minimum $0.50)"
+    )
+    customer_email: Optional[str] = Field(
+        None, max_length=255, description="Customer email address"
+    )
+    customer_name: Optional[str] = Field(
+        None, max_length=255, description="Customer name"
+    )
+    reddit_username: Optional[str] = Field(
+        None, max_length=100, description="Reddit username of the donor"
+    )
+    is_anonymous: bool = Field(
+        False, description="Whether the sponsorship should be anonymous"
+    )
     post_id: str = Field(..., max_length=32, description="Reddit post ID to sponsor")
-    sponsor_message: Optional[str] = Field(None, max_length=500, description="Optional message from sponsor")
+    sponsor_message: Optional[str] = Field(
+        None, max_length=500, description="Optional message from sponsor"
+    )
 
 
 class DonationResponse(BaseModel):
     """Response model for donation payment intent."""
-    client_secret: str = Field(..., description="Stripe client secret for payment confirmation")
+
+    client_secret: str = Field(
+        ..., description="Stripe client secret for payment confirmation"
+    )
     payment_intent_id: str = Field(..., description="Stripe payment intent ID")
 
 
 class DonationSchema(BaseModel):
     """Schema for donation data."""
+
     id: int
     stripe_payment_intent_id: str
     amount_cents: int
@@ -913,13 +995,13 @@ class DonationSchema(BaseModel):
         if isinstance(value, str):
             return value
         # Handle SQLAlchemy relationship object
-        if hasattr(value, 'subreddit_name'):
+        if hasattr(value, "subreddit_name"):
             return value.subreddit_name
         # Handle case where subreddit might be a different object
-        if hasattr(value, '__class__') and 'Subreddit' in str(value.__class__):
+        if hasattr(value, "__class__") and "Subreddit" in str(value.__class__):
             # Try to get subreddit_name attribute
             try:
-                return getattr(value, 'subreddit_name', str(value))
+                return getattr(value, "subreddit_name", str(value))
             except:
                 return str(value)
         return str(value)
@@ -930,6 +1012,7 @@ class DonationSchema(BaseModel):
 
 class DonationSummary(BaseModel):
     """Summary of donation statistics."""
+
     total_donations: int
     total_amount_usd: Decimal
     total_donors: int
@@ -938,54 +1021,75 @@ class DonationSummary(BaseModel):
 
 class CheckoutSessionResponse(BaseModel):
     """Response model for Stripe Checkout session creation."""
+
     session_id: str
     url: str
 
 
 class CommissionValidationRequest(BaseModel):
     """Request model for validating commission parameters."""
-    commission_type: str = Field(..., description="Type of commission: 'random_subreddit', 'specific_post', or 'random_random'")
-    subreddit: Optional[str] = Field(None, max_length=100, description="Subreddit name (required for random_subreddit and specific_post)")
-    post_id: Optional[str] = Field(None, max_length=32, description="Reddit post ID (required for specific_post)")
 
-    @field_validator('commission_type')
+    commission_type: str = Field(
+        ...,
+        description="Type of commission: 'random_subreddit', 'specific_post', or 'random_random'",
+    )
+    subreddit: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Subreddit name (required for random_subreddit and specific_post)",
+    )
+    post_id: Optional[str] = Field(
+        None, max_length=32, description="Reddit post ID (required for specific_post)"
+    )
+
+    @field_validator("commission_type")
     @classmethod
     def validate_commission_type(cls, v):
         """Validate commission type."""
-        valid_types = ['random_subreddit', 'specific_post', 'random_random']
+        valid_types = ["random_subreddit", "specific_post", "random_random"]
         if v not in valid_types:
-            raise ValueError(f'commission_type must be one of: {valid_types}')
+            raise ValueError(f"commission_type must be one of: {valid_types}")
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_required_fields(self):
         """Validate required fields based on commission type."""
-        if self.commission_type in ['random_subreddit', 'specific_post']:
+        if self.commission_type in ["random_subreddit", "specific_post"]:
             if not self.subreddit:
-                raise ValueError(f'subreddit is required for {self.commission_type} commission type')
-        
-        if self.commission_type == 'specific_post':
+                raise ValueError(
+                    f"subreddit is required for {self.commission_type} commission type"
+                )
+
+        if self.commission_type == "specific_post":
             if not self.post_id:
-                raise ValueError('post_id is required for specific_post commission type')
-        
+                raise ValueError(
+                    "post_id is required for specific_post commission type"
+                )
+
         return self
 
 
 class CommissionValidationResponse(BaseModel):
     """Response model for commission validation."""
+
     valid: bool = Field(..., description="Whether the commission parameters are valid")
     subreddit: Optional[str] = Field(None, description="Validated subreddit name")
-    subreddit_id: Optional[int] = Field(None, description="Database ID of the subreddit")
+    subreddit_id: Optional[int] = Field(
+        None, description="Database ID of the subreddit"
+    )
     post_id: Optional[str] = Field(None, description="Validated post ID")
     post_title: Optional[str] = Field(None, description="Title of the post")
     post_content: Optional[str] = Field(None, description="Content of the post")
     post_url: Optional[str] = Field(None, description="URL of the post")
-    commission_type: str = Field(..., description="Type of commission that was validated")
+    commission_type: str = Field(
+        ..., description="Type of commission that was validated"
+    )
     error: Optional[str] = Field(None, description="Error message if validation failed")
 
 
 class ProductSubredditPostSchema(BaseModel):
     """Schema for tracking products published to subreddits."""
+
     id: int
     product_info_id: int
     subreddit_name: str
@@ -1003,8 +1107,10 @@ class ProductSubredditPostSchema(BaseModel):
 
 # Subreddit Management Models
 
+
 class SubredditSchema(BaseModel):
     """Schema for subreddit information."""
+
     id: int
     subreddit_name: str
     display_name: Optional[str] = None
@@ -1020,28 +1126,34 @@ class SubredditSchema(BaseModel):
 
 class SubredditCreateRequest(BaseModel):
     """Request model for creating/validating a new subreddit."""
-    subreddit_name: str = Field(..., min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_]+$')
 
-    @field_validator('subreddit_name')
+    subreddit_name: str = Field(
+        ..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_]+$"
+    )
+
+    @field_validator("subreddit_name")
     @classmethod
     def validate_subreddit_name(cls, v):
         """Validate subreddit name format."""
         if not v:
-            raise ValueError('Subreddit name cannot be empty')
-        
+            raise ValueError("Subreddit name cannot be empty")
+
         # Remove 'r/' prefix if present
-        if v.startswith('r/'):
+        if v.startswith("r/"):
             v = v[2:]
-        
+
         # Basic validation for Reddit subreddit names
-        if not v.replace('_', '').isalnum():
-            raise ValueError('Subreddit name can only contain letters, numbers, and underscores')
-        
+        if not v.replace("_", "").isalnum():
+            raise ValueError(
+                "Subreddit name can only contain letters, numbers, and underscores"
+            )
+
         return v.lower()
 
 
 class SubredditValidationResponse(BaseModel):
     """Response model for subreddit validation."""
+
     subreddit_name: str
     exists: bool
     message: str
@@ -1050,8 +1162,10 @@ class SubredditValidationResponse(BaseModel):
 
 # Fundraising Goals Models
 
+
 class SubredditFundraisingGoalSchema(BaseModel):
     """Schema for subreddit fundraising goals."""
+
     id: int
     subreddit_id: int
     subreddit_name: str
@@ -1061,20 +1175,24 @@ class SubredditFundraisingGoalSchema(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     deadline: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class FundraisingGoalsConfig(BaseModel):
     """Configuration for fundraising goals system."""
+
     overall_goal_amount: Decimal = Field(default=Decimal("10000.00"))
-    overall_goal_reward: str = Field(default="Clouvel will be able to understand images")
+    overall_goal_reward: str = Field(
+        default="Clouvel will be able to understand images"
+    )
     subreddit_goal_amount: Decimal = Field(default=Decimal("1000.00"))
     subreddit_goal_reward: str = Field(default="Clouvel will illustrate a banner image")
 
 
 class FundraisingProgress(BaseModel):
     """Progress information for fundraising goals."""
+
     overall_raised: Decimal
     overall_goal: Decimal
     overall_progress_percentage: float
