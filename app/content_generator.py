@@ -57,7 +57,6 @@ class ContentGenerator:
         self.client = OpenAI(api_key=self.api_key)
         logger.info("Initializing ContentGenerator")
 
-    @track_openai_call(model="gpt-3.5-turbo", operation="chat")
     def _make_openai_call(self, prompt: str) -> str:
         """
         Make an OpenAI API call with tracking.
@@ -68,10 +67,24 @@ class ContentGenerator:
         Returns:
             str: The response content
         """
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo", messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content.strip()
+        model = self._get_model()
+        
+        # Apply tracking with the actual model being used
+        @track_openai_call(model=model, operation="chat")
+        def _tracked_call():
+            response = self.client.chat.completions.create(
+                model=model, messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content.strip()
+            
+        return _tracked_call()
+    
+    def _get_model(self) -> str:
+        """
+        Get the model to use for content generation.
+        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-4o-mini.
+        """
+        return os.getenv("OPENAI_IDEA_MODEL", "gpt-4o-mini")
 
     def generate_content(
         self, product_name: str, force_new_content: bool = False

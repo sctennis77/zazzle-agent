@@ -633,9 +633,9 @@ class RedditAgent:
     def _get_idea_model(self) -> str:
         """
         Get the model to use for product idea generation.
-        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-3.5-turbo.
+        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-4o-mini.
         """
-        return os.getenv("OPENAI_IDEA_MODEL", "gpt-3.5-turbo")
+        return os.getenv("OPENAI_IDEA_MODEL", "gpt-4o-mini")
 
     async def _send_image_generation_progress(
         self, delay: int = 1, image_title: str = None
@@ -673,15 +673,20 @@ class RedditAgent:
         except Exception as e:
             logger.error(f"Progress update error: {e}")
 
-    @track_openai_call(model="gpt-3.5-turbo", operation="chat")
     def _make_openai_call(self, messages: List[Dict[str, str]]) -> str:
         """
         Make an OpenAI API call with tracking.
         Uses the model specified by _get_idea_model().
         """
         model = self._get_idea_model()
-        response = self.openai.chat.completions.create(model=model, messages=messages)
-        return response.choices[0].message.content
+        
+        # Apply tracking with the actual model being used
+        @track_openai_call(model=model, operation="chat")
+        def _tracked_call():
+            response = self.openai.chat.completions.create(model=model, messages=messages)
+            return response.choices[0].message.content
+            
+        return _tracked_call()
 
     async def _determine_product_idea(
         self, reddit_context: RedditContext
