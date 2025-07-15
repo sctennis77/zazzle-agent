@@ -121,9 +121,6 @@ stripe_service = StripeService()
 # Initialize task manager
 task_manager = TaskManager()
 
-# Initialize task monitor
-from app.services.task_monitor import TaskMonitor
-task_monitor = TaskMonitor(task_manager)
 
 
 @app.on_event("startup")
@@ -144,9 +141,6 @@ async def startup_event():
     asyncio.create_task(background_scheduler.start())
     logger.info("Background scheduler started successfully!")
     
-    logger.info("Starting task monitor...")
-    await task_monitor.start_monitoring()
-    logger.info("Task monitor started successfully!")
 
 
 @app.on_event("shutdown")
@@ -158,9 +152,6 @@ async def shutdown_event():
     await background_scheduler.stop()
     logger.info("Background scheduler stopped successfully!")
 
-    logger.info("Stopping task monitor...")
-    await task_monitor.stop_monitoring()
-    logger.info("Task monitor stopped successfully!")
     
     logger.info("Stopping WebSocket manager...")
     await websocket_manager.stop()
@@ -1635,32 +1626,8 @@ async def get_task_status(task_id: str):
         )
 
 
-@app.get("/api/tasks/monitor/status")
-async def get_task_monitor_status():
-    """
-    Get task monitor status.
-    Returns:
-        Dict: Task monitor status information
-    """
-    try:
-        return task_monitor.get_monitoring_status()
-    except Exception as e:
-        logger.error(f"Error getting task monitor status: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/api/tasks/monitor/stuck")
-async def check_stuck_tasks():
-    """
-    Check for stuck tasks.
-    Returns:
-        Dict: Information about stuck tasks
-    """
-    try:
-        return await task_monitor.check_stuck_tasks_once()
-    except Exception as e:
-        logger.error(f"Error checking stuck tasks: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/tasks/{task_id}/heartbeat")
@@ -2143,6 +2110,63 @@ async def run_scheduler_now(
         raise HTTPException(
             status_code=500, detail=f"Failed to run scheduled commission: {str(e)}"
         )
+
+
+@app.get("/api/scheduler/next-run")
+async def get_next_scheduled_run(db: Session = Depends(get_db)):
+    """
+    Get the next scheduled commission run time.
+    
+    Returns:
+        Dict: Information about the next scheduled run including timestamp and time remaining
+    """
+    try:
+        from app.redis_service import redis_service
+        from app.services.scheduler_service import SchedulerService
+        
+        scheduler_service = SchedulerService(redis_service, task_manager)
+        status = scheduler_service.get_scheduler_status(db)
+        
+        result = {
+            "enabled": status["enabled"],
+            "next_run_at": status["next_run_at"],
+            "interval_hours": status["interval_hours"],
+        }
+        
+        # Calculate time remaining if next run is scheduled
+        if status["next_run_at"] and status["enabled"]:
+            from datetime import datetime, timezone
+            next_run = datetime.fromisoformat(status["next_run_at"].replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            
+            if next_run > now:
+                time_remaining = next_run - now
+                result["time_remaining_seconds"] = int(time_remaining.total_seconds())
+                result["time_remaining_human"] = _format_time_remaining(time_remaining)
+            else:
+                result["time_remaining_seconds"] = 0
+                result["time_remaining_human"] = "Overdue"
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting next scheduled run: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get scheduler status")
+
+
+def _format_time_remaining(time_delta) -> str:
+    """Format time delta into human readable string."""
+    total_seconds = int(time_delta.total_seconds())
+    
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    elif total_seconds < 3600:
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        return f"{minutes}m {seconds}s"
+    else:
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours}h {minutes}m"
 
 
 @app.get("/api/subreddits", response_model=List[SubredditSchema])

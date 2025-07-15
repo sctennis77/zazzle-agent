@@ -264,3 +264,100 @@ def test_health_check(client):
     data = response.json()
     assert data["status"] == "healthy"
     assert "timestamp" in data
+
+
+def test_get_next_scheduled_run_enabled(client, db_session):
+    """Test getting next scheduled run when scheduler is enabled."""
+    from app.db.models import SchedulerConfig
+    from datetime import datetime, timezone, timedelta
+    
+    # Create scheduler config
+    now = datetime.now(timezone.utc)
+    next_run = now + timedelta(hours=12)
+    config = SchedulerConfig(
+        enabled=True,
+        interval_hours=24,
+        last_run_at=now - timedelta(hours=12),
+        next_run_at=next_run
+    )
+    db_session.add(config)
+    db_session.commit()
+    
+    response = client.get("/api/scheduler/next-run")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["enabled"] is True
+    assert data["interval_hours"] == 24
+    assert data["next_run_at"] is not None
+    assert "time_remaining_seconds" in data
+    assert data["time_remaining_seconds"] > 0
+    assert "time_remaining_human" in data
+    # Should be in format like "12h 0m"
+    assert "h" in data["time_remaining_human"] or "m" in data["time_remaining_human"]
+
+
+def test_get_next_scheduled_run_disabled(client, db_session):
+    """Test getting next scheduled run when scheduler is disabled."""
+    from app.db.models import SchedulerConfig
+    from datetime import datetime, timezone, timedelta
+    
+    # Create disabled scheduler config
+    now = datetime.now(timezone.utc)
+    config = SchedulerConfig(
+        enabled=False,
+        interval_hours=24,
+        last_run_at=now - timedelta(hours=12),
+        next_run_at=now + timedelta(hours=12)
+    )
+    db_session.add(config)
+    db_session.commit()
+    
+    response = client.get("/api/scheduler/next-run")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["enabled"] is False
+    assert data["interval_hours"] == 24
+    assert data["next_run_at"] is not None
+    # No time remaining info when disabled
+    assert "time_remaining_seconds" not in data
+    assert "time_remaining_human" not in data
+
+
+def test_get_next_scheduled_run_overdue(client, db_session):
+    """Test getting next scheduled run when it's overdue."""
+    from app.db.models import SchedulerConfig
+    from datetime import datetime, timezone, timedelta
+    
+    # Create scheduler config with overdue next run
+    now = datetime.now(timezone.utc)
+    config = SchedulerConfig(
+        enabled=True,
+        interval_hours=24,
+        last_run_at=now - timedelta(hours=25),
+        next_run_at=now - timedelta(hours=1)  # Overdue
+    )
+    db_session.add(config)
+    db_session.commit()
+    
+    response = client.get("/api/scheduler/next-run")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["enabled"] is True
+    assert data["time_remaining_seconds"] == 0
+    assert data["time_remaining_human"] == "Overdue"
+
+
+def test_get_next_scheduled_run_no_config(client):
+    """Test getting next scheduled run when no config exists."""
+    response = client.get("/api/scheduler/next-run")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["enabled"] is False
+    assert data["next_run_at"] is None
+    assert data["interval_hours"] == 1  # Default from service
+    assert "time_remaining_seconds" not in data
+    assert "time_remaining_human" not in data

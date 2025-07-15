@@ -4,6 +4,7 @@ import logo from '../../assets/logo.png';
 import React, { useMemo, useState, useEffect } from 'react';
 import { createNoise3D } from 'simplex-noise';
 import { AnimatedPainting } from '../common/AnimatedPainting';
+import { useScheduledRun } from '../../hooks/useScheduledRun';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,6 +17,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
   const [showAnimated, setShowAnimated] = useState(false);
   const [showLogo, setShowLogo] = useState(true);
   const animationDuration = 20; // seconds
+  const { data: scheduledRunData } = useScheduledRun();
+  const [localTimeRemaining, setLocalTimeRemaining] = useState<number | null>(null);
 
   // Handle logo click
   const handleLogoClick = () => {
@@ -27,6 +30,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
     setShowLogo(false);
     setShowAnimated(true);
     
+    // Set initial countdown value when animation starts
+    if (scheduledRunData?.time_remaining_seconds && scheduledRunData.enabled) {
+      setLocalTimeRemaining(scheduledRunData.time_remaining_seconds);
+    }
+    
     // Trigger FAB animation when thank you message appears
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('trigger-fab-animation'));
@@ -36,8 +44,25 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
     setTimeout(() => {
       setShowAnimated(false);
       setShowLogo(true);
+      setLocalTimeRemaining(null); // Clear countdown when animation ends
     }, animationDuration * 1000); // match animation duration
   };
+
+  // Update local countdown every second when showing animation
+  useEffect(() => {
+    if (!showAnimated || localTimeRemaining === null || localTimeRemaining <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setLocalTimeRemaining(prev => {
+        if (prev === null || prev <= 0) return null;
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showAnimated, localTimeRemaining]);
 
   // Listen for external animation triggers (e.g., from commission task creation)
   useEffect(() => {
@@ -51,6 +76,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
       window.removeEventListener('trigger-logo-animation', handleExternalTrigger);
     };
   }, []);
+
+  // Helper function to format time remaining
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 text-gray-900">
@@ -101,13 +141,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
             </div>
             {/* Right: Show message during animation */}
             <div className="flex-1 flex items-center justify-end">
-              <span
-                className={`transition-all duration-700 text-2xl font-bold text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-2xl px-8 py-4 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60
+              <div
+                className={`transition-all duration-700 text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-2xl px-8 py-4 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60
                   ${showAnimated ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8 pointer-events-none'}`}
-                style={{ minWidth: '22rem', textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: '600' }}
+                style={{ minWidth: '22rem', textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif' }}
               >
-                Thanks for supporting clouvel 🐶❤️
-              </span>
+                <div className="text-2xl font-bold mb-1">
+                  Thanks for supporting clouvel 🐶❤️
+                </div>
+                {localTimeRemaining !== null && localTimeRemaining > 0 && (
+                  <div className="text-sm font-medium opacity-90">
+                    Clouvel will automatically commission a post in: {formatTime(localTimeRemaining)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
