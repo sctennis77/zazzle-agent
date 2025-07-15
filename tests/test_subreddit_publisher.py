@@ -317,6 +317,7 @@ class TestSubredditPublisher:
         mock_product_schema.prompt_version = "1.0.0"
         mock_product_schema.product_type = "sticker"
         mock_product_schema.design_description = "Test design description"
+        mock_product_schema.image_quality = "standard"
         mock_product_schema.available_actions = {}
         mock_product_schema.donation_info = {}
         

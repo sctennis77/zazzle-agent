@@ -1,209 +1,127 @@
-import os
-os.environ["STRIPE_SECRET_KEY"] = "test_secret_key"
+"""
+Centralized test configuration and fixtures.
 
+This module provides a unified approach to test setup, database management,
+and common fixtures to eliminate duplication across test files.
+"""
+
+import os
 import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+from typing import Generator
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from fastapi.testclient import TestClient
+
+# Set test environment variables early
+os.environ["TESTING"] = "true"
+os.environ["STRIPE_SECRET_KEY"] = "test_secret_key"
+os.environ["ADMIN_SECRET"] = "testsecret123"
 
 pytest_plugins = ["pytest_asyncio"]
 
-# Patch StripeService before any imports to prevent initialization errors
-mock_stripe_service = MagicMock()
 
-# Configure the mock to return real donation objects
-def save_donation_to_db_side_effect(db, payment_intent_data, donation_request):
-    from app.db.models import Donation, Subreddit
-    from app.models import DonationStatus, get_tier_from_amount
+@pytest.fixture(scope="session")
+def test_engine():
+    """Create a test database engine for the entire test session."""
+    from app.db.models import Base
     
-    # Check if donation already exists
-    existing_donation = db.query(Donation).filter_by(
-        stripe_payment_intent_id=payment_intent_data["payment_intent_id"]
-    ).first()
+    # Use a file-based SQLite database for thread safety
+    test_db_path = "/tmp/zazzle_test_session.db"
     
-    if existing_donation:
-        return existing_donation
+    # Clean up any existing test database
+    if os.path.exists(test_db_path):
+        os.remove(test_db_path)
     
-    # Get or create subreddit
-    subreddit_id = None
-    if donation_request.subreddit:
-        subreddit = db.query(Subreddit).filter_by(subreddit_name=donation_request.subreddit).first()
-        if not subreddit:
-            subreddit = Subreddit(
-                subreddit_name=donation_request.subreddit,
-                display_name=donation_request.subreddit.title()
-            )
-            db.add(subreddit)
-            db.commit()
-            db.refresh(subreddit)
-        subreddit_id = subreddit.id
-    
-    # Determine tier
-    tier = get_tier_from_amount(donation_request.amount_usd)
-    
-    # Create donation
-    donation = Donation(
-        stripe_payment_intent_id=payment_intent_data["payment_intent_id"],
-        amount_cents=payment_intent_data["amount_cents"],
-        amount_usd=payment_intent_data["amount_usd"],
-        currency="usd",
-        status=DonationStatus.PENDING.value,
-        tier=tier.value,
-        customer_email=donation_request.customer_email,
-        customer_name=donation_request.customer_name,
-        message=donation_request.message,
-        subreddit_id=subreddit_id,
-        reddit_username=donation_request.reddit_username,
-        is_anonymous=donation_request.is_anonymous,
-        stripe_metadata=payment_intent_data.get("metadata", {}),
-        donation_type=donation_request.donation_type,
-        commission_type=donation_request.commission_type,
-        post_id=donation_request.post_id,
-        commission_message=donation_request.commission_message,
+    engine = create_engine(
+        f"sqlite:///{test_db_path}",
+        connect_args={"check_same_thread": False}
     )
     
-    db.add(donation)
-    db.commit()
-    db.refresh(donation)
-    return donation
-
-def update_donation_status_side_effect(db, payment_intent_id, status):
-    from app.db.models import Donation
-    donation = db.query(Donation).filter_by(stripe_payment_intent_id=payment_intent_id).first()
-    if donation:
-        donation.status = status.value
-        db.commit()
-        db.refresh(donation)
-    return donation
-
-def process_subreddit_tiers_side_effect(db, donation):
-    # Mock implementation - just return empty dict
-    return {}
-
-# Configure the mock methods
-mock_stripe_service.save_donation_to_db.side_effect = save_donation_to_db_side_effect
-mock_stripe_service.update_donation_status.side_effect = update_donation_status_side_effect
-mock_stripe_service.process_subreddit_tiers.side_effect = process_subreddit_tiers_side_effect
-
-# Apply the patch at module level
-patch("app.api.stripe_service", mock_stripe_service).start()
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+    
+    yield engine
+    
+    # Cleanup
+    engine.dispose()
+    if os.path.exists(test_db_path):
+        os.remove(test_db_path)
 
 
-@pytest.fixture(autouse=True, scope="session")
-def patch_database():
-    """Patch all database-related imports to use test database and create schema from models."""
-    import os
-    from app.db.models import Base
-
-    # Set testing environment variable
-    os.environ["TESTING"] = "true"
-
-    # Create a test engine using a file-based database for thread safety
-    # SQLite in-memory databases are not thread-safe and can't be shared across threads
-    test_db_path = "/tmp/zazzle_test.db"
-    test_engine = create_engine(f"sqlite:///{test_db_path}")
-    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-
-    # Create all tables from models
-    Base.metadata.create_all(bind=test_engine)
-
-    # Clean up test database file after tests
-    import atexit
-    def cleanup_test_db():
-        try:
-            import os
-            if os.path.exists(test_db_path):
-                os.remove(test_db_path)
-        except Exception:
-            pass  # Ignore cleanup errors
-    atexit.register(cleanup_test_db)
-
-    # Patch the app's database engine/session to use the test DB
-    with (
-        patch("app.db.database.get_database_url", return_value=f"sqlite:///{test_db_path}"),
-        patch("app.db.database.engine", test_engine),
-        patch("app.db.database.SessionLocal", TestSessionLocal),
-        # Also patch the get_db function to use our test session
-        patch("app.db.database.get_db", lambda: TestSessionLocal()),
-    ):
-        # Store the test session for use in other fixtures
-        patch_database.test_session = TestSessionLocal
-        yield
+@pytest.fixture(scope="session")
+def test_session_factory(test_engine):
+    """Create a session factory for tests."""
+    return sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
-@pytest.fixture(autouse=True, scope="session")
-def patch_stripe_service():
-    """Patch StripeService to prevent initialization errors during tests."""
-    yield mock_stripe_service
+@pytest.fixture
+def db_session(test_engine) -> Generator[Session, None, None]:
+    """
+    Provide a clean database session for each test.
+    
+    Each test gets a fresh transaction that is rolled back at the end,
+    ensuring test isolation without recreating the database schema.
+    """
+    from sqlalchemy.orm import sessionmaker
+    
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    TestSession = sessionmaker(bind=connection)
+    session = TestSession()
+    
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
 def mock_stripe_service():
-    """Provide the mock stripe service for individual tests."""
-    return mock_stripe_service
-
-
-@pytest.fixture(scope="session")
-def test_data():
-    """Create basic test data for donation tests."""
-    from app.db.models import Subreddit, PipelineRun, RedditPost
-    from datetime import datetime, timezone
-
-    # Use the same session that was used for migrations
-    db = patch_database.test_session()
+    """Provide a mock Stripe service with minimal necessary functionality."""
+    mock_service = MagicMock()
     
-    # Create a test subreddit
-    subreddit = Subreddit(
-        subreddit_name="test",
-        display_name="Test Subreddit",
-        description="A test subreddit for donation tests",
-        subscribers=100,
-        over18=False,
-        spoilers_enabled=False,
-    )
-    db.add(subreddit)
-    db.commit()
-    db.refresh(subreddit)
+    # Simple mock implementations that don't duplicate business logic
+    mock_service.save_donation_to_db.return_value = MagicMock(id=1)
+    mock_service.update_donation_status.return_value = MagicMock(id=1)
+    mock_service.process_subreddit_tiers.return_value = {}
+    
+    return mock_service
 
-    # Create a test pipeline run
-    pipeline_run = PipelineRun(
-        status="completed",
-        start_time=datetime.now(timezone.utc),
-        end_time=datetime.now(timezone.utc),
-        summary="Test pipeline run completed",
-        config={"test": True},
-        metrics={"products_generated": 1},
-        duration=10,
-        retry_count=0,
-        version="1.0.0"
-    )
-    db.add(pipeline_run)
-    db.commit()
-    db.refresh(pipeline_run)
 
-    # Create a test Reddit post
-    reddit_post = RedditPost(
-        post_id="test_post_id_abc",
-        title="Test Post Title",
-        content="Test post content for donation tests.",
-        subreddit_id=subreddit.id,
-        score=10,
-        url="https://reddit.com/r/test/comments/test_post_id_abc",
-        permalink="/r/test/comments/test_post_id_abc/test_post_title/",
-        pipeline_run_id=pipeline_run.id,
-        comment_summary="Test comment summary",
-        author="test_user",
-        num_comments=5
-    )
-    db.add(reddit_post)
-    db.commit()
-    db.refresh(reddit_post)
-
-    yield subreddit, pipeline_run, reddit_post
-    db.close()
+@pytest.fixture
+def client(db_session, mock_stripe_service, monkeypatch):
+    """Create a FastAPI test client with database and service overrides."""
+    from fastapi.testclient import TestClient
+    
+    # Mock Redis and other external services to prevent connection attempts
+    monkeypatch.setattr("app.redis_service.redis", MagicMock())
+    monkeypatch.setattr("app.websocket_manager.redis_service", MagicMock())
+    monkeypatch.setattr("app.services.background_scheduler.BackgroundScheduler", MagicMock())
+    
+    # Import app after patching external dependencies
+    from app.api import app, get_db
+    
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+    
+    # Override dependencies
+    app.dependency_overrides[get_db] = override_get_db
+    
+    with patch("app.api.stripe_service", mock_stripe_service):
+        with TestClient(app) as test_client:
+            yield test_client
+    
+    # Clean up overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="session")
@@ -211,30 +129,20 @@ def test_output_dir(tmp_path_factory):
     """Create a temporary directory for test outputs."""
     test_dir = tmp_path_factory.mktemp("test_outputs")
     yield test_dir
-    # Cleanup after all tests are done
-    shutil.rmtree(test_dir)
+    shutil.rmtree(test_dir, ignore_errors=True)
 
 
-@pytest.fixture
-def db():
-    """Provide a database session for tests."""
-    from app.db.database import SessionLocal
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-@pytest.fixture
-def db_session():
-    """Alias for db fixture for compatibility."""
-    from app.db.database import SessionLocal
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+@pytest.fixture(autouse=True)
+def setup_test_environment(test_output_dir, monkeypatch):
+    """Automatically configure test environment for all tests."""
+    # Set up output directories
+    monkeypatch.setenv("OUTPUT_DIR", str(test_output_dir))
+    
+    # Create necessary subdirectories
+    (test_output_dir / "screenshots").mkdir(exist_ok=True)
+    (test_output_dir / "images").mkdir(exist_ok=True)
+    
+    return test_output_dir
 
 
 @pytest.fixture
@@ -250,20 +158,63 @@ def sample_subreddit_data():
     }
 
 
-@pytest.fixture(autouse=True)
-def set_test_output_dir(test_output_dir, monkeypatch):
-    """Automatically set the test output directory for all tests."""
-    # Override the default outputs directory for tests
-    monkeypatch.setenv("OUTPUT_DIR", str(test_output_dir))
-    # Create necessary subdirectories
-    (test_output_dir / "screenshots").mkdir(exist_ok=True)
-    (test_output_dir / "images").mkdir(exist_ok=True)
-    return test_output_dir
+@pytest.fixture
+def sample_reddit_post_data():
+    """Provide sample Reddit post data for tests."""
+    return {
+        "post_id": "test_post_123",
+        "title": "Test Post Title",
+        "content": "Test post content",
+        "score": 42,
+        "url": "https://reddit.com/r/test/comments/test_post_123",
+        "permalink": "/r/test/comments/test_post_123/test_post_title/",
+        "author": "test_user",
+        "num_comments": 5,
+    }
 
 
 @pytest.fixture
-def client():
-    """Provide a test client for FastAPI app."""
-    from fastapi.testclient import TestClient
-    from app.api import app
-    return TestClient(app)
+def mock_openai_client():
+    """Provide a mock OpenAI client for tests."""
+    mock_client = MagicMock()
+    
+    # Mock chat completion
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = '{"theme": "Test Theme", "description": "Test description"}'
+    mock_client.chat.completions.create.return_value = mock_response
+    
+    # Mock image generation
+    mock_image_response = MagicMock()
+    mock_image_response.data[0].url = "https://example.com/test-image.jpg"
+    mock_client.images.generate.return_value = mock_image_response
+    
+    return mock_client
+
+
+@pytest.fixture
+def mock_reddit_client():
+    """Provide a mock Reddit (PRAW) client for tests."""
+    mock_reddit = MagicMock()
+    
+    # Mock subreddit
+    mock_subreddit = MagicMock()
+    mock_subreddit.display_name = "test"
+    mock_subreddit.subscribers = 100
+    mock_reddit.subreddit.return_value = mock_subreddit
+    
+    # Mock submission
+    mock_submission = MagicMock()
+    mock_submission.id = "test_post_123"
+    mock_submission.title = "Test Post"
+    mock_submission.selftext = "Test content"
+    mock_submission.score = 42
+    mock_submission.num_comments = 5
+    mock_submission.author.name = "test_user"
+    mock_submission.subreddit.display_name = "test"
+    mock_submission.url = "https://reddit.com/test"
+    mock_submission.permalink = "/r/test/test"
+    
+    mock_subreddit.hot.return_value = [mock_submission]
+    mock_subreddit.new.return_value = [mock_submission]
+    
+    return mock_reddit
