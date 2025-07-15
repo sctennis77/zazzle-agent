@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -132,10 +133,23 @@ async def startup_event():
     await websocket_manager.start()
     logger.info("WebSocket manager started successfully!")
 
+    logger.info("Starting background scheduler...")
+    from app.services.background_scheduler import background_scheduler
+
+    # Start the scheduler in the background without blocking startup
+    asyncio.create_task(background_scheduler.start())
+    logger.info("Background scheduler started successfully!")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up resources when the application shuts down."""
+    logger.info("Stopping background scheduler...")
+    from app.services.background_scheduler import background_scheduler
+
+    await background_scheduler.stop()
+    logger.info("Background scheduler stopped successfully!")
+
     logger.info("Stopping WebSocket manager...")
     await websocket_manager.stop()
     logger.info("WebSocket manager stopped successfully!")
@@ -1946,6 +1960,109 @@ async def manual_create_commission(
         "donation_id": donation.id,
         "task_id": task_id,
     }
+
+
+@app.get("/api/admin/scheduler/status")
+async def get_scheduler_status(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Get the current status of the scheduled commission system.
+    Requires X-Admin-Secret header to match ADMIN_SECRET env var.
+    """
+    admin_secret = os.getenv("ADMIN_SECRET")
+    provided_secret = request.headers.get("x-admin-secret")
+    if not admin_secret or provided_secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid admin secret")
+
+    from app.redis_service import redis_service
+    from app.services.scheduler_service import SchedulerService
+    from app.task_manager import task_manager
+
+    scheduler_service = SchedulerService(redis_service, task_manager)
+    status = scheduler_service.get_scheduler_status(db)
+
+    return {
+        "scheduler": status,
+        "redis_healthy": await redis_service.health_check(),
+    }
+
+
+@app.post("/api/admin/scheduler/config")
+async def update_scheduler_config(
+    request: Request,
+    enabled: bool,
+    interval_hours: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Update scheduler configuration.
+    Requires X-Admin-Secret header to match ADMIN_SECRET env var.
+    """
+    admin_secret = os.getenv("ADMIN_SECRET")
+    provided_secret = request.headers.get("x-admin-secret")
+    if not admin_secret or provided_secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid admin secret")
+
+    # Validate input
+    if interval_hours < 1 or interval_hours > 168:  # 1 hour to 1 week
+        raise HTTPException(
+            status_code=400, detail="interval_hours must be between 1 and 168 (1 week)"
+        )
+
+    from app.redis_service import redis_service
+    from app.services.scheduler_service import SchedulerService
+    from app.task_manager import task_manager
+
+    scheduler_service = SchedulerService(redis_service, task_manager)
+    config = scheduler_service.update_scheduler_config(db, enabled, interval_hours)
+
+    return {
+        "status": "scheduler config updated",
+        "config": config,
+    }
+
+
+@app.post("/api/admin/scheduler/run-now")
+async def run_scheduler_now(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Manually trigger a scheduled commission run.
+    Requires X-Admin-Secret header to match ADMIN_SECRET env var.
+    """
+    admin_secret = os.getenv("ADMIN_SECRET")
+    provided_secret = request.headers.get("x-admin-secret")
+    if not admin_secret or provided_secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid admin secret")
+
+    from app.redis_service import redis_service
+    from app.services.scheduler_service import SchedulerService
+    from app.task_manager import task_manager
+
+    scheduler_service = SchedulerService(redis_service, task_manager)
+
+    try:
+        result = await scheduler_service.run_scheduled_commission(db)
+
+        if result:
+            return {
+                "status": "scheduled commission created",
+                "commission": result,
+            }
+        else:
+            return {
+                "status": "scheduled commission skipped",
+                "reason": "Another instance is running or lock acquisition failed",
+            }
+
+    except Exception as e:
+        logger.error(f"Error running scheduled commission: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to run scheduled commission: {str(e)}"
+        )
 
 
 @app.get("/api/subreddits", response_model=List[SubredditSchema])

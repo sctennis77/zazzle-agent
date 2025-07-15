@@ -5,11 +5,10 @@ This module defines the RedditAgent, which automates content distribution, produ
 image creation, and engagement on Reddit. It integrates with OpenAI, PRAW, and Zazzle product workflows.
 """
 
-import json
-
 # Remove the base import since we're not inheriting from it anymore
 # from .base import ChannelAgent
 import asyncio
+import json
 import logging
 import os
 import random
@@ -23,14 +22,16 @@ import praw
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from app.clients.reddit_client import RedditClient
-from app.clients.imgur_client import ImgurClient
-from app.db.database import SessionLocal
-from app.db.mappers import reddit_context_to_db, product_idea_to_db, product_info_to_db
-from app.db.models import RedditPost, ProductInfo
+from app.affiliate_linker import ZazzleAffiliateLinker
+
 # Remove legacy distribution imports
 # from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-from app.async_image_generator import AsyncImageGenerator, IMAGE_GENERATION_BASE_PROMPTS
+from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS, AsyncImageGenerator
+from app.clients.imgur_client import ImgurClient
+from app.clients.reddit_client import RedditClient
+from app.db.database import SessionLocal
+from app.db.mappers import product_idea_to_db, product_info_to_db, reddit_context_to_db
+from app.db.models import ProductInfo, RedditPost
 from app.models import (
     DesignInstructions,
     DistributionMetadata,
@@ -42,10 +43,9 @@ from app.models import (
 )
 from app.pipeline_status import PipelineStatus
 from app.utils.logging_config import get_logger
-from app.utils.openai_usage_tracker import track_openai_call, log_session_summary
+from app.utils.openai_usage_tracker import log_session_summary, track_openai_call
 from app.zazzle_product_designer import ZazzleProductDesigner
 from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
-from app.affiliate_linker import ZazzleAffiliateLinker
 
 logger = get_logger(__name__)
 
@@ -454,14 +454,48 @@ SUBREDDIT_CRITERIA = {
 }
 
 
-def pick_subreddit() -> str:
+def pick_subreddit(db: Session = None) -> str:
     """
-    Pick a random subreddit from the available subreddits list.
+    Pick a random subreddit from the database.
+
+    Args:
+        db: Database session. If None, creates a new session.
 
     Returns:
         str: A randomly selected subreddit name
+
+    Raises:
+        Exception: If no subreddits are available in the database
     """
-    return random.choice(AVAILABLE_SUBREDDITS)
+    if db is None:
+        from app.db.database import SessionLocal
+
+        db = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        from app.db.models import Subreddit
+
+        subreddits = db.query(Subreddit).all()
+
+        if not subreddits:
+            # Fallback to hardcoded list if database is empty
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "No subreddits found in database, falling back to hardcoded list"
+            )
+            return random.choice(AVAILABLE_SUBREDDITS)
+
+        selected_subreddit = random.choice(subreddits)
+        return selected_subreddit.subreddit_name
+
+    finally:
+        if should_close:
+            db.close()
 
 
 class RedditAgent:
@@ -507,34 +541,38 @@ class RedditAgent:
         self.session = session
         self.reddit_post_id = reddit_post_id
         self.subreddit_name = subreddit_name
-        self.commission_message = None  # Optional commission message for commissioned posts
+        self.commission_message = (
+            None  # Optional commission message for commissioned posts
+        )
         self.task_context = task_context or {}  # Task context for commissioning logic
         self.progress_callback = progress_callback  # Callback for progress updates
-        
+
         # Initialize Reddit client
         if reddit_client:
             self.reddit_client = reddit_client
         else:
             self.reddit_client = RedditClient()
-        
+
         # Initialize other components
         self.imgur_client = ImgurClient()
-        self.image_generator = AsyncImageGenerator(model=self.config.model)
+        self.image_generator = AsyncImageGenerator(
+            model=self.config.model, quality=self.config.image_quality
+        )
         self.zazzle_designer = ZazzleProductDesigner()
         self.affiliate_linker = ZazzleAffiliateLinker(
             zazzle_affiliate_id=self.config.zazzle_affiliate_id,
             zazzle_tracking_code=self.config.zazzle_tracking_code,
         )
-        
+
         # Set OpenAI API key and initialize client
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         self.openai = OpenAI(api_key=openai.api_key)  # Initialize the OpenAI client
-        
+
         # Set the idea generation model
         self.idea_model = self._get_idea_model()
-        
+
         logger.info(f"Initialized RedditAgent for subreddit: {self.subreddit_name}")
         logger.info(f"Using idea model: {self.idea_model}")
         logger.info(f"Using image model: {self.config.model}")
@@ -542,7 +580,7 @@ class RedditAgent:
         logger.info(f"Reddit post ID: {self.reddit_post_id}")
         if self.task_context:
             logger.info(f"Task context: {self.task_context}")
-        
+
         # Initialize usage tracking
         log_session_summary()
 
@@ -553,62 +591,41 @@ class RedditAgent:
         """
         return os.getenv("OPENAI_IDEA_MODEL", "gpt-3.5-turbo")
 
-    async def _send_image_generation_progress(self, delay: int = 1, image_title: str = None):
-        """Send incremental progress updates during image generation (40% to 89%)."""
+    async def _send_image_generation_progress(
+        self, delay: int = 1, image_title: str = None
+    ):
+        """Send key progress milestones during image generation."""
         try:
-            logger.info(f"=== _send_image_generation_progress START ===")
-            logger.info(f"Starting _send_image_generation_progress with delay={delay}")
-            logger.info(f"Progress callback available: {self.progress_callback}")
-            logger.info(f"Progress callback type: {type(self.progress_callback)}")
-            logger.info(f"Current event loop: {asyncio.get_event_loop()}")
-            
-            # Sleep at the start to avoid jumping straight from started to progress
-            logger.info(f"Sleeping for {delay} seconds before starting progress updates")
+            logger.debug("Starting image generation progress updates")
             await asyncio.sleep(delay)
-            logger.info("Finished initial delay, starting progress updates")
-            
-            start_progress = 40
-            end_progress = 89
-            total_updates = 15  # Reduced from 30 to make updates more frequent
-            
-            for i in range(total_updates):
-                # Calculate progress (smooth curve from 40% to 89%)
-                progress_ratio = i / (total_updates - 1) if total_updates > 1 else 1
-                current_progress = start_progress + int((end_progress - start_progress) * progress_ratio)
-                
-                # Ensure the last update reaches exactly end_progress
-                if i == total_updates - 1:
-                    current_progress = end_progress
-                
-                logger.info(f"Progress update {i+1}/{total_updates}: {current_progress}%")
-                
-                # Call progress callback
+
+            # Only log key milestones: start, 25%, 50%, 75%, 90%
+            milestones = [40, 55, 70, 85, 89]
+
+            for i, progress in enumerate(milestones):
                 if self.progress_callback:
                     try:
-                        await self.progress_callback("image_generation_progress", {
-                            "progress": current_progress
-                        })
-                        logger.info(f"Successfully sent progress callback for {current_progress}%")
+                        await self.progress_callback(
+                            "image_generation_progress", {"progress": progress}
+                        )
+                        if progress in [40, 89]:  # Only log start and end
+                            logger.info(f"Image generation progress: {progress}%")
                     except Exception as e:
-                        logger.error(f"Error calling progress callback: {e}")
-                else:
-                    logger.warning("No progress_callback available")
-                
-                # Don't sleep after the last update
-                if i < total_updates - 1:
-                    # Random sleep interval (0.5 to 1.5 seconds) - more frequent updates
-                    sleep_time = random.uniform(0.5, 1.5)
-                    logger.info(f"Sleeping for {sleep_time:.2f} seconds before next update")
-                    await asyncio.sleep(sleep_time)
-            
-            logger.info("Completed all progress updates")
-            
+                        logger.error(f"Progress callback failed at {progress}%: {e}")
+
+                if i < len(milestones) - 1:
+                    await asyncio.sleep(random.uniform(2.0, 3.0))  # Longer intervals
+
+            # Simplified event coordination
+            if hasattr(self, "image_generation_event") and self.image_generation_event:
+                await self.image_generation_event.wait()
+                logger.debug("Image generation completed")
+
         except asyncio.CancelledError:
-            logger.info("Progress task was cancelled")
+            logger.debug("Progress updates cancelled")
             raise
         except Exception as e:
-            logger.error(f"Error in _send_image_generation_progress: {e}")
-            # Don't re-raise - we want this to fail gracefully
+            logger.error(f"Progress update error: {e}")
 
     @track_openai_call(model="gpt-3.5-turbo", operation="chat")
     def _make_openai_call(self, messages: List[Dict[str, str]]) -> str:
@@ -617,10 +634,7 @@ class RedditAgent:
         Uses the model specified by _get_idea_model().
         """
         model = self._get_idea_model()
-        response = self.openai.chat.completions.create(
-            model=model,
-            messages=messages
-        )
+        response = self.openai.chat.completions.create(model=model, messages=messages)
         return response.choices[0].message.content
 
     async def _determine_product_idea(
@@ -654,7 +668,6 @@ class RedditAgent:
                 },
             ]
 
-           
             content = self._make_openai_call(messages)
 
             # Log the raw response for debugging
@@ -693,7 +706,11 @@ class RedditAgent:
             product_idea = ProductIdea(
                 theme=theme,
                 image_description=image_description,
-                design_instructions={"image": None, "theme": theme, "image_title": image_title},
+                design_instructions={
+                    "image": None,
+                    "theme": theme,
+                    "image_title": image_title,
+                },
                 reddit_context=reddit_context,
                 model=self.config.model,
                 prompt_version=self.config.prompt_version,
@@ -702,18 +719,21 @@ class RedditAgent:
             logger.info(f"Successfully generated product idea: {theme}")
             if image_title:
                 logger.info(f"Generated image title: {image_title}")
-            
+
             # Call progress callback if available
             if self.progress_callback:
                 try:
-                    await self.progress_callback("product_designed", {
-                        "theme": theme,
-                        "image_title": image_title,
-                        "image_description": image_description
-                    })
+                    await self.progress_callback(
+                        "product_designed",
+                        {
+                            "theme": theme,
+                            "image_title": image_title,
+                            "image_description": image_description,
+                        },
+                    )
                 except Exception as e:
                     logger.error(f"Error calling progress callback: {e}")
-            
+
             return product_idea
 
         except ValueError:
@@ -727,11 +747,9 @@ class RedditAgent:
         Find a trending post and create a product for it.
         This is the main entry point for task-based product creation.
         """
-        logger.info("=== find_and_create_product_for_task START ===")
-        logger.info(f"Progress callback available: {self.progress_callback}")
-        logger.info(f"Progress callback type: {type(self.progress_callback)}")
-        logger.info(f"Task context: {self.task_context}")
-        
+        logger.debug("Starting task-based product creation")
+        logger.debug(f"Task context: {self.task_context}")
+
         try:
             # Find a trending post using task-specific method
             trending_post = await self._find_trending_post_for_task()
@@ -792,62 +810,88 @@ class RedditAgent:
                     "Image prompt (image_description) is empty. Aborting image generation."
                 )
                 raise ValueError("Image prompt (image_description) cannot be empty.")
-            
+
             logger.info("=== ABOUT TO START IMAGE GENERATION ===")
-            logger.info(f"Progress callback at image generation: {self.progress_callback}")
-            
+            logger.info(
+                f"Progress callback at image generation: {self.progress_callback}"
+            )
+
             # Call image generation started callback
             if self.progress_callback:
                 try:
                     logger.info("Calling image generation started callback")
                     logger.info(f"Progress callback function: {self.progress_callback}")
-                    await self.progress_callback("image_generation_started", {
-                        "post_id": reddit_context.post_id,
-                        "subreddit_name": reddit_context.subreddit
-                    })
+                    await self.progress_callback(
+                        "image_generation_started",
+                        {
+                            "post_id": reddit_context.post_id,
+                            "subreddit_name": reddit_context.subreddit,
+                        },
+                    )
                     logger.info("Successfully called image generation started callback")
                 except Exception as e:
-                    logger.error(f"Error calling image generation started callback: {e}")
+                    logger.error(
+                        f"Error calling image generation started callback: {e}"
+                    )
                     logger.error(f"Exception type: {type(e)}")
                     import traceback
+
                     logger.error(f"Traceback: {traceback.format_exc()}")
-                
+
                 # Start progress updates as a background task
-                logger.info("Creating progress task for image generation")
-                logger.info(f"Progress callback available: {self.progress_callback}")
-                logger.info(f"Current event loop: {asyncio.get_event_loop()}")
-                try:
-                    progress_task = asyncio.create_task(self._send_image_generation_progress())
-                    logger.info(f"Progress task created successfully: {progress_task}")
-                    logger.info(f"Progress task done: {progress_task.done()}")
-                    logger.info(f"Progress task cancelled: {progress_task.cancelled()}")
-                except Exception as e:
-                    logger.error(f"Error creating progress task: {e}")
-                    logger.error(f"Exception type: {type(e)}")
-                    import traceback
-                    logger.error(f"Traceback: {traceback.format_exc()}")
+                if self.progress_callback:
+                    try:
+                        # Create event for coordinating progress task with image generation
+                        self.image_generation_event = asyncio.Event()
+                        progress_task = asyncio.create_task(
+                            self._send_image_generation_progress()
+                        )
+                        logger.debug("Progress task created for image generation")
+                    except Exception as e:
+                        logger.error(f"Error creating progress task: {e}")
+                        progress_task = None
+                        self.image_generation_event = None
+                else:
                     progress_task = None
-            else:
-                progress_task = None
-                logger.info("No progress_callback available, skipping progress task")
-            
+                    self.image_generation_event = None
+                    logger.debug(
+                        "No progress callback available, skipping progress task"
+                    )
+
             try:
                 # Log the start time
                 start_time = time.time()
                 logger.info(f"Starting image generation at {start_time}")
-                
+
                 imgur_url, local_path = await self.image_generator.generate_image(
                     product_idea.image_description,
                     template_id=self.config.zazzle_template_id,
                 )
-                
+
                 # Log the end time and duration
                 end_time = time.time()
                 duration = end_time - start_time
-                logger.info(f"Image generation completed at {end_time}, duration: {duration:.2f} seconds")
-                
+                logger.info(
+                    f"Image generation completed at {end_time}, duration: {duration:.2f} seconds"
+                )
+
+                # Signal that image generation is complete
+                if (
+                    hasattr(self, "image_generation_event")
+                    and self.image_generation_event
+                ):
+                    self.image_generation_event.set()
+                    logger.debug("Image generation event signaled")
+
             except Exception as e:
                 logger.error(f"Error during image generation: {str(e)}")
+                # Signal completion even on error so progress task doesn't hang
+                if (
+                    hasattr(self, "image_generation_event")
+                    and self.image_generation_event
+                ):
+                    self.image_generation_event.set()
+                    logger.debug("Image generation event signaled on error")
                 raise
             finally:
                 # Cancel progress task if it exists
@@ -860,18 +904,31 @@ class RedditAgent:
                         logger.info("Progress task cancelled successfully")
                     except Exception as e:
                         logger.error(f"Error cancelling progress task: {e}")
-            
+
+                # Clean up the event
+                if (
+                    hasattr(self, "image_generation_event")
+                    and self.image_generation_event
+                ):
+                    self.image_generation_event = None
+                    logger.debug("Image generation event cleaned up")
+
             # Call image generation complete callback
             if self.progress_callback:
                 try:
-                    await self.progress_callback("image_generation_complete", {
-                        "post_id": reddit_context.post_id,
-                        "subreddit_name": reddit_context.subreddit,
-                        "duration": duration
-                    })
+                    await self.progress_callback(
+                        "image_generation_complete",
+                        {
+                            "post_id": reddit_context.post_id,
+                            "subreddit_name": reddit_context.subreddit,
+                            "duration": duration,
+                        },
+                    )
                 except Exception as e:
-                    logger.error(f"Error calling image generation complete callback: {e}")
-            
+                    logger.error(
+                        f"Error calling image generation complete callback: {e}"
+                    )
+
             design_instructions = DesignInstructions(
                 image=imgur_url,
                 theme=product_idea.theme,
@@ -881,6 +938,7 @@ class RedditAgent:
                 template_id=self.config.zazzle_template_id,
                 model=self.config.model,
                 prompt_version=self.config.prompt_version,
+                image_quality=self.config.image_quality,
             )
             logger.info(f"Design Instructions: {design_instructions}")
             product_info = await self.zazzle_designer.create_product(
@@ -907,7 +965,9 @@ class RedditAgent:
         reddit_post_id = None
         if self.session and self.pipeline_run_id:
             try:
-                orm_post = reddit_context_to_db(reddit_context, self.pipeline_run_id, self.session)
+                orm_post = reddit_context_to_db(
+                    reddit_context, self.pipeline_run_id, self.session
+                )
                 self.session.add(orm_post)
                 self.session.commit()
                 reddit_post_id = orm_post.id
@@ -917,10 +977,14 @@ class RedditAgent:
                 self.session.rollback()
                 return None
         else:
-            logger.warning("No session or pipeline_run_id available for saving RedditPost")
+            logger.warning(
+                "No session or pipeline_run_id available for saving RedditPost"
+            )
         return reddit_post_id
 
-    async def _find_trending_post_for_task(self, tries: int = 3, limit: int = 50, subreddit_name: str = None):
+    async def _find_trending_post_for_task(
+        self, tries: int = 3, limit: int = 50, subreddit_name: str = None
+    ):
         """
         Find a trending Reddit post specifically for task-based processing.
         This is a simplified version that can be easily tested and mocked.
@@ -931,10 +995,10 @@ class RedditAgent:
         logger.info(
             f"Starting _find_trending_post_for_task with subreddit: {subreddit_name or self.subreddit_name}, limit: {limit}, retries: {tries}"
         )
-        
+
         # Check if we have a specific post to commission from task context
-        if hasattr(self, 'task_context') and self.task_context:
-            post_id = self.task_context.get('post_id')
+        if hasattr(self, "task_context") and self.task_context:
+            post_id = self.task_context.get("post_id")
             if post_id:
                 logger.info(f"Commissioning specific post: {post_id}")
                 try:
@@ -944,32 +1008,41 @@ class RedditAgent:
                         # Generate comment summary and add to submission
                         comment_summary = self._generate_comment_summary(submission)
                         submission.comment_summary = comment_summary
-                        logger.info(f"Successfully fetched commissioned post: {submission.title}")
-                        
+                        logger.info(
+                            f"Successfully fetched commissioned post: {submission.title}"
+                        )
+
                         # Call progress callback if available
                         if self.progress_callback:
                             try:
-                                await self.progress_callback("post_fetched", {
-                                    "post_title": submission.title,
-                                    "post_id": submission.id,
-                                    "subreddit": submission.subreddit.display_name
-                                })
+                                await self.progress_callback(
+                                    "post_fetched",
+                                    {
+                                        "post_title": submission.title,
+                                        "post_id": submission.id,
+                                        "subreddit": submission.subreddit.display_name,
+                                    },
+                                )
                             except Exception as e:
                                 logger.error(f"Error calling progress callback: {e}")
-                        
+
                         return submission
                     else:
                         logger.error(f"Failed to fetch commissioned post {post_id}")
                         return None
                 except Exception as e:
-                    logger.error(f"Error fetching commissioned post {post_id}: {str(e)}")
+                    logger.error(
+                        f"Error fetching commissioned post {post_id}: {str(e)}"
+                    )
                     return None
-        
+
         # Otherwise, find a random trending post
         try:
             for attempt in range(tries):
                 # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.reddit_client.reddit.subreddit(subreddit_name or self.subreddit_name).hot(limit=limit):
+                for submission in self.reddit_client.reddit.subreddit(
+                    subreddit_name or self.subreddit_name
+                ).hot(limit=limit):
                     logger.info(
                         f"Processing submission: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days)"
                     )
@@ -1012,29 +1085,24 @@ class RedditAgent:
     def _generate_comment_summary(self, submission) -> str:
         """
         Generate a summary of the top comments for a Reddit submission.
-        
+
         Args:
             submission: PRAW submission object
-            
+
         Returns:
             str: Comment summary
         """
         try:
             # Get top comments and generate summary
-            submission.comments.replace_more(
-                limit=0
-            )  # Load top-level comments only
+            submission.comments.replace_more(limit=0)  # Load top-level comments only
             top_comments = submission.comments.list()[:10]  # Get top 10 comments
             comment_texts = [
-                comment.body
-                for comment in top_comments
-                if hasattr(comment, "body")
+                comment.body for comment in top_comments if hasattr(comment, "body")
             ]
             if comment_texts:
                 # Use GPT to summarize comments
                 response = self.openai.chat.completions.create(
                     model="gpt-4",
-                    
                     messages=[
                         {
                             "role": "system",
@@ -1049,21 +1117,27 @@ class RedditAgent:
                 comment_summary = response.choices[0].message.content.strip()
             else:
                 comment_summary = "No comments available."
-            
+
             return comment_summary
-            
+
         except Exception as e:
             logger.error(f"Error generating comment summary: {str(e)}")
             return "Error generating comment summary."
 
-    async def find_top_post_from_subreddit(self, tries: int = 3, limit: int = 100, subreddit_name: str = None, time_filter: str = "month"):
+    async def find_top_post_from_subreddit(
+        self,
+        tries: int = 3,
+        limit: int = 100,
+        subreddit_name: str = None,
+        time_filter: str = "month",
+    ):
         """
         Find a top Reddit post from a subreddit using Reddit's top method.
         This method uses the top() method instead of hot() to find the highest-scoring posts.
         Works for both specific subreddits and "all" (front page).
         Skips posts that are stickied, too old, or already present in the database (by post_id).
         Returns the first valid post or None if none are found.
-        
+
         Args:
             tries: Number of attempts to find a suitable post
             limit: Number of posts to fetch per attempt
@@ -1073,10 +1147,10 @@ class RedditAgent:
         logger.info(
             f"Starting find_top_post_from_subreddit with subreddit: {subreddit_name or self.subreddit_name}, limit: {limit}, retries: {tries}, time_filter: {time_filter}"
         )
-        
+
         # Check if we have a specific post to commission from task context
-        if hasattr(self, 'task_context') and self.task_context:
-            post_id = self.task_context.get('post_id')
+        if hasattr(self, "task_context") and self.task_context:
+            post_id = self.task_context.get("post_id")
             if post_id:
                 logger.info(f"Commissioning specific post: {post_id}")
                 try:
@@ -1086,31 +1160,40 @@ class RedditAgent:
                         # Generate comment summary and add to submission
                         comment_summary = self._generate_comment_summary(submission)
                         submission.comment_summary = comment_summary
-                        logger.info(f"Successfully fetched commissioned post: {submission.title}")
-                        
+                        logger.info(
+                            f"Successfully fetched commissioned post: {submission.title}"
+                        )
+
                         # Call progress callback if available
                         if self.progress_callback:
                             try:
-                                await self.progress_callback("post_fetched", {
-                                    "post_title": submission.title,
-                                    "post_id": submission.id,
-                                    "subreddit": submission.subreddit.display_name
-                                })
+                                await self.progress_callback(
+                                    "post_fetched",
+                                    {
+                                        "post_title": submission.title,
+                                        "post_id": submission.id,
+                                        "subreddit": submission.subreddit.display_name,
+                                    },
+                                )
                             except Exception as e:
                                 logger.error(f"Error calling progress callback: {e}")
-                        
+
                         return submission
                     else:
                         logger.error(f"Failed to fetch commissioned post {post_id}")
                         return None
                 except Exception as e:
-                    logger.error(f"Error fetching commissioned post {post_id}: {str(e)}")
+                    logger.error(
+                        f"Error fetching commissioned post {post_id}: {str(e)}"
+                    )
                     return None
-        
+
         # Otherwise, find a top post using the top method
         try:
             for attempt in range(tries):
-                logger.info(f"Starting attempt {attempt + 1}/{tries} with limit {limit}")
+                logger.info(
+                    f"Starting attempt {attempt + 1}/{tries} with limit {limit}"
+                )
                 processed_count = 0
                 skipped_stickied = 0
                 skipped_old = 0
@@ -1118,7 +1201,9 @@ class RedditAgent:
                 skipped_already_processed = 0
                 # TODO add smarter time filter fallback logic, we should really just curate posts outside of the commision loops and serve them from the db
                 # Use the existing subreddit object (works for "all" and specific subreddits)
-                for submission in self.reddit_client.reddit.subreddit(subreddit_name or self.subreddit_name).top(time_filter=time_filter, limit=limit):
+                for submission in self.reddit_client.reddit.subreddit(
+                    subreddit_name or self.subreddit_name
+                ).top(time_filter=time_filter, limit=limit):
                     processed_count += 1
                     logger.info(
                         f"Processing submission {processed_count}: {submission.title} (score: {submission.score}, subreddit: {submission.subreddit.display_name}, is_self: {submission.is_self}, selftext length: {len(submission.selftext) if submission.selftext else 0}, age: {(datetime.now(timezone.utc) - datetime.fromtimestamp(submission.created_utc, timezone.utc)).days} days, num_comments: {submission.num_comments}, stickied: {submission.stickied})"
@@ -1152,7 +1237,9 @@ class RedditAgent:
 
                     # Return the submission without generating comment summary
                     # Comment summary will be generated when needed in the actual pipeline
-                    logger.info(f"Found suitable post {submission.id} after processing {processed_count} submissions")
+                    logger.info(
+                        f"Found suitable post {submission.id} after processing {processed_count} submissions"
+                    )
                     return submission
                 # If we reach here, no suitable post was found in this attempt
                 logger.info(
