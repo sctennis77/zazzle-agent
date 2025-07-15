@@ -130,203 +130,188 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 </a>
               </div>
             </div>
-            {/* Right Column: Reddit Content Only */}
-            <div className="space-y-4 flex flex-col h-full justify-between">
-              {/* Original Post Card */}
-              <div className="flex-1 flex flex-col justify-between">
-                <div className="space-y-2 flex flex-col h-full justify-between">
-                  <div className="bg-orange-50 rounded-xl p-2 border border-orange-200 flex flex-col justify-between h-full">
-                    {/* Header: Reddit icon, post title */}
-                    <div className="flex items-center gap-3 mb-0.5">
-                      <a
-                        href={product.reddit_post.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-full bg-orange-100 border border-orange-300 hover:bg-orange-200 transition-colors cursor-pointer mt-0.5"
-                        title="View on Reddit"
-                      >
-                        <FaReddit size={20} className="text-orange-500" />
-                      </a>
-                      {product.reddit_post.title && (
-                        <span className="font-bold text-gray-900 text-lg break-words leading-snug">{product.reddit_post.title}</span>
-                      )}
-                    </div>
-                    {/* Subheader: author • subreddit • timestamp, now directly under title */}
-                    <div className="ml-1 mt-0.5 mb-0 text-sm text-gray-700 flex items-center gap-2 flex-wrap">
-                      <span className="flex items-center gap-1 font-medium">
-                        <FaUser size={12} className="text-gray-400" />
-                        {product.reddit_post.author ? `u/${product.reddit_post.author}` : <span className='italic text-gray-400'>[unknown]</span>}
-                      </span>
-                      <span className="text-gray-400">•</span>
-                      <span className="font-semibold text-orange-700">r/{product.reddit_post.subreddit}</span>
-                      <span className="text-gray-400">•</span>
-                      {product.pipeline_run && product.pipeline_run.start_time && (
-                        <span className="text-xs text-gray-500">
-                          {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      )}
-                    </div>
-                    {/* Separator line now below subtitle */}
-                    <div className="ml-1 flex items-center my-1">
-                      <span className="flex-grow border-t border-gray-200"></span>
-                    </div>
-                    {/* Body: post content or dash, then community discussion */}
-                    <div>
-                      <div className="mb-2 text-sm text-gray-800 whitespace-pre-line min-h-[1.5em] mt-0">
-                        {product.reddit_post.content ? (
-                          product.reddit_post.content
-                        ) : (
-                          <span className="italic text-xs text-gray-400">No post content</span>
-                        )}
+            {/* Right Column: Reddit Content and Commission */}
+            <div className="space-y-4">
+              {/* Original Post Card - Compact Version */}
+              <div className="bg-orange-50 rounded-xl p-3 border border-orange-200">
+                {/* Header: Reddit icon, post title */}
+                <div className="flex items-center gap-3 mb-1">
+                  <a
+                    href={product.reddit_post.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-full bg-orange-100 border border-orange-300 hover:bg-orange-200 transition-colors cursor-pointer"
+                    title="View on Reddit"
+                  >
+                    <FaReddit size={20} className="text-orange-500" />
+                  </a>
+                  {product.reddit_post.title && (
+                    <span className="font-bold text-gray-900 text-base break-words leading-snug">{product.reddit_post.title}</span>
+                  )}
+                </div>
+                {/* Subheader: author • subreddit */}
+                <div className="ml-12 flex items-center justify-between">
+                  <div className="text-sm text-gray-700 flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1 font-medium">
+                      <FaUser size={12} className="text-gray-400" />
+                      {product.reddit_post.author ? `u/${product.reddit_post.author}` : <span className='italic text-gray-400'>[unknown]</span>}
+                    </span>
+                    <span className="text-gray-400">•</span>
+                    <span className="font-semibold text-orange-700">r/{product.reddit_post.subreddit}</span>
+                  </div>
+                  {/* Timestamp moved to the right */}
+                  {product.pipeline_run && product.pipeline_run.start_time && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  )}
+                </div>
+                {/* Community Discussion */}
+                <div className="bg-white rounded-lg border border-gray-200 p-2 mt-2">
+                  <h5 className="font-semibold text-gray-900 mb-1 text-sm">Community Discussion</h5>
+                  {/* Comments Summary */}
+                  {product.reddit_post.comment_summary && (
+                    <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
+                  )}
+                  {/* Reddit post metadata */}
+                  <div className="flex items-center gap-4 text-sm pt-1 border-t border-gray-100 flex-wrap mt-1">
+                    {product.reddit_post.score !== undefined && (
+                      <div className="flex items-center gap-1">
+                        <FaThumbsUp size={12} className="text-gray-500" />
+                        <span className="text-gray-600">Score:</span>
+                        <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
                       </div>
-                      <div className="bg-white rounded-lg border border-gray-200 p-2">
-                        <h5 className="font-semibold text-gray-900 mb-1 text-sm">Community Discussion</h5>
-                        {/* Comments Summary */}
-                        {product.reddit_post.comment_summary && (
-                          <div>
-                            <p className="text-sm leading-relaxed text-gray-700">{product.reddit_post.comment_summary}</p>
-                          </div>
-                        )}
-                        {/* Reddit post metadata */}
-                        <div className="flex items-center gap-4 text-sm pt-1 border-t border-gray-100 flex-wrap">
-                          {product.reddit_post.score !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <FaThumbsUp size={12} className="text-gray-500" />
-                              <span className="text-gray-600">Score:</span>
-                              <span className="font-medium text-gray-900">{product.reddit_post.score}</span>
-                            </div>
-                          )}
-                          {product.reddit_post.num_comments !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <FaComment size={12} className="text-gray-500" />
-                              <span className="text-gray-600">Comments:</span>
-                              <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Footer: Published to Reddit/Clouvel Section */}
-                    {publishedPost && (
-                      <div className="flex items-center gap-2 mt-4">
-                        <a
-                          href={publishedPost.reddit_post_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
-                          title="View on Reddit"
-                        >
-                          <FaReddit size={20} className="text-green-600" />
-                        </a>
-                        <span className="font-semibold text-gray-900">
-                          r/{publishedPost.subreddit_name}
-                        </span>
-                        <span className="text-sm text-gray-600">
-                          &nbsp;• {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
+                    )}
+                    {product.reddit_post.num_comments !== undefined && (
+                      <div className="flex items-center gap-1">
+                        <FaComment size={12} className="text-gray-500" />
+                        <span className="text-gray-600">Comments:</span>
+                        <span className="font-medium text-gray-900">{product.reddit_post.num_comments}</span>
                       </div>
                     )}
                   </div>
                 </div>
+                {/* Published to Reddit/Clouvel Section */}
+                {publishedPost && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <a
+                      href={publishedPost.reddit_post_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
+                      title="View on Reddit"
+                    >
+                      <FaReddit size={16} className="text-green-600" />
+                    </a>
+                    <span className="font-semibold text-gray-900 text-sm">
+                      r/{publishedPost.subreddit_name}
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      &nbsp;• {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Commissioned By - Now below original post, not full width */}
+              {commissionInfo && (
+                <div className="flex items-center bg-blue-50 border border-blue-100 rounded-xl px-4 py-2 shadow-sm">
+                  {/* Icon */}
+                  {(() => {
+                    const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
+                    const tierDisplay = getTierDisplay(tierName);
+                    const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                    return (
+                      <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
+                        <IconComponent size={18} className={tierDisplay.color} />
+                      </span>
+                    );
+                  })()}
+                  {/* Username and subtext */}
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-semibold text-gray-900 text-sm truncate">
+                      {commissionInfo.is_anonymous
+                        ? 'Anonymous'
+                        : commissionInfo.reddit_username
+                          ? `u/${commissionInfo.reddit_username}`
+                          : ''}
+                    </span>
+                    <span className="text-xs text-gray-400 font-medium">Commission</span>
+                  </div>
+                  {/* Commission message centered */}
+                  {commissionInfo.commission_message && (
+                    <span className="flex-1 text-center text-xs text-gray-600 italic px-2">
+                      "{commissionInfo.commission_message}"
+                    </span>
+                  )}
+                  {/* Amount and date */}
+                  <div className="flex flex-col items-end ml-auto">
+                    <span className="font-mono text-gray-700 text-base font-semibold">${commissionInfo.donation_amount?.toFixed(2)}</span>
+                    <span className="text-xs text-gray-400 leading-tight">
+                      {product.pipeline_run && product.pipeline_run.end_time ?
+                        new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Support Donations - Now at the top of where commission used to be */}
+              <div className="mt-auto">
+                {supportDonations.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {supportDonations.map((donation, index) => {
+                      const tierDisplay = getTierDisplay(donation.tier_name);
+                      const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
+                      return (
+                        <div key={index} className="flex items-center bg-green-50 border border-green-100 rounded-xl px-4 py-2 shadow-sm">
+                          {/* Icon */}
+                          <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
+                            <IconComponent size={18} className={tierDisplay.color} />
+                          </span>
+                          {/* Username and subtext */}
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-gray-900 text-sm truncate">
+                              {donation.reddit_username}
+                            </span>
+                            <span className="text-xs text-gray-400 font-medium">Supported</span>
+                          </div>
+                          {/* Message centered if present */}
+                          {donation.message && (
+                            <span className="flex-1 text-center text-xs text-gray-600 italic px-2">
+                              "{donation.message}"
+                            </span>
+                          )}
+                          {/* Amount and date */}
+                          <div className="flex flex-col items-end ml-auto">
+                            <span className="font-mono text-gray-700 text-base font-semibold">${donation.donation_amount?.toFixed(2)}</span>
+                            <span className="text-xs text-gray-400 leading-tight">
+                              {donation.created_at ?
+                                new Date(donation.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                    <span className="text-sm text-gray-500 italic">No support donations yet</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          {/* Commissioned By - Styled Like DonationCard Row, Full Width, Message Centered */}
-          {commissionInfo && (
-            <div className="flex justify-center mt-6">
-              <div className="flex items-center w-full bg-blue-50 border border-blue-100 rounded-xl px-6 py-2 shadow-sm">
-                {/* Icon */}
-                {(() => {
-                  const tierName = product.product_info.donation_info && product.product_info.donation_info.tier_name || '';
-                  const tierDisplay = getTierDisplay(tierName);
-                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
-                  return (
-                    <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
-                      <IconComponent size={20} className={tierDisplay.color} />
-                    </span>
-                  );
-                })()}
-                {/* Username and subtext */}
-                <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-gray-900 text-base truncate">
-                    {commissionInfo.is_anonymous
-                      ? 'Anonymous'
-                      : commissionInfo.reddit_username
-                        ? `u/${commissionInfo.reddit_username}`
-                        : ''}
-                  </span>
-                  <span className="text-xs text-gray-400 font-medium">Commission</span>
-                </div>
-                {/* Commission message centered */}
-                {commissionInfo.commission_message && (
-                  <span className="flex-1 text-center text-xs text-gray-600 italic px-4">
-                    "{commissionInfo.commission_message}"
-                  </span>
-                )}
-                {/* Amount and date */}
-                <div className="flex flex-col items-end ml-auto">
-                  <span className="font-mono text-gray-700 text-lg font-semibold">${commissionInfo.donation_amount?.toFixed(2)}</span>
-                  <span className="text-xs text-gray-400 leading-tight">
-                    {product.pipeline_run && product.pipeline_run.end_time ?
-                      new Date(product.pipeline_run.end_time).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Support Donations - Styled Like Commission Row */}
-          {supportDonations.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex flex-col gap-3">
-                {supportDonations.map((donation, index) => {
-                  const tierDisplay = getTierDisplay(donation.tier_name);
-                  const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
-                  return (
-                    <div key={index} className="flex items-center w-full bg-green-50 border border-green-100 rounded-xl px-6 py-2 shadow-sm">
-                      {/* Icon */}
-                      <span className={`flex-shrink-0 flex items-center justify-center ${tierDisplay.color} mr-3`}>
-                        <IconComponent size={20} className={tierDisplay.color} />
-                      </span>
-                      {/* Username and subtext */}
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-semibold text-gray-900 text-base truncate">
-                          {donation.reddit_username}
-                        </span>
-                        <span className="text-xs text-gray-400 font-medium">Supported</span>
-                      </div>
-                      {/* Message centered if present */}
-                      {donation.message && (
-                        <span className="flex-1 text-center text-xs text-gray-600 italic px-4">
-                          "{donation.message}"
-                        </span>
-                      )}
-                      {/* Amount and date */}
-                      <div className="flex flex-col items-end ml-auto">
-                        <span className="font-mono text-gray-700 text-lg font-semibold">${donation.donation_amount?.toFixed(2)}</span>
-                        <span className="text-xs text-gray-400 leading-tight">
-                          {donation.created_at ?
-                            new Date(donation.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
         {/* Moved to bottom: Illustration credit */}
         <div className="mt-2 pt-2 border-t border-gray-200">
