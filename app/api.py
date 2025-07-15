@@ -95,6 +95,23 @@ def get_image_quality_for_tier(tier: str) -> str:
 
 app = FastAPI()
 
+# Debug environment variable loading for Railway
+logger = logging.getLogger(__name__)
+logger.info(f"Environment variables available: {list(os.environ.keys())}")
+logger.info(f"Railway environment detected: {'RAILWAY_ENVIRONMENT' in os.environ}")
+
+# Log the loaded API key (masked)
+openai_api_key_loaded = os.getenv("OPENAI_API_KEY")
+if openai_api_key_loaded:
+    logger.info(
+        f"OPENAI_API_KEY loaded: {openai_api_key_loaded[:5]}...{openai_api_key_loaded[-5:]}"
+    )
+else:
+    logger.warning("OPENAI_API_KEY not loaded.")
+    # Check if any env vars contain 'openai' or 'OPENAI'
+    openai_vars = {k: v for k, v in os.environ.items() if 'openai' in k.lower()}
+    logger.info(f"Environment variables containing 'openai': {list(openai_vars.keys())}")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -122,7 +139,6 @@ stripe_service = StripeService()
 task_manager = TaskManager()
 
 
-
 @app.on_event("startup")
 async def startup_event():
     """Initialize the database and WebSocket manager when the application starts."""
@@ -140,7 +156,6 @@ async def startup_event():
     # Start the scheduler in the background without blocking startup
     asyncio.create_task(background_scheduler.start())
     logger.info("Background scheduler started successfully!")
-    
 
 
 @app.on_event("shutdown")
@@ -152,7 +167,6 @@ async def shutdown_event():
     await background_scheduler.stop()
     logger.info("Background scheduler stopped successfully!")
 
-    
     logger.info("Stopping WebSocket manager...")
     await websocket_manager.stop()
     logger.info("WebSocket manager stopped successfully!")
@@ -228,7 +242,9 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                             "is_anonymous": donation.is_anonymous,
                             "donation_type": donation.donation_type,
                             "commission_type": donation.commission_type,
-                            "source": donation.source.value if donation.source else None,
+                            "source": (
+                                donation.source.value if donation.source else None
+                            ),
                         }
 
                 # Get subreddit name for reddit context
@@ -1328,12 +1344,12 @@ async def stripe_webhook(request: Request):
         # Webhook signature verification with development mode support
         webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
         is_dev_mode = os.getenv("STRIPE_CLI_MODE", "false").lower() == "true"
-        
+
         if not webhook_secret and not is_dev_mode:
-            logger.error("STRIPE_WEBHOOK_SECRET environment variable is not set and not in dev mode")
-            raise HTTPException(
-                status_code=500, detail="Webhook secret not configured"
+            logger.error(
+                "STRIPE_WEBHOOK_SECRET environment variable is not set and not in dev mode"
             )
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
         if is_dev_mode and not webhook_secret:
             # Development mode without secret - parse event directly but log warning
@@ -1362,7 +1378,9 @@ async def stripe_webhook(request: Request):
                 logger.error(f"Invalid webhook signature: {str(e)}")
                 raise HTTPException(status_code=400, detail="Invalid signature")
 
-        logger.info(f"Received Stripe webhook event: {event['type']} (id: {event['id']})")
+        logger.info(
+            f"Received Stripe webhook event: {event['type']} (id: {event['id']})"
+        )
 
         # Handle the event
         if event["type"] == "payment_intent.succeeded":
@@ -1626,10 +1644,6 @@ async def get_task_status(task_id: str):
         )
 
 
-
-
-
-
 @app.post("/api/tasks/{task_id}/heartbeat")
 async def update_task_heartbeat(task_id: str):
     """
@@ -1644,7 +1658,9 @@ async def update_task_heartbeat(task_id: str):
         if success:
             return {"success": True, "message": f"Heartbeat updated for task {task_id}"}
         else:
-            raise HTTPException(status_code=404, detail="Task not found or not in progress")
+            raise HTTPException(
+                status_code=404, detail="Task not found or not in progress"
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -2116,29 +2132,32 @@ async def run_scheduler_now(
 async def get_next_scheduled_run(db: Session = Depends(get_db)):
     """
     Get the next scheduled commission run time.
-    
+
     Returns:
         Dict: Information about the next scheduled run including timestamp and time remaining
     """
     try:
         from app.redis_service import redis_service
         from app.services.scheduler_service import SchedulerService
-        
+
         scheduler_service = SchedulerService(redis_service, task_manager)
         status = scheduler_service.get_scheduler_status(db)
-        
+
         result = {
             "enabled": status["enabled"],
             "next_run_at": status["next_run_at"],
             "interval_hours": status["interval_hours"],
         }
-        
+
         # Calculate time remaining if next run is scheduled
         if status["next_run_at"] and status["enabled"]:
             from datetime import datetime, timezone
-            next_run = datetime.fromisoformat(status["next_run_at"].replace("Z", "+00:00"))
+
+            next_run = datetime.fromisoformat(
+                status["next_run_at"].replace("Z", "+00:00")
+            )
             now = datetime.now(timezone.utc)
-            
+
             if next_run > now:
                 time_remaining = next_run - now
                 result["time_remaining_seconds"] = int(time_remaining.total_seconds())
@@ -2146,7 +2165,7 @@ async def get_next_scheduled_run(db: Session = Depends(get_db)):
             else:
                 result["time_remaining_seconds"] = 0
                 result["time_remaining_human"] = "Overdue"
-        
+
         return result
     except Exception as e:
         logger.error(f"Error getting next scheduled run: {e}")
@@ -2156,7 +2175,7 @@ async def get_next_scheduled_run(db: Session = Depends(get_db)):
 def _format_time_remaining(time_delta) -> str:
     """Format time delta into human readable string."""
     total_seconds = int(time_delta.total_seconds())
-    
+
     if total_seconds < 60:
         return f"{total_seconds}s"
     elif total_seconds < 3600:
