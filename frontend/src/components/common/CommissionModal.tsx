@@ -1256,13 +1256,26 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center min-h-[200px] text-gray-500">
-              <span className="mb-2 text-lg">🖌️</span>
-              <span>
-                {commissionType === COMMISSION_TYPES.SUBREDDIT && !subreddit && 'Please select a subreddit to continue.'}
-                {commissionType === COMMISSION_TYPES.SPECIFIC && !postId && 'Please enter a post ID or URL to continue.'}
-                {commissionType === COMMISSION_TYPES.RANDOM && 'Generating a random commission...'}
-                {(isValidating || validationError) && ''}
-              </span>
+              {isValidating ? (
+                <>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-4"></div>
+                  <span>Validating subreddit...</span>
+                </>
+              ) : validationError ? (
+                <>
+                  <span className="mb-2 text-lg text-red-500">⚠️</span>
+                  <span className="text-red-600">{validationError}</span>
+                </>
+              ) : (
+                <>
+                  <span className="mb-2 text-lg">🖌️</span>
+                  <span>
+                    {commissionType === COMMISSION_TYPES.SUBREDDIT && !subreddit && 'Please select a subreddit to continue.'}
+                    {commissionType === COMMISSION_TYPES.SPECIFIC && !postId && 'Please enter a post ID or URL to continue.'}
+                    {commissionType === COMMISSION_TYPES.RANDOM && 'Generating a random commission...'}
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>
