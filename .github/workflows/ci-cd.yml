@@ -56,6 +56,16 @@ jobs:
         REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
         REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
         ZAZZLE_AFFILIATE_ID: ${{ secrets.ZAZZLE_AFFILIATE_ID }}
+        IMGUR_CLIENT_ID: ${{ secrets.IMGUR_CLIENT_ID }}
+        IMGUR_CLIENT_SECRET: ${{ secrets.IMGUR_CLIENT_SECRET }}
+        STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+        STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+        DATABASE_URL: sqlite:///./test.db
+        REDIS_HOST: localhost
+        REDIS_PORT: 6379
+        REDIS_DB: 1
+        STRIPE_CLI_MODE: false
       run: |
         poetry run make test
     
