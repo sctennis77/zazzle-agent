@@ -9,19 +9,37 @@ const mockProducts: GeneratedProduct[] = [
   {
     product_info: {
       id: 1,
-      product_name: 'Test Product',
-      zazzle_url: 'https://zazzle.com/test',
+      pipeline_run_id: 1,
+      reddit_post_id: 1,
+      theme: 'test',
+      image_title: 'Test Product',
       image_url: 'https://example.com/image.jpg',
-      created_at: '2023-01-01T00:00:00Z'
+      product_url: 'https://zazzle.com/test',
+      template_id: 'template1',
+      model: 'dall-e-3',
+      prompt_version: 'v1',
+      product_type: 'tshirt',
+      design_description: 'Test design',
+      image_quality: 'hd'
+    },
+    pipeline_run: {
+      id: 1,
+      start_time: '2023-01-01T00:00:00Z',
+      end_time: '2023-01-01T00:01:00Z',
+      status: 'completed',
+      retry_count: 0
     },
     reddit_post: {
+      id: 1,
+      pipeline_run_id: 1,
       post_id: 'test123',
       title: 'Test Post',
       content: 'Test content',
       subreddit: 'test',
       url: 'https://reddit.com/test',
-      upvotes: 100,
-      created_at: '2023-01-01T00:00:00Z'
+      permalink: '/r/test/test123',
+      score: 100,
+      num_comments: 5
     }
   }
 ];
@@ -29,7 +47,7 @@ const mockProducts: GeneratedProduct[] = [
 const mockUseProducts = {
   products: mockProducts,
   loading: false,
-  error: null,
+  error: null as string | null,
   refresh: vi.fn(),
   setProducts: vi.fn()
 };

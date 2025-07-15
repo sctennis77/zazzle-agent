@@ -66,7 +66,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       await refreshProducts();
       
       // Move to transitioning stage
-      const transitionTimeoutId = setTimeout(() => {
+      const transitionTimeoutId = window.setTimeout(() => {
         setCompletingTasks(prev => {
           const newMap = new Map(prev);
           const taskData = newMap.get(taskId);
@@ -77,7 +77,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         });
         
         // Move to removing stage after animation
-        const removeTimeoutId = setTimeout(() => {
+        const removeTimeoutId = window.setTimeout(() => {
           setCompletingTasks(prev => {
             const newMap = new Map(prev);
             newMap.delete(taskId);
@@ -115,7 +115,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           clearTimeout(taskData.timeoutId);
         }
         // Remove from completing tasks on error after brief delay
-        const errorTimeoutId = setTimeout(() => {
+        const errorTimeoutId = window.setTimeout(() => {
           setCompletingTasks(current => {
             const newMap = new Map(current);
             newMap.delete(taskId);
@@ -269,7 +269,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             subscribeToActiveTasks(ws, [message.task_info]);
           }
           // Trigger thank you message animation for new commission tasks
-          setTimeout(() => {
+          window.setTimeout(() => {
             window.dispatchEvent(new CustomEvent('trigger-logo-animation'));
           }, 1000); // Delay to let the task card appear first
         } else if (message.type === 'general_update') {
@@ -280,7 +280,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
               subscribeToActiveTasks(ws, [message.data.task_info]);
             }
             // Trigger thank you message animation for new commission tasks
-            setTimeout(() => {
+            window.setTimeout(() => {
               window.dispatchEvent(new CustomEvent('trigger-logo-animation'));
             }, 1000); // Delay to let the task card appear first
           }
@@ -399,7 +399,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   // Handler for ephemeral publish animation
   const handleProductPublished = (productId: number) => {
     setJustPublishedId(productId);
-    setTimeout(() => setJustPublishedId(null), 2500);
+    window.setTimeout(() => setJustPublishedId(null), 2500);
   };
 
   // Helper to ensure tasks are unique by task_id
@@ -414,7 +414,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   // Function to trigger FAB animation
   const triggerFabAnimation = () => {
     setFabAnimation(true);
-    setTimeout(() => setFabAnimation(false), 1000); // Reset after 1 second
+    window.setTimeout(() => setFabAnimation(false), 1000); // Reset after 1 second
   };
 
   // Expose the trigger function to parent component

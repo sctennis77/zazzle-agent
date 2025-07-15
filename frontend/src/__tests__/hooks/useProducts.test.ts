@@ -1,37 +1,57 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import axios from 'axios';
 import { useProducts } from '../../hooks/useProducts';
 import type { GeneratedProduct } from '../../types/productTypes';
 
 const mockAxios = vi.mocked(axios);
+const mockGet = vi.fn();
 
 const mockProduct: GeneratedProduct = {
   product_info: {
     id: 1,
-    product_name: 'Test Product',
-    zazzle_url: 'https://zazzle.com/test',
+    pipeline_run_id: 1,
+    reddit_post_id: 1,
+    theme: 'test',
+    image_title: 'Test Product',
     image_url: 'https://example.com/image.jpg',
-    created_at: '2023-01-01T00:00:00Z'
+    product_url: 'https://zazzle.com/test',
+    template_id: 'template1',
+    model: 'dall-e-3',
+    prompt_version: 'v1',
+    product_type: 'tshirt',
+    design_description: 'Test design',
+    image_quality: 'hd'
+  },
+  pipeline_run: {
+    id: 1,
+    start_time: '2023-01-01T00:00:00Z',
+    end_time: '2023-01-01T00:01:00Z',
+    status: 'completed',
+    retry_count: 0
   },
   reddit_post: {
+    id: 1,
+    pipeline_run_id: 1,
     post_id: 'test123',
     title: 'Test Post',
     content: 'Test content',
     subreddit: 'test',
     url: 'https://reddit.com/test',
-    upvotes: 100,
-    created_at: '2023-01-01T00:00:00Z'
+    permalink: '/r/test/test123',
+    score: 100,
+    num_comments: 5
   }
 };
 
 describe('useProducts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAxios.get = mockGet;
   });
 
   it('should fetch products successfully', async () => {
-    mockAxios.get.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: [mockProduct]
     });
 
@@ -52,7 +72,7 @@ describe('useProducts', () => {
 
   it('should handle API errors', async () => {
     const errorMessage = 'Network error';
-    mockAxios.get.mockRejectedValueOnce(new Error(errorMessage));
+    mockGet.mockRejectedValueOnce(new Error(errorMessage));
 
     const { result } = renderHook(() => useProducts());
 
@@ -65,7 +85,7 @@ describe('useProducts', () => {
   });
 
   it('should handle non-array response', async () => {
-    mockAxios.get.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: { invalid: 'response' }
     });
 
@@ -80,7 +100,7 @@ describe('useProducts', () => {
   });
 
   it('should refresh products', async () => {
-    mockAxios.get.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: [mockProduct]
     });
 
@@ -90,7 +110,7 @@ describe('useProducts', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    mockAxios.get.mockResolvedValueOnce({
+    mockGet.mockResolvedValueOnce({
       data: [{ ...mockProduct, product_info: { ...mockProduct.product_info, id: 2 } }]
     });
 
@@ -111,7 +131,10 @@ describe('useProducts', () => {
     });
 
     const newProducts = [mockProduct];
-    result.current.setProducts(newProducts);
+    
+    act(() => {
+      result.current.setProducts(newProducts);
+    });
 
     expect(result.current.products).toEqual(newProducts);
   });

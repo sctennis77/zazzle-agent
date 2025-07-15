@@ -28,24 +28,34 @@ vi.mock('@stripe/react-stripe-js', () => ({
 }));
 
 // Mock WebSocket
-global.WebSocket = vi.fn().mockImplementation(() => ({
+const MockWebSocket = vi.fn().mockImplementation(() => ({
   send: vi.fn(),
   close: vi.fn(),
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   readyState: 1, // OPEN
-  CONNECTING: 0,
-  OPEN: 1,
-  CLOSING: 2,
-  CLOSED: 3,
   onopen: null,
   onclose: null,
   onmessage: null,
   onerror: null,
 }));
 
+Object.assign(MockWebSocket, {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3,
+});
+
+global.WebSocket = MockWebSocket as any;
+
 // Mock fetch for API calls
-global.fetch = vi.fn();
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([]),
+  } as Response)
+);
 
 // Mock axios
 vi.mock('axios', () => ({
@@ -63,7 +73,7 @@ vi.mock('react-router-dom', () => ({
   Routes: ({ children }: { children: React.ReactNode }) => children,
   Route: () => null,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
-  useLocation: vi.fn(() => ({ pathname: '/', state: null })),
+  useLocation: vi.fn(() => ({ pathname: '/', state: null, key: 'default', search: '', hash: '' })),
   useNavigate: vi.fn(() => vi.fn()),
 }));
 
@@ -84,6 +94,20 @@ vi.mock('react-icons/fa', () => ({
   FaStar: () => null,
   FaGem: () => null,
   FaHeart: () => null,
+  FaExpand: () => null,
+  FaExternalLinkAlt: () => null,
+  FaArrowLeft: () => null,
+  FaSupport: () => null,
+  FaSpinner: () => null,
+  FaCheckCircle: () => null,
+  FaExclamationTriangle: () => null,
+  FaClock: () => null,
+  FaReddit: () => null,
+  FaTimes: () => null,
+  FaRedo: () => null,
+  FaUser: () => null,
+  FaThumbsUp: () => null,
+  FaComment: () => null,
 }));
 
 // Setup window.location mock
@@ -106,8 +130,8 @@ Object.defineProperty(window, 'history', {
   writable: true,
 });
 
-// Mock URL constructor for URL manipulation
-global.URL = class URL {
+// Mock URL constructor for URL manipulation  
+const MockURL = class MockURL {
   href: string;
   pathname: string;
   search: string;
@@ -123,4 +147,11 @@ global.URL = class URL {
   toString() {
     return this.href;
   }
+
+  static canParse() { return true; }
+  static createObjectURL() { return 'mock-url'; }
+  static parse() { return null; }
+  static revokeObjectURL() { return; }
 };
+
+global.URL = MockURL as any;

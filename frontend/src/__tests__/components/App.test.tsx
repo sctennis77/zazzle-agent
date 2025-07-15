@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import App from '../../App';
 
 const mockNavigate = vi.fn();
-const mockLocation = { pathname: '/', state: null };
+const mockLocation = { pathname: '/', state: null, key: 'default', search: '', hash: '' };
 
 vi.mocked(useNavigate).mockReturnValue(mockNavigate);
 vi.mocked(useLocation).mockReturnValue(mockLocation);
