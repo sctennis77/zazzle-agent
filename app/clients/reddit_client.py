@@ -834,3 +834,68 @@ class RedditClient:
                 error=e,
             )
             raise
+
+    def get_subreddit_info(self, subreddit_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get information about a subreddit to validate its existence and properties.
+        
+        Args:
+            subreddit_name: Name of the subreddit to check
+            
+        Returns:
+            Dictionary with subreddit information or None if not found
+            
+        Raises:
+            Exception: If subreddit doesn't exist or is not accessible
+        """
+        try:
+            log_operation(
+                logger,
+                "get_subreddit_info",
+                "started",
+                {"subreddit": subreddit_name, "mode": self.mode}
+            )
+            
+            # Access the subreddit - this will raise an exception if it doesn't exist
+            subreddit = self.reddit.subreddit(subreddit_name)
+            
+            # Try to access basic properties to trigger validation
+            # This will raise an exception if the subreddit doesn't exist or is private
+            display_name = subreddit.display_name
+            subscribers = subreddit.subscribers
+            over18 = subreddit.over18
+            description = subreddit.description
+            public_description = subreddit.public_description
+            
+            subreddit_info = {
+                'display_name': display_name,
+                'subscribers': subscribers,
+                'over18': over18,
+                'description': description,
+                'public_description': public_description,
+            }
+            
+            log_operation(
+                logger,
+                "get_subreddit_info",
+                "success",
+                {
+                    "subreddit": subreddit_name,
+                    "subscribers": subscribers,
+                    "over18": over18,
+                    "mode": self.mode
+                }
+            )
+            
+            return subreddit_info
+            
+        except Exception as e:
+            log_operation(
+                logger,
+                "get_subreddit_info",
+                "failure",
+                {"subreddit": subreddit_name, "mode": self.mode},
+                error=e
+            )
+            # Re-raise the exception to let the caller handle it
+            raise

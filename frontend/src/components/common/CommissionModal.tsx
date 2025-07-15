@@ -42,27 +42,64 @@ interface ValidationResult {
   error?: string;
 }
 
-// Available subreddits for commission
-const AVAILABLE_SUBREDDITS = [
-  // Nature & Outdoors
-  "nature", "earthporn", "landscapephotography", "hiking", "camping", "gardening", "plants", "succulents",
-  // Space & Science
-  "space", "astrophotography", "nasa", "science", "physics", "chemistry", "biology",
-  // Sports & Recreation
-  "golf", "soccer", "basketball", "tennis", "baseball", "hockey", "fishing", "surfing", "skiing", "rockclimbing",
-  // Animals & Pets
-  "aww", "cats", "dogs", "puppies", "kittens", "wildlife", "birding", "aquariums",
-  // Food & Cooking
-  "food", "foodporn", "cooking", "baking", "coffee", "tea", "wine",
-  // Art & Design
-  "art", "design", "architecture", "interiordesign", "streetart", "digitalart",
-  // Technology & Gaming
-  "programming", "gaming", "pcgaming", "retrogaming", "cyberpunk", "futurology",
-  // Travel & Culture
-  "travel", "backpacking", "photography", "cityporn", "history",
-  // Lifestyle & Wellness
-  "fitness", "yoga", "meditation", "minimalism", "sustainability", "vegan"
-];
+// Subreddit API types
+interface SubredditInfo {
+  id: number;
+  subreddit_name: string;
+  display_name?: string;
+  description?: string;
+  public_description?: string;
+  subscribers?: number;
+  over18: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SubredditValidationResponse {
+  subreddit_name: string;
+  exists: boolean;
+  message: string;
+  subreddit?: SubredditInfo;
+}
+
+// API functions for subreddit management
+const fetchAvailableSubreddits = async (): Promise<SubredditInfo[]> => {
+  try {
+    const response = await fetch(`${API_BASE}/api/subreddits`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch subreddits: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching subreddits:', error);
+    return [];
+  }
+};
+
+const validateSubreddit = async (subredditName: string): Promise<SubredditValidationResponse> => {
+  try {
+    const response = await fetch(`${API_BASE}/api/subreddits/validate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ subreddit_name: subredditName }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to validate subreddit: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error validating subreddit:', error);
+    return {
+      subreddit_name: subredditName,
+      exists: false,
+      message: 'Failed to validate subreddit. Please try again.',
+    };
+  }
+};
 
 // Helper to extract subreddit from a Reddit URL
 function extractSubredditFromUrl(url: string): string | null {
@@ -264,6 +301,13 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const [subreddit, setSubreddit] = useState('');
   const [postId, setPostId] = useState('');
   const [commissionType, setCommissionType] = useState(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
+  
+  // Subreddit management state
+  const [availableSubreddits, setAvailableSubreddits] = useState<SubredditInfo[]>([]);
+  const [customSubreddit, setCustomSubreddit] = useState('');
+  const [isValidatingSubreddit, setIsValidatingSubreddit] = useState(false);
+  const [subredditValidationMessage, setSubredditValidationMessage] = useState('');
+  const [showCustomSubredditInput, setShowCustomSubredditInput] = useState(false);
   const [error, setError] = useState('');
   // Note: error state is used in error handling logic
   const [success, setSuccess] = useState(false);
@@ -314,6 +358,22 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     return () => { isMounted.current = false; };
   }, [isOpen]);
 
+  // Load available subreddits when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadAvailableSubreddits();
+    }
+  }, [isOpen]);
+
+  const loadAvailableSubreddits = async () => {
+    try {
+      const subreddits = await fetchAvailableSubreddits();
+      setAvailableSubreddits(subreddits);
+    } catch (error) {
+      console.error('Error loading subreddits:', error);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setCustomAmount('');
@@ -335,6 +395,12 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setPaymentIntentId(null);
       setUsernameError(null);
       setMessageError(null);
+      
+      // Reset subreddit management state
+      setCustomSubreddit('');
+      setIsValidatingSubreddit(false);
+      setSubredditValidationMessage('');
+      setShowCustomSubredditInput(false);
     }
   }, [isOpen]);
 
@@ -354,6 +420,73 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     } else if (type === COMMISSION_TYPES.SPECIFIC) {
       setPostId('');
       setSubreddit('');
+    }
+  };
+
+  // Handle custom subreddit validation
+  const handleCustomSubredditValidation = async () => {
+    if (!customSubreddit.trim()) {
+      setSubredditValidationMessage('Please enter a subreddit name');
+      return;
+    }
+
+    setIsValidatingSubreddit(true);
+    setSubredditValidationMessage('');
+
+    try {
+      const result = await validateSubreddit(customSubreddit.trim());
+      
+      if (result.exists && result.subreddit) {
+        // Successfully validated and added
+        setSubredditValidationMessage(result.message);
+        
+        // Add to available subreddits list and select it
+        const newSubreddit = result.subreddit;
+        setAvailableSubreddits(prev => {
+          // Check if already exists to avoid duplicates
+          const exists = prev.some(s => s.subreddit_name === newSubreddit.subreddit_name);
+          if (exists) return prev;
+          return [...prev, newSubreddit].sort((a, b) => a.subreddit_name.localeCompare(b.subreddit_name));
+        });
+        
+        // Select the newly validated subreddit
+        setSubreddit(newSubreddit.subreddit_name);
+        setCustomSubreddit('');
+        setShowCustomSubredditInput(false);
+        
+        // Clear validation message after a short delay
+        setTimeout(() => setSubredditValidationMessage(''), 3000);
+      } else {
+        // Validation failed
+        setSubredditValidationMessage(result.message);
+      }
+    } catch (error) {
+      setSubredditValidationMessage('Error validating subreddit. Please try again.');
+    } finally {
+      setIsValidatingSubreddit(false);
+    }
+  };
+
+  // Handle selecting a subreddit from dropdown
+  const handleSubredditSelect = (value: string) => {
+    if (value === 'custom') {
+      setShowCustomSubredditInput(true);
+      setSubreddit('');
+    } else {
+      setSubreddit(value);
+      setShowCustomSubredditInput(false);
+      setCustomSubreddit('');
+      setSubredditValidationMessage('');
+      
+      // Clear previous validation and run new validation if a subreddit is selected
+      setValidationResult(null);
+      setValidationError('');
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      
+      if (value) {
+        setTimeout(() => validateCommission(COMMISSION_TYPES.SUBREDDIT, value, ''), 100);
+      }
     }
   };
 
@@ -411,17 +544,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     }
   };
 
-  // Subreddit select handler
-  const handleSubredditSelect = (value: string) => {
-    setSubreddit(value);
-    setValidationResult(null);
-    setValidationError('');
-    setClientSecret(null);
-    setPaymentIntentId(null);
-    if (value) {
-      setTimeout(() => validateCommission(COMMISSION_TYPES.SUBREDDIT, value, ''), 100);
-    }
-  };
+  // Subreddit select handler (updated to use new logic above)
 
   // Post ID input handler
   const handlePostIdInput = (value: string) => {
@@ -700,10 +823,60 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="">Select a subreddit...</option>
-              {AVAILABLE_SUBREDDITS.map((sub) => (
-                <option key={sub} value={sub}>r/{sub}</option>
+              {availableSubreddits.map((sub) => (
+                <option key={sub.id} value={sub.subreddit_name}>
+                  r/{sub.subreddit_name} {sub.subscribers && `(${sub.subscribers.toLocaleString()} members)`}
+                </option>
               ))}
+              <option value="custom">📝 Add a new subreddit...</option>
             </select>
+            
+            {/* Custom subreddit input */}
+            {showCustomSubredditInput && (
+              <div className="mt-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customSubreddit}
+                    onChange={(e) => setCustomSubreddit(e.target.value)}
+                    placeholder="Enter subreddit name (e.g., 'photography')"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleCustomSubredditValidation();
+                      } else if (e.key === 'Escape') {
+                        setShowCustomSubredditInput(false);
+                        setCustomSubreddit('');
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCustomSubredditValidation}
+                    disabled={isValidatingSubreddit || !customSubreddit.trim()}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isValidatingSubreddit ? 'Validating...' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomSubredditInput(false);
+                      setCustomSubreddit('');
+                      setSubredditValidationMessage('');
+                    }}
+                    className="px-3 py-2 text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {subredditValidationMessage && (
+                  <p className={`mt-2 text-sm ${subredditValidationMessage.includes('successfully') || subredditValidationMessage.includes('already exists') ? 'text-green-600' : 'text-red-600'}`}>
+                    {subredditValidationMessage}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

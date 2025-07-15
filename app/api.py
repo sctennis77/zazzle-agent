@@ -3,7 +3,7 @@ import logging
 import os
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -18,11 +18,13 @@ from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 
 from app.db.database import SessionLocal, get_db, init_db
-from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask, ProductSubredditPost, SourceType
+from app.db.models import PipelineRun, ProductInfo, RedditPost, PipelineRunUsage, Donation, SubredditFundraisingGoal, PipelineTask, ProductSubredditPost, SourceType, Subreddit
 from app.models import (
     GeneratedProductSchema, PipelineRunSchema, PipelineRunUsageSchema,
     DonationRequest, DonationResponse, DonationSchema, DonationSummary, DonationStatus,
     CheckoutSessionResponse, ProductInfoSchema, RedditContext, ProductSubredditPostSchema, CommissionValidationRequest, CommissionRequest,
+    SubredditSchema, SubredditCreateRequest, SubredditValidationResponse,
+    SubredditFundraisingGoalSchema, FundraisingGoalsConfig, FundraisingProgress,
     get_tier_from_amount
 )
 from app.models import ProductInfo as ProductInfoDataClass
@@ -30,6 +32,7 @@ from app.models import RedditPostSchema
 from app.pipeline_status import PipelineStatus
 from app.services.stripe_service import StripeService
 from app.services.commission_validator import CommissionValidator
+from app.services.fundraising_goals_service import FundraisingGoalsService
 from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_queue import TaskQueue
@@ -653,6 +656,69 @@ async def get_subreddit_fundraising(db: Session = Depends(get_db)):
         
     except Exception as e:
         logger.error(f"Error getting subreddit fundraising: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/fundraising/progress", response_model=FundraisingProgress)
+async def get_fundraising_progress(db: Session = Depends(get_db)):
+    """
+    Get complete fundraising progress including overall and subreddit goals.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        FundraisingProgress: Complete fundraising progress information
+    """
+    try:
+        service = FundraisingGoalsService(db)
+        return service.get_fundraising_progress()
+        
+    except Exception as e:
+        logger.error(f"Error getting fundraising progress: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/fundraising/config", response_model=FundraisingGoalsConfig)
+async def get_fundraising_config():
+    """
+    Get fundraising goals configuration.
+    
+    Returns:
+        FundraisingGoalsConfig: Configuration for fundraising goals
+    """
+    try:
+        config = FundraisingGoalsConfig()
+        return config
+        
+    except Exception as e:
+        logger.error(f"Error getting fundraising config: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/fundraising/update-goal-status")
+async def update_fundraising_goal_status(db: Session = Depends(get_db)):
+    """
+    Update completion status for fundraising goals that have reached their target.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List: Newly completed goals
+    """
+    try:
+        service = FundraisingGoalsService(db)
+        completed_goals = service.update_goal_completion_status()
+        return {
+            "completed_goals": completed_goals,
+            "count": len(completed_goals)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating fundraising goal status: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -1696,6 +1762,115 @@ async def manual_create_commission(
     logger.info(f"Manual commission task {task_id} created for donation {donation.id} (user: {donation.customer_name}, type: {donation.commission_type}, tier: {donation.tier})")
 
     return {"status": "manual commission created", "donation_id": donation.id, "task_id": task_id}
+
+
+@app.get("/api/subreddits", response_model=List[SubredditSchema])
+async def get_available_subreddits(db: Session = Depends(get_db)):
+    """
+    Get all available subreddits for commission selection.
+    
+    Returns a list of subreddits that can be used for commissions,
+    including both seeded subreddits and user-added ones.
+    """
+    try:
+        subreddits = db.query(Subreddit).order_by(Subreddit.subreddit_name).all()
+        return [SubredditSchema.model_validate(subreddit) for subreddit in subreddits]
+    except Exception as e:
+        logger.error(f"Error fetching subreddits: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch subreddits")
+
+
+@app.post("/api/subreddits/validate", response_model=SubredditValidationResponse)
+async def validate_and_create_subreddit(
+    request: SubredditCreateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Validate a subreddit name against Reddit API and create it in our database if it exists.
+    
+    This endpoint:
+    1. Validates the subreddit name format
+    2. Checks if the subreddit exists on Reddit using the Reddit API
+    3. If it exists, creates a new entry in our database
+    4. Returns validation status and subreddit info
+    
+    Note: Future filtering for NSFW, 18+ content can be added here.
+    """
+    from app.clients.reddit_client import RedditClient
+    
+    subreddit_name = request.subreddit_name
+    
+    try:
+        # Check if subreddit already exists in our database
+        existing_subreddit = db.query(Subreddit).filter(
+            Subreddit.subreddit_name == subreddit_name
+        ).first()
+        
+        if existing_subreddit:
+            return SubredditValidationResponse(
+                subreddit_name=subreddit_name,
+                exists=True,
+                message="Subreddit already exists in our database",
+                subreddit=SubredditSchema.model_validate(existing_subreddit)
+            )
+        
+        # Use Reddit client to validate the subreddit exists
+        reddit_client = RedditClient()
+        
+        try:
+            # Attempt to access the subreddit - this will raise an exception if it doesn't exist
+            subreddit_info = reddit_client.get_subreddit_info(subreddit_name)
+            
+            if not subreddit_info:
+                return SubredditValidationResponse(
+                    subreddit_name=subreddit_name,
+                    exists=False,
+                    message="Subreddit not found on Reddit"
+                )
+            
+            # TODO: Add filtering for NSFW/18+ content here in the future
+            # For now, we'll accept all subreddits but store the NSFW flag
+            
+            # Create new subreddit in our database
+            current_time = datetime.now(timezone.utc)
+            new_subreddit = Subreddit(
+                subreddit_name=subreddit_name,
+                display_name=subreddit_info.get('display_name', subreddit_name),
+                description=subreddit_info.get('description'),
+                public_description=subreddit_info.get('public_description'),
+                subscribers=subreddit_info.get('subscribers'),
+                over18=subreddit_info.get('over18', False),
+                created_at=current_time,
+                updated_at=current_time
+            )
+            
+            db.add(new_subreddit)
+            db.commit()
+            db.refresh(new_subreddit)
+            
+            logger.info(f"Successfully validated and added subreddit: {subreddit_name}")
+            
+            return SubredditValidationResponse(
+                subreddit_name=subreddit_name,
+                exists=True,
+                message="Subreddit validated and added successfully",
+                subreddit=SubredditSchema.model_validate(new_subreddit)
+            )
+            
+        except Exception as reddit_error:
+            logger.warning(f"Reddit API error for subreddit {subreddit_name}: {reddit_error}")
+            return SubredditValidationResponse(
+                subreddit_name=subreddit_name,
+                exists=False,
+                message=f"Subreddit not found or not accessible: {str(reddit_error)}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error validating subreddit {subreddit_name}: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to validate subreddit. Please try again."
+        )
 
 
 if __name__ == "__main__":

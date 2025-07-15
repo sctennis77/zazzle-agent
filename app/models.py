@@ -999,3 +999,86 @@ class ProductSubredditPostSchema(BaseModel):
     engagement_data: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Subreddit Management Models
+
+class SubredditSchema(BaseModel):
+    """Schema for subreddit information."""
+    id: int
+    subreddit_name: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    public_description: Optional[str] = None
+    subscribers: Optional[int] = None
+    over18: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubredditCreateRequest(BaseModel):
+    """Request model for creating/validating a new subreddit."""
+    subreddit_name: str = Field(..., min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_]+$')
+
+    @field_validator('subreddit_name')
+    @classmethod
+    def validate_subreddit_name(cls, v):
+        """Validate subreddit name format."""
+        if not v:
+            raise ValueError('Subreddit name cannot be empty')
+        
+        # Remove 'r/' prefix if present
+        if v.startswith('r/'):
+            v = v[2:]
+        
+        # Basic validation for Reddit subreddit names
+        if not v.replace('_', '').isalnum():
+            raise ValueError('Subreddit name can only contain letters, numbers, and underscores')
+        
+        return v.lower()
+
+
+class SubredditValidationResponse(BaseModel):
+    """Response model for subreddit validation."""
+    subreddit_name: str
+    exists: bool
+    message: str
+    subreddit: Optional[SubredditSchema] = None
+
+
+# Fundraising Goals Models
+
+class SubredditFundraisingGoalSchema(BaseModel):
+    """Schema for subreddit fundraising goals."""
+    id: int
+    subreddit_id: int
+    subreddit_name: str
+    goal_amount: Decimal
+    current_amount: Decimal
+    status: str
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    deadline: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FundraisingGoalsConfig(BaseModel):
+    """Configuration for fundraising goals system."""
+    overall_goal_amount: Decimal = Field(default=Decimal("10000.00"))
+    overall_goal_reward: str = Field(default="Clouvel will be able to understand images")
+    subreddit_goal_amount: Decimal = Field(default=Decimal("1000.00"))
+    subreddit_goal_reward: str = Field(default="Clouvel will illustrate a banner image")
+
+
+class FundraisingProgress(BaseModel):
+    """Progress information for fundraising goals."""
+    overall_raised: Decimal
+    overall_goal: Decimal
+    overall_progress_percentage: float
+    overall_reward: str
+    subreddit_goals: List[SubredditFundraisingGoalSchema]
+    subreddit_goal_amount: Decimal
+    subreddit_goal_reward: str
