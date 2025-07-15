@@ -1316,32 +1316,44 @@ async def stripe_webhook(request: Request):
         body = await request.body()
         sig_header = request.headers.get("stripe-signature")
 
-        # For development/testing with Stripe CLI, skip signature verification
+        # Webhook signature verification with development mode support
         webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-        if (
-            not webhook_secret
-            or os.getenv("STRIPE_CLI_MODE", "false").lower() == "true"
-        ):
-            # Parse event without signature verification for development
-            import json
+        is_dev_mode = os.getenv("STRIPE_CLI_MODE", "false").lower() == "true"
+        
+        if not webhook_secret and not is_dev_mode:
+            logger.error("STRIPE_WEBHOOK_SECRET environment variable is not set and not in dev mode")
+            raise HTTPException(
+                status_code=500, detail="Webhook secret not configured"
+            )
 
+        if is_dev_mode and not webhook_secret:
+            # Development mode without secret - parse event directly but log warning
+            logger.warning("DEVELOPMENT MODE: Skipping webhook signature verification")
+            logger.warning("This should NEVER be used in production!")
             event = json.loads(body)
-            logger.info("Skipping webhook signature verification (development mode)")
         else:
+            # Production mode or dev mode with secret - always verify signature
             if not sig_header:
+                logger.warning("Webhook request missing stripe-signature header")
                 raise HTTPException(
                     status_code=400, detail="Missing stripe-signature header"
                 )
 
-            # Verify webhook signature
+            # Verify webhook signature with timestamp validation
             try:
-                event = stripe.Webhook.construct_event(body, sig_header, webhook_secret)
+                # Use tolerance of 300 seconds (5 minutes) to prevent replay attacks
+                event = stripe.Webhook.construct_event(
+                    body, sig_header, webhook_secret, tolerance=300
+                )
+                logger.info("Webhook signature verified successfully")
             except ValueError as e:
+                logger.error(f"Invalid webhook payload: {str(e)}")
                 raise HTTPException(status_code=400, detail="Invalid payload")
             except stripe.error.SignatureVerificationError as e:
+                logger.error(f"Invalid webhook signature: {str(e)}")
                 raise HTTPException(status_code=400, detail="Invalid signature")
 
-        logger.info(f"Received Stripe webhook event: {event['type']}")
+        logger.info(f"Received Stripe webhook event: {event['type']} (id: {event['id']})")
 
         # Handle the event
         if event["type"] == "payment_intent.succeeded":
@@ -1355,6 +1367,9 @@ async def stripe_webhook(request: Request):
 
         return {"status": "success"}
 
+    except HTTPException:
+        # Re-raise HTTPException as is (for 400 errors like missing signature)
+        raise
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
