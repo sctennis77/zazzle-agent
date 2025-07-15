@@ -138,7 +138,7 @@ def test_cors_blocks_disallowed_origins(client):
 def test_stripe_webhook_missing_signature(client):
     """Test Stripe webhook rejects requests without signature."""
     response = client.post(
-        "/webhook",
+        "/api/donations/webhook",
         data="test payload",
         headers={"Content-Type": "application/json"}
     )
@@ -148,7 +148,7 @@ def test_stripe_webhook_missing_signature(client):
 def test_stripe_webhook_invalid_signature(client):
     """Test Stripe webhook rejects requests with invalid signature."""
     response = client.post(
-        "/webhook",
+        "/api/donations/webhook",
         data="test payload",
         headers={
             "Content-Type": "application/json",
@@ -204,15 +204,16 @@ def test_manual_create_commission_success(client, mock_stripe_service):
     mock_stripe_service.create_payment_intent.return_value = mock_payment_intent
     
     response = client.post(
-        "/api/admin/manual_commission",
+        "/api/commissions/manual-create",
         json=commission_data,
         headers={"X-Admin-Secret": "testsecret123"}
     )
     
     assert response.status_code == 200
     data = response.json()
-    assert data["payment_intent_id"] == "pi_test_123"
-    assert data["amount_usd"] == 25.00
+    assert data["status"] == "manual commission created"
+    assert "donation_id" in data
+    assert "task_id" in data
 
 
 def test_manual_create_commission_unauthorized(client):
@@ -228,7 +229,7 @@ def test_manual_create_commission_unauthorized(client):
     }
     
     response = client.post(
-        "/api/admin/manual_commission",
+        "/api/commissions/manual-create",
         json=commission_data
     )
     
@@ -248,7 +249,7 @@ def test_manual_create_commission_wrong_secret(client):
     }
     
     response = client.post(
-        "/api/admin/manual_commission",
+        "/api/commissions/manual-create",
         json=commission_data,
         headers={"X-Admin-Secret": "wrong_secret"}
     )

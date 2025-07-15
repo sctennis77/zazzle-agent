@@ -8,7 +8,7 @@ and common fixtures to eliminate duplication across test files.
 import os
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Generator
 
 import pytest
@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 # Set test environment variables early
 os.environ["TESTING"] = "true"
 os.environ["STRIPE_SECRET_KEY"] = "test_secret_key"
+os.environ["STRIPE_WEBHOOK_SECRET"] = "test_webhook_secret"
 os.environ["ADMIN_SECRET"] = "testsecret123"
 
 pytest_plugins = ["pytest_asyncio"]
@@ -100,8 +101,12 @@ def client(db_session, mock_stripe_service, monkeypatch):
     from fastapi.testclient import TestClient
     
     # Mock Redis and other external services to prevent connection attempts
+    redis_mock = MagicMock()
+    redis_mock.stop_listening = AsyncMock()
+    redis_mock.disconnect = AsyncMock()
+    
     monkeypatch.setattr("app.redis_service.redis", MagicMock())
-    monkeypatch.setattr("app.websocket_manager.redis_service", MagicMock())
+    monkeypatch.setattr("app.websocket_manager.redis_service", redis_mock)
     monkeypatch.setattr("app.services.background_scheduler.BackgroundScheduler", MagicMock())
     
     # Import app after patching external dependencies
@@ -218,3 +223,164 @@ def mock_reddit_client():
     mock_subreddit.new.return_value = [mock_submission]
     
     return mock_reddit
+
+
+@pytest.fixture
+def test_data(db_session):
+    """Create basic test data for donation tests."""
+    from app.db.models import Subreddit, PipelineRun, RedditPost
+    from datetime import datetime, timezone
+    
+    # Create a test subreddit
+    subreddit = Subreddit(
+        subreddit_name="test",
+        display_name="Test Subreddit",
+        description="A test subreddit for donation tests",
+        subscribers=100,
+        over18=False,
+        spoilers_enabled=False,
+    )
+    db_session.add(subreddit)
+    db_session.commit()
+    db_session.refresh(subreddit)
+
+    # Create a test pipeline run
+    pipeline_run = PipelineRun(
+        status="completed",
+        start_time=datetime.now(timezone.utc),
+        end_time=datetime.now(timezone.utc),
+        summary="Test pipeline run completed",
+        config={"test": True},
+        metrics={"products_generated": 1},
+        duration=10,
+        retry_count=0,
+        version="1.0.0"
+    )
+    db_session.add(pipeline_run)
+    db_session.commit()
+    db_session.refresh(pipeline_run)
+
+    # Create a test Reddit post
+    reddit_post = RedditPost(
+        post_id="test_post_id_abc",
+        title="Test Post Title",
+        content="Test post content for donation tests.",
+        subreddit_id=subreddit.id,
+        score=10,
+        url="https://reddit.com/r/test/comments/test_post_id_abc",
+        permalink="/r/test/comments/test_post_id_abc/test_post_title/",
+        pipeline_run_id=pipeline_run.id,
+        comment_summary="Test comment summary",
+        author="test_user",
+        num_comments=5
+    )
+    db_session.add(reddit_post)
+    db_session.commit()
+    db_session.refresh(reddit_post)
+
+    return subreddit, pipeline_run, reddit_post
+
+
+@pytest.fixture
+def db(db_session):
+    """Alias for db_session for compatibility."""
+    return db_session
+
+
+@pytest.fixture
+def sample_subreddit(db_session):
+    """Create a sample subreddit for tests."""
+    from app.db.models import Subreddit
+    
+    subreddit = Subreddit(
+        subreddit_name="test",
+        display_name="Test Subreddit",
+        description="A test subreddit",
+        subscribers=100,
+        over18=False,
+        spoilers_enabled=False,
+    )
+    db_session.add(subreddit)
+    db_session.commit()
+    db_session.refresh(subreddit)
+    return subreddit
+
+
+@pytest.fixture
+def sample_commission_donation(db, sample_subreddit):
+    """Create a sample commission donation."""
+    import uuid
+    from app.db.models import Donation
+    from app.models import DonationStatus
+    
+    unique_intent_id = f"pi_test_{uuid.uuid4().hex[:8]}"
+    donation = Donation(
+        customer_name="Test User",
+        customer_email="test@example.com",
+        amount_usd=25.0,
+        amount_cents=2500,
+        currency="usd",
+        status=DonationStatus.SUCCEEDED.value,
+        tier="sapphire",
+        stripe_payment_intent_id=unique_intent_id,
+        subreddit_id=sample_subreddit.id,
+        donation_type="commission",
+        commission_type="random_subreddit",
+        commission_message="Test commission message",
+        is_anonymous=False,
+        reddit_username="testuser",
+        post_id="test_post_123",
+        stripe_metadata={"test": "data"}
+    )
+    db.add(donation)
+    db.commit()
+    db.refresh(donation)
+    return donation
+
+
+@pytest.fixture
+def sample_failed_task(db, sample_commission_donation, sample_subreddit):
+    """Create a sample failed task for tests."""
+    from app.db.models import PipelineTask
+    
+    task = PipelineTask(
+        task_type="commission",
+        status="failed",
+        subreddit_id=sample_subreddit.id,
+        donation_id=sample_commission_donation.id,
+        message="Test task message",
+        commission_type="random_subreddit",
+        error_message="Test error message"
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@pytest.fixture
+def task_manager():
+    """Create a task manager for tests."""
+    from app.task_manager import TaskManager
+    return TaskManager()
+
+
+@pytest.fixture
+def sample_fundraising_goal(db_session, sample_subreddit):
+    """Create a sample fundraising goal for tests."""
+    from app.db.models import SubredditFundraisingGoal
+    from datetime import datetime, timezone
+    
+    goal = SubredditFundraisingGoal(
+        subreddit_id=sample_subreddit.id,
+        goal_amount=100.00,
+        current_amount=0.00,
+        goal_description="Test fundraising goal",
+        start_date=datetime.now(timezone.utc),
+        end_date=datetime.now(timezone.utc),
+        is_active=True
+    )
+    db_session.add(goal)
+    db_session.commit()
+    db_session.refresh(goal)
+    return goal

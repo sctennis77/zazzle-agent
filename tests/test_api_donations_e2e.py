@@ -1,11 +1,7 @@
 import pytest
-from fastapi.testclient import TestClient
-from app.api import app
-
-client = TestClient(app)
 
 
-def test_donation_tiers_endpoint():
+def test_donation_tiers_endpoint(client):
     """Test that donation tiers endpoint returns valid tier data."""
     resp = client.get("/api/donation-tiers")
     assert resp.status_code == 200
@@ -18,7 +14,7 @@ def test_donation_tiers_endpoint():
         assert "display_name" in tier
 
 
-def test_create_support_donation(test_data):
+def test_create_support_donation(client, test_data):
     """Test creating a basic support donation."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -42,7 +38,7 @@ def test_create_support_donation(test_data):
     assert "payment_intent_id" in data
 
 
-def test_create_commission_donation(test_data):
+def test_create_commission_donation(client, test_data):
     """Test creating a basic commission donation."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -67,7 +63,7 @@ def test_create_commission_donation(test_data):
     assert "payment_intent_id" in data
 
 
-def test_create_random_random_commission_donation(test_data):
+def test_create_random_random_commission_donation(client, test_data):
     """Test creating a random_random commission donation with normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -92,7 +88,7 @@ def test_create_random_random_commission_donation(test_data):
     assert "payment_intent_id" in data
 
 
-def test_random_random_commission_validation_accepts_subreddit(test_data):
+def test_random_random_commission_validation_accepts_subreddit(client, test_data):
     """Test that random_random commission type accepts subreddit parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -111,7 +107,7 @@ def test_random_random_commission_validation_accepts_subreddit(test_data):
     assert resp.status_code == 200  # Should succeed with normalized interface
 
 
-def test_random_random_commission_validation_accepts_post_id(test_data):
+def test_random_random_commission_validation_accepts_post_id(client, test_data):
     """Test that random_random commission type accepts post_id parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -130,7 +126,7 @@ def test_random_random_commission_validation_accepts_post_id(test_data):
     assert resp.status_code == 200  # Should succeed with normalized interface
 
 
-def test_donations_endpoint(test_data):
+def test_donations_endpoint(client, test_data):
     """Test retrieving all donations."""
     resp = client.get("/api/donations")
     assert resp.status_code == 200
@@ -138,7 +134,7 @@ def test_donations_endpoint(test_data):
     assert isinstance(donations, list)
 
 
-def test_post_donations_endpoint(test_data):
+def test_post_donations_endpoint(client, test_data):
     """Test retrieving donations for a specific post."""
     subreddit, pipeline_run, reddit_post = test_data
     
@@ -148,7 +144,7 @@ def test_post_donations_endpoint(test_data):
     assert isinstance(donations, list) 
 
 
-def test_donations_by_subreddit_endpoint(test_data):
+def test_donations_by_subreddit_endpoint(client, test_data):
     """Test retrieving donations grouped by subreddit."""
     resp = client.get("/api/donations/by-subreddit")
     assert resp.status_code == 200
