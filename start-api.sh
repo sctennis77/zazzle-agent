@@ -5,37 +5,31 @@ set -e
 
 echo "🔧 Initializing database..."
 
-# Check if alembic_version table exists and has incompatible revision
-if python -c "
-import os
-from sqlalchemy import create_engine, text
-from app.db.database import get_database_url
-
-engine = create_engine(get_database_url())
-try:
-    with engine.connect() as conn:
-        result = conn.execute(text('SELECT version_num FROM alembic_version'))
-        version = result.fetchone()
-        if version and version[0] != '687b4d7540f4':
-            print('NEEDS_RESET')
-        else:
-            print('OK')
-except:
-    print('OK')
-" | grep -q "NEEDS_RESET"; then
-    echo "⚠️  Detected incompatible migration history. Resetting to fresh schema..."
-    python -c "
-from sqlalchemy import create_engine, text
+# TEMPORARY: Drop and recreate database schema since we have no production data
+# TODO: Remove this once migration issues are resolved
+echo "⚠️  TEMPORARY: Dropping existing schema for fresh migration..."
+python -c "
+from sqlalchemy import create_engine, text, MetaData
 from app.db.database import get_database_url
 
 engine = create_engine(get_database_url())
 with engine.connect() as conn:
-    conn.execute(text('DROP TABLE IF EXISTS alembic_version'))
-    conn.commit()
-    print('Reset complete')
+    # Drop all tables
+    metadata = MetaData()
+    metadata.reflect(bind=engine)
+    metadata.drop_all(bind=engine)
+    print('✅ All tables dropped')
+    
+    # Drop alembic_version table specifically if it exists
+    try:
+        conn.execute(text('DROP TABLE IF EXISTS alembic_version'))
+        conn.commit()
+        print('✅ Alembic version table dropped')
+    except:
+        print('ℹ️  Alembic version table not found (already clean)')
 "
-fi
 
+echo "🔄 Applying fresh migration..."
 python -m alembic upgrade head
 
 echo "🚀 Starting API server..."
