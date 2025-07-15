@@ -364,12 +364,15 @@ class TestRedditClientCommon:
         assert result["content"] == content
 
     def test_fetch_random_subreddit(self, reddit_client, mock_reddit):
-        """Test fetching a random subreddit."""
-        # Mock the random_subreddit method
-        mock_random_subreddit = MagicMock()
-        mock_random_subreddit.display_name = "test_random_subreddit"
-        mock_random_subreddit.subscribers = 12345
-        mock_reddit.return_value.random_subreddit.return_value = mock_random_subreddit
+        """Test fetching a random subreddit using popular posts."""
+        # Mock popular posts from r/all
+        mock_post = MagicMock()
+        mock_post.subreddit.display_name = "test_random_subreddit"
+        mock_post.subreddit.subscribers = 12345
+        
+        mock_subreddit = MagicMock()
+        mock_subreddit.hot.return_value = [mock_post]
+        mock_reddit.return_value.subreddit.return_value = mock_subreddit
         
         # Call the method
         result = reddit_client.fetch_random_subreddit()
@@ -377,13 +380,13 @@ class TestRedditClientCommon:
         # Verify the result
         assert result == "test_random_subreddit"
         
-        # Verify the Reddit API was called regardless of mode
-        mock_reddit.return_value.random_subreddit.assert_called_once()
+        # Verify the Reddit API was called with "all"
+        mock_reddit.return_value.subreddit.assert_called_with("all")
 
     def test_fetch_random_subreddit_error_handling(self, reddit_client, mock_reddit):
         """Test fetching a random subreddit when API call fails."""
-        # Mock the random_subreddit method to raise an exception
-        mock_reddit.return_value.random_subreddit.side_effect = Exception("API Error")
+        # Mock the subreddit method to raise an exception
+        mock_reddit.return_value.subreddit.side_effect = Exception("API Error")
         
         # Call the method - it should return None on error
         result = reddit_client.fetch_random_subreddit()

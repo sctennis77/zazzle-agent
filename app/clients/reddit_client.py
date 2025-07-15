@@ -906,7 +906,10 @@ class RedditClient:
 
     def fetch_random_subreddit(self) -> Optional[str]:
         """
-        Fetch a random subreddit from Reddit's API.
+        Fetch a random subreddit using popular/trending subreddits.
+        
+        Reddit deprecated their random_subreddit() endpoint, so we use
+        an alternative approach by getting random subreddits from popular posts.
 
         Returns:
             Optional[str]: Name of a random subreddit, or None if the request fails
@@ -922,9 +925,35 @@ class RedditClient:
                 {"mode": self.mode},
             )
 
-            # Get a random subreddit from Reddit's API regardless of mode
-            random_subreddit = self.reddit.random_subreddit()
-            subreddit_name = random_subreddit.display_name
+            # Get random subreddit from popular posts across Reddit
+            popular_posts = list(self.reddit.subreddit("all").hot(limit=100))
+            
+            if not popular_posts:
+                log_operation(
+                    logger,
+                    "fetch_random_subreddit",
+                    "failure",
+                    {"mode": self.mode, "reason": "no_popular_posts"},
+                )
+                return None
+            
+            # Pick a random post and get its subreddit
+            random_post = random.choice(popular_posts)
+            subreddit_name = random_post.subreddit.display_name
+            
+            # Filter out unsuitable subreddits
+            excluded_subreddits = {
+                'all', 'popular', 'announcements', 'blog', 'changelog',
+                'modnews', 'ModSupport', 'help', 'reddit', 'RedditEng'
+            }
+            
+            if subreddit_name.lower() in excluded_subreddits:
+                # Try a few more times to get a different subreddit
+                for _ in range(5):
+                    random_post = random.choice(popular_posts)
+                    subreddit_name = random_post.subreddit.display_name
+                    if subreddit_name.lower() not in excluded_subreddits:
+                        break
 
             log_operation(
                 logger,
@@ -933,9 +962,10 @@ class RedditClient:
                 {
                     "selected_subreddit": subreddit_name,
                     "subscribers": getattr(
-                        random_subreddit, 'subscribers', 'unknown'
+                        random_post.subreddit, 'subscribers', 'unknown'
                     ),
                     "mode": self.mode,
+                    "method": "popular_posts",
                 },
             )
 
