@@ -245,20 +245,25 @@ class CommissionWorker:
                 )
                 return
             self.pipeline_task.status = status
-            
+
             # Update timing fields
             if status == "in_progress":
-                if hasattr(self.pipeline_task, 'started_at') and not self.pipeline_task.started_at:
+                if (
+                    hasattr(self.pipeline_task, "started_at")
+                    and not self.pipeline_task.started_at
+                ):
                     self.pipeline_task.started_at = datetime.now()
-                if hasattr(self.pipeline_task, 'last_heartbeat'):
+                if hasattr(self.pipeline_task, "last_heartbeat"):
                     self.pipeline_task.last_heartbeat = datetime.now()
             elif status in ["completed", "failed"]:
                 self.pipeline_task.completed_at = datetime.now()
-                
+
             # Always update heartbeat for in_progress tasks
-            if status == "in_progress" and hasattr(self.pipeline_task, 'last_heartbeat'):
+            if status == "in_progress" and hasattr(
+                self.pipeline_task, "last_heartbeat"
+            ):
                 self.pipeline_task.last_heartbeat = datetime.now()
-                
+
             if error_message:
                 self.pipeline_task.error_message = error_message
             self.db.commit()
@@ -281,11 +286,22 @@ class CommissionWorker:
 
             import redis
 
-            from app.config import REDIS_DB, REDIS_HOST, REDIS_PORT
+            from app.config import (
+                REDIS_DB,
+                REDIS_HOST,
+                REDIS_PASSWORD,
+                REDIS_PORT,
+                REDIS_SSL,
+            )
 
             # Create a simple Redis client for this operation
             r = redis.Redis(
-                host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                db=REDIS_DB,
+                password=REDIS_PASSWORD,
+                ssl=REDIS_SSL,
+                decode_responses=True,
             )
             # Create the message
             message = {
@@ -600,11 +616,11 @@ class CommissionWorker:
         except Exception as e:
             logger.error(f"Error updating donation status: {e}")
             self.db.rollback()
-            
+
     def _send_heartbeat(self):
         """Send a heartbeat to indicate the task is still running."""
         try:
-            if self.pipeline_task and hasattr(self.pipeline_task, 'last_heartbeat'):
+            if self.pipeline_task and hasattr(self.pipeline_task, "last_heartbeat"):
                 self.pipeline_task.last_heartbeat = datetime.now()
                 self.db.commit()
                 logger.debug(f"Sent heartbeat for task {self.pipeline_task.id}")
