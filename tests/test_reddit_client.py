@@ -363,6 +363,34 @@ class TestRedditClientCommon:
         assert result["title"] == product_name
         assert result["content"] == content
 
+    def test_fetch_random_subreddit(self, reddit_client, mock_reddit):
+        """Test fetching a random subreddit."""
+        # Mock the random_subreddit method
+        mock_random_subreddit = MagicMock()
+        mock_random_subreddit.display_name = "test_random_subreddit"
+        mock_random_subreddit.subscribers = 12345
+        mock_reddit.return_value.random_subreddit.return_value = mock_random_subreddit
+        
+        # Call the method
+        result = reddit_client.fetch_random_subreddit()
+        
+        # Verify the result
+        assert result == "test_random_subreddit"
+        
+        # Verify the Reddit API was called regardless of mode
+        mock_reddit.return_value.random_subreddit.assert_called_once()
+
+    def test_fetch_random_subreddit_error_handling(self, reddit_client, mock_reddit):
+        """Test fetching a random subreddit when API call fails."""
+        # Mock the random_subreddit method to raise an exception
+        mock_reddit.return_value.random_subreddit.side_effect = Exception("API Error")
+        
+        # Call the method - it should return None on error
+        result = reddit_client.fetch_random_subreddit()
+        
+        # Verify it returns None instead of raising
+        assert result is None
+
 
 if __name__ == "__main__":
     pytest.main()

@@ -922,43 +922,24 @@ class RedditClient:
                 {"mode": self.mode},
             )
 
-            if self.mode == "dryrun":
-                # Return a mock random subreddit for dry run mode
-                mock_subreddits = [
-                    "funny", "mildlyinteresting", "todayilearned", 
-                    "askreddit", "pics"
-                ]
-                selected = random.choice(mock_subreddits)
-                log_operation(
-                    logger,
-                    "fetch_random_subreddit",
-                    "dryrun",
-                    {
-                        "action": "would fetch random subreddit",
-                        "selected_subreddit": selected,
-                        "mode": self.mode,
-                    },
-                )
-                return selected
-            else:
-                # Get a random subreddit from Reddit's API
-                random_subreddit = self.reddit.random_subreddit()
-                subreddit_name = random_subreddit.display_name
+            # Get a random subreddit from Reddit's API regardless of mode
+            random_subreddit = self.reddit.random_subreddit()
+            subreddit_name = random_subreddit.display_name
 
-                log_operation(
-                    logger,
-                    "fetch_random_subreddit",
-                    "success",
-                    {
-                        "selected_subreddit": subreddit_name,
-                        "subscribers": getattr(
-                            random_subreddit, 'subscribers', 'unknown'
-                        ),
-                        "mode": self.mode,
-                    },
-                )
+            log_operation(
+                logger,
+                "fetch_random_subreddit",
+                "success",
+                {
+                    "selected_subreddit": subreddit_name,
+                    "subscribers": getattr(
+                        random_subreddit, 'subscribers', 'unknown'
+                    ),
+                    "mode": self.mode,
+                },
+            )
 
-                return subreddit_name
+            return subreddit_name
 
         except Exception as e:
             log_operation(
