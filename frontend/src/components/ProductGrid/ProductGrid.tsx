@@ -23,38 +23,117 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [activeTasks, setActiveTasks] = useState<Task[]>([]);
-  const [completedTasks, setCompletedTasks] = useState<Map<string, { task: Task; completedAt: number; transitioning: boolean }>>(new Map());
+  const [completingTasks, setCompletingTasks] = useState<Map<string, {
+    task: Task;
+    stage: 'completing' | 'transitioning' | 'removing';
+    startTime: number;
+    timeoutId?: number;
+  }>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
   const [websocketError, setWebsocketError] = useState<string | null>(null);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
-  const [justCompletedIds, setJustCompletedIds] = useState<Set<number>>(new Set());
   
-  // Cleanup completed tasks after a maximum time to prevent them from getting stuck
+  // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      setCompletedTasks(prev => {
-        const newMap = new Map(prev);
-        let hasChanges = false;
-        
-        for (const [taskId, taskData] of newMap.entries()) {
-          // Remove tasks that have been in completed state for more than 10 seconds
-          if (now - taskData.completedAt > 10000) {
-            newMap.delete(taskId);
-            hasChanges = true;
-            console.warn('Removing stuck completed task:', taskId);
-          }
-        }
-        
-        return hasChanges ? newMap : prev;
+    return () => {
+      // Clear all pending timeouts
+      completingTasks.forEach(({ timeoutId }) => {
+        if (timeoutId) clearTimeout(timeoutId);
       });
-    }, 5000); // Check every 5 seconds
-    
-    return () => clearInterval(cleanupInterval);
+    };
   }, []);
+  
+  // Manage transition state machine
+  const processCompletedTask = async (taskId: string, completedTask: Task) => {
+    // Prevent duplicate processing
+    if (completingTasks.has(taskId)) {
+      console.log('Task already being processed:', taskId);
+      return;
+    }
+
+    // Add to completing tasks
+    setCompletingTasks(prev => new Map(prev).set(taskId, {
+      task: completedTask,
+      stage: 'completing',
+      startTime: Date.now()
+    }));
+
+    try {
+      // Fetch new product first
+      await refreshProducts();
+      
+      // Move to transitioning stage
+      const transitionTimeoutId = setTimeout(() => {
+        setCompletingTasks(prev => {
+          const newMap = new Map(prev);
+          const taskData = newMap.get(taskId);
+          if (taskData) {
+            newMap.set(taskId, { ...taskData, stage: 'transitioning' });
+          }
+          return newMap;
+        });
+        
+        // Move to removing stage after animation
+        const removeTimeoutId = setTimeout(() => {
+          setCompletingTasks(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(taskId);
+            return newMap;
+          });
+        }, 600); // Match animation duration
+        
+        // Update timeout reference
+        setCompletingTasks(prev => {
+          const newMap = new Map(prev);
+          const taskData = newMap.get(taskId);
+          if (taskData) {
+            newMap.set(taskId, { ...taskData, timeoutId: removeTimeoutId });
+          }
+          return newMap;
+        });
+      }, 1200); // Show completion card for 1.2s
+      
+      // Store timeout reference
+      setCompletingTasks(prev => {
+        const newMap = new Map(prev);
+        const taskData = newMap.get(taskId);
+        if (taskData) {
+          newMap.set(taskId, { ...taskData, timeoutId: transitionTimeoutId });
+        }
+        return newMap;
+      });
+      
+    } catch (error) {
+      console.error('Error processing completed task:', error);
+      // Clear any pending timeout
+      setCompletingTasks(prev => {
+        const taskData = prev.get(taskId);
+        if (taskData?.timeoutId) {
+          clearTimeout(taskData.timeoutId);
+        }
+        // Remove from completing tasks on error after brief delay
+        const errorTimeoutId = setTimeout(() => {
+          setCompletingTasks(current => {
+            const newMap = new Map(current);
+            newMap.delete(taskId);
+            return newMap;
+          });
+        }, 2000);
+        
+        const newMap = new Map(prev);
+        newMap.set(taskId, {
+          task: completedTask,
+          stage: 'removing',
+          startTime: Date.now(),
+          timeoutId: errorTimeoutId
+        });
+        return newMap;
+      });
+    }
+  };
   const [fabAnimation, setFabAnimation] = useState(false);
   const [failedTask, setFailedTask] = useState<Task | null>(null);
   const [showFailedModal, setShowFailedModal] = useState(false);
@@ -99,6 +178,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     fetchActiveTasks();
     
     return () => {
+      // Clear all pending timeouts
+      completingTasks.forEach(({ timeoutId }) => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+      
       if (wsRef.current) {
         // Only close if open or connecting, and suppress onclose to avoid browser warning
         if (
@@ -139,87 +223,29 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         const message: WebSocketMessage = JSON.parse(event.data);
         console.log('Parsed WebSocket message:', message);
         if (message.type === 'task_update') {
+          // Update active tasks
           setActiveTasks(prevTasks => {
-            const updatedTasks = prevTasks.map(task =>
+            return prevTasks.map(task =>
               task.task_id === message.task_id
                 ? { ...task, ...message.data }
                 : task
             );
-            if (message.data.status === 'completed') {
-              return updatedTasks.map(task =>
-                task.task_id === message.task_id
-                  ? { ...task, justCompleted: true, completedAt: Date.now() }
-                  : task
-              );
-            }
-            return updatedTasks;
           });
+          
+          // Handle task completion
           if (message.data.status === 'completed') {
-            // Prevent duplicate processing
-            setCompletedTasks(prev => {
-              if (prev.has(message.task_id)) {
-                return prev; // Already processing this task
-              }
-              
-              // Create the completed task data
-              const completedTaskData = {
-                task_id: message.task_id,
-                status: 'completed',
-                ...message.data,
-                justCompleted: true,
-                completedAt: Date.now()
-              };
-              
-              // Add to completed tasks immediately
-              const newMap = new Map(prev);
-              newMap.set(message.task_id, {
-                task: completedTaskData as Task,
-                completedAt: Date.now(),
-                transitioning: false
-              });
-              return newMap;
-            });
-            
             // Remove from active tasks
             setActiveTasks(prevTasks => prevTasks.filter(task => task.task_id !== message.task_id));
             
-            // Start the transition sequence with a longer delay for smoother experience
-            setTimeout(async () => {
-              try {
-                await fetchNewProduct();
-                
-                // Start transition animation with longer delay
-                setTimeout(() => {
-                  setCompletedTasks(prev => {
-                    const newMap = new Map(prev);
-                    const taskData = newMap.get(message.task_id);
-                    if (taskData && !taskData.transitioning) {
-                      newMap.set(message.task_id, { ...taskData, transitioning: true });
-                    }
-                    return newMap;
-                  });
-                  
-                  // Remove completed task after transition animation
-                  setTimeout(() => {
-                    setCompletedTasks(prev => {
-                      const newMap = new Map(prev);
-                      newMap.delete(message.task_id);
-                      return newMap;
-                    });
-                  }, 600); // Slightly longer transition
-                }, 500); // Longer delay before starting transition
-              } catch (error) {
-                console.error('Error during completion transition:', error);
-                // Fallback: remove the completed task
-                setTimeout(() => {
-                  setCompletedTasks(prev => {
-                    const newMap = new Map(prev);
-                    newMap.delete(message.task_id);
-                    return newMap;
-                  });
-                }, 2000);
-              }
-            }, 800); // Longer initial delay
+            // Create completed task data
+            const completedTaskData = {
+              task_id: message.task_id,
+              status: 'completed' as const,
+              ...message.data
+            } as Task;
+            
+            // Process through state machine
+            processCompletedTask(message.task_id, completedTaskData);
           }
           // Handle failed commission task
           if (message.data.status === 'failed') {
@@ -301,13 +327,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       await refreshProducts();
     } catch (error) {
       console.error('Failed to fetch new product:', error);
+      throw error; // Re-throw to handle in processCompletedTask
     }
   };
 
   // Helper function to check if a product is newly completed
   const isProductJustCompleted = (product: GeneratedProduct) => {
-    return Array.from(completedTasks.values()).some(
-      ({ task }) => task.task_id === product.reddit_post.post_id
+    return Array.from(completingTasks.values()).some(
+      ({ task, stage }) => task.task_id === product.reddit_post.post_id && stage === 'completing'
     );
   };
 
@@ -499,11 +526,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             />
           ))}
           {/* Completed commission cards (transitioning) */}
-          {Array.from(completedTasks.values()).map(({ task, transitioning }) => (
+          {Array.from(completingTasks.values()).map(({ task, stage }) => (
             <CompletedProductCard
               key={task.task_id}
               task={task}
-              transitioning={transitioning}
+              transitioning={stage === 'transitioning'}
             />
           ))}
           {/* Generated product cards */}
@@ -521,7 +548,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         </div>
 
         {/* Empty state - simplified */}
-        {products.length === 0 && inProgressTasks.length === 0 && completedTasks.size === 0 && (
+        {products.length === 0 && inProgressTasks.length === 0 && completingTasks.size === 0 && (
           <div className="text-center py-24">
             <div className="text-6xl mb-4">🎨</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Products Yet</h2>

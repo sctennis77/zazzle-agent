@@ -12,12 +12,12 @@ export const CompletedProductCard: React.FC<CompletedProductCardProps> = ({
   transitioning 
 }) => {
   return (
-    <div className={`group relative bg-gradient-to-br from-green-50 to-emerald-100 border-2 border-green-200 rounded-xl p-6 shadow-sm transition-all duration-500 overflow-hidden animate-pulse completion-entrance ${
-      transitioning ? 'opacity-0 scale-95 transform -translate-y-2' : 'opacity-100 scale-100'
-    }`} style={{ animationDuration: '2s' }}>
+    <div className={`group relative bg-gradient-to-br from-green-50 to-emerald-100 border-2 border-green-200 rounded-xl p-6 shadow-sm overflow-hidden ${
+      transitioning ? 'transition-out' : 'completion-entrance'
+    }`}>
       {/* Success background pattern */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 animate-pulse"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400"></div>
       </div>
 
       {/* Main content */}
@@ -56,11 +56,10 @@ export const CompletedProductCard: React.FC<CompletedProductCardProps> = ({
               <img 
                 src={logo} 
                 alt="Clouvel" 
-                className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-green-300 ring-4 ring-green-200 animate-pulse transition-all duration-300"
-                style={{ animationDuration: '1.5s' }}
+                className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-green-300 ring-4 ring-green-200 transition-all duration-300"
               />
               {/* Success glow effect */}
-              <div className="absolute inset-0 bg-green-400 rounded-full opacity-30 blur-md animate-ping"></div>
+              <div className="absolute inset-0 bg-green-400 rounded-full opacity-30 blur-md animate-pulse" style={{ animationDuration: '2s' }}></div>
             </div>
           </div>
         </div>
