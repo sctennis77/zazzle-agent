@@ -51,32 +51,48 @@ class SchedulerService:
         Execute a scheduled bronze tier commission with distributed locking.
         Returns commission details if created, None if skipped.
         """
+        return await self._run_commission_with_lock(db, check_interval=True)
+
+    async def run_manual_commission(self, db: Session) -> Optional[dict]:
+        """
+        Execute a manual bronze tier commission with distributed locking.
+        Bypasses interval checks for manual triggers.
+        Returns commission details if created, None if skipped.
+        """
+        return await self._run_commission_with_lock(db, check_interval=False)
+
+    async def _run_commission_with_lock(self, db: Session, check_interval: bool = True) -> Optional[dict]:
+        """
+        Execute a bronze tier commission with distributed locking.
+        Returns commission details if created, None if skipped.
+        """
         # Try to acquire distributed lock
         lock_acquired = await self.redis_service.acquire_lock(
             self.lock_key, self.lock_timeout
         )
 
         if not lock_acquired:
-            logger.info("Scheduled commission skipped - another instance is running")
+            logger.info("Commission skipped - another instance is running")
             return None
 
         try:
-            # Double-check if we should still run (race condition protection)
-            if not await self.should_run_scheduled_commission(db):
+            # Check if we should run (only for scheduled, not manual)
+            if check_interval and not await self.should_run_scheduled_commission(db):
                 logger.info("Scheduled commission no longer needed")
                 return None
 
             # Create the commission
             commission_data = await self._create_scheduled_commission(db)
 
-            # Update scheduler config
-            self._update_scheduler_last_run(db)
+            # Update scheduler config (only for scheduled runs)
+            if check_interval:
+                self._update_scheduler_last_run(db)
 
-            logger.info(f"Scheduled commission created: {commission_data}")
+            logger.info(f"Commission created: {commission_data}")
             return commission_data
 
         except Exception as e:
-            logger.error(f"Error in scheduled commission: {e}")
+            logger.error(f"Error in commission: {e}")
             raise
         finally:
             # Always release the lock
@@ -90,11 +106,9 @@ class SchedulerService:
         subreddit_name = pick_subreddit(db)
 
         # Step 2: Validate the commission using the same validator as API endpoints
-        from app.agents.reddit_agent import RedditAgent
         from app.services.commission_validator import CommissionValidator
 
-        reddit_agent = RedditAgent(subreddit_name=subreddit_name)
-        validator = CommissionValidator(reddit_agent)
+        validator = CommissionValidator(session=db)
 
         # Validate the random subreddit commission
         validation_result = await validator.validate_commission(
@@ -134,7 +148,7 @@ class SchedulerService:
             customer_name="Clouvel",  # Fixed donor name
             message=None,
             subreddit_id=subreddit.id,
-            reddit_username=None,
+            reddit_username="clouvel",
             stripe_metadata=None,
             is_anonymous=False,
             donation_type="commission",

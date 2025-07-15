@@ -2057,7 +2057,7 @@ async def run_scheduler_now(
     scheduler_service = SchedulerService(redis_service, task_manager)
 
     try:
-        result = await scheduler_service.run_scheduled_commission(db)
+        result = await scheduler_service.run_manual_commission(db)
 
         if result:
             return {
