@@ -862,6 +862,9 @@ class RedditAgent:
                 f"Progress callback at image generation: {self.progress_callback}"
             )
 
+            # Initialize progress_task to avoid UnboundLocalError
+            progress_task = None
+            
             # Call image generation started callback
             if self.progress_callback:
                 try:

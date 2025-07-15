@@ -79,7 +79,7 @@ class BackgroundScheduler:
                 logger.error(f"Error checking/running scheduled commission: {e}")
 
     @asynccontextmanager
-    def _get_db_session(self):
+    async def _get_db_session(self):
         """Get a database session with proper cleanup."""
         db = SessionLocal()
         try:

@@ -1993,7 +1993,6 @@ async def get_scheduler_status(
 
     from app.redis_service import redis_service
     from app.services.scheduler_service import SchedulerService
-    from app.task_manager import task_manager
 
     scheduler_service = SchedulerService(redis_service, task_manager)
     status = scheduler_service.get_scheduler_status(db)
@@ -2028,7 +2027,6 @@ async def update_scheduler_config(
 
     from app.redis_service import redis_service
     from app.services.scheduler_service import SchedulerService
-    from app.task_manager import task_manager
 
     scheduler_service = SchedulerService(redis_service, task_manager)
     config = scheduler_service.update_scheduler_config(db, enabled, interval_hours)
@@ -2055,7 +2053,6 @@ async def run_scheduler_now(
 
     from app.redis_service import redis_service
     from app.services.scheduler_service import SchedulerService
-    from app.task_manager import task_manager
 
     scheduler_service = SchedulerService(redis_service, task_manager)
 
