@@ -121,6 +121,10 @@ stripe_service = StripeService()
 # Initialize task manager
 task_manager = TaskManager()
 
+# Initialize task monitor
+from app.services.task_monitor import TaskMonitor
+task_monitor = TaskMonitor(task_manager)
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -139,6 +143,10 @@ async def startup_event():
     # Start the scheduler in the background without blocking startup
     asyncio.create_task(background_scheduler.start())
     logger.info("Background scheduler started successfully!")
+    
+    logger.info("Starting task monitor...")
+    await task_monitor.start_monitoring()
+    logger.info("Task monitor started successfully!")
 
 
 @app.on_event("shutdown")
@@ -150,6 +158,10 @@ async def shutdown_event():
     await background_scheduler.stop()
     logger.info("Background scheduler stopped successfully!")
 
+    logger.info("Stopping task monitor...")
+    await task_monitor.stop_monitoring()
+    logger.info("Task monitor stopped successfully!")
+    
     logger.info("Stopping WebSocket manager...")
     await websocket_manager.stop()
     logger.info("WebSocket manager stopped successfully!")
@@ -1615,6 +1627,56 @@ async def get_task_status(task_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error getting task status: {str(e)}"
         )
+
+
+@app.get("/api/tasks/monitor/status")
+async def get_task_monitor_status():
+    """
+    Get task monitor status.
+    Returns:
+        Dict: Task monitor status information
+    """
+    try:
+        return task_monitor.get_monitoring_status()
+    except Exception as e:
+        logger.error(f"Error getting task monitor status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/tasks/monitor/stuck")
+async def check_stuck_tasks():
+    """
+    Check for stuck tasks.
+    Returns:
+        Dict: Information about stuck tasks
+    """
+    try:
+        return await task_monitor.check_stuck_tasks_once()
+    except Exception as e:
+        logger.error(f"Error checking stuck tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/tasks/{task_id}/heartbeat")
+async def update_task_heartbeat(task_id: str):
+    """
+    Update task heartbeat.
+    Args:
+        task_id: ID of the task
+    Returns:
+        Dict: Success response
+    """
+    try:
+        success = task_manager.update_task_heartbeat(task_id)
+        if success:
+            return {"success": True, "message": f"Heartbeat updated for task {task_id}"}
+        else:
+            raise HTTPException(status_code=404, detail="Task not found or not in progress")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating task heartbeat: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.websocket("/ws/tasks")

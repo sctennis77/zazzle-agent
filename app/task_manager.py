@@ -196,8 +196,20 @@ class TaskManager:
             task = db.query(PipelineTask).filter(PipelineTask.id == task_id).first()
             if task:
                 task.status = status
-                if status in ["completed", "failed"]:
+                
+                # Update timing fields
+                if status == "in_progress":
+                    if hasattr(task, 'started_at') and not task.started_at:
+                        task.started_at = datetime.now()
+                    if hasattr(task, 'last_heartbeat'):
+                        task.last_heartbeat = datetime.now()
+                elif status in ["completed", "failed"]:
                     task.completed_at = datetime.now()
+                    
+                # Update heartbeat for in_progress tasks
+                if status == "in_progress" and hasattr(task, 'last_heartbeat'):
+                    task.last_heartbeat = datetime.now()
+                    
                 if error_message:
                     task.error_message = error_message
                 db.commit()
@@ -392,6 +404,17 @@ class TaskManager:
                     "timestamp": (
                         task.created_at.timestamp() if task.created_at else None
                     ),
+                    "started_at": (
+                        getattr(task, 'started_at', None).isoformat() 
+                        if hasattr(task, 'started_at') and getattr(task, 'started_at') else None
+                    ),
+                    "last_heartbeat": (
+                        getattr(task, 'last_heartbeat', None).isoformat() 
+                        if hasattr(task, 'last_heartbeat') and getattr(task, 'last_heartbeat') else None
+                    ),
+                    "retry_count": getattr(task, 'retry_count', 0),
+                    "max_retries": getattr(task, 'max_retries', 2),
+                    "timeout_seconds": getattr(task, 'timeout_seconds', 300),
                 }
             return None
         finally:
@@ -451,6 +474,17 @@ class TaskManager:
                     "timestamp": (
                         task.created_at.timestamp() if task.created_at else None
                     ),
+                    "started_at": (
+                        getattr(task, 'started_at', None).isoformat() 
+                        if hasattr(task, 'started_at') and getattr(task, 'started_at') else None
+                    ),
+                    "last_heartbeat": (
+                        getattr(task, 'last_heartbeat', None).isoformat() 
+                        if hasattr(task, 'last_heartbeat') and getattr(task, 'last_heartbeat') else None
+                    ),
+                    "retry_count": getattr(task, 'retry_count', 0),
+                    "max_retries": getattr(task, 'max_retries', 2),
+                    "timeout_seconds": getattr(task, 'timeout_seconds', 300),
                 }
 
                 # Add donation information if available
@@ -513,3 +547,35 @@ class TaskManager:
                 f"Error handling task failure for task {task_id}: {str(e)}\n{traceback.format_exc()}"
             )
             db.rollback()
+            
+    def update_task_heartbeat(self, task_id: str) -> bool:
+        """
+        Update the heartbeat for a running task.
+        
+        Args:
+            task_id: ID of the task to update
+            
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        try:
+            db = SessionLocal()
+            try:
+                task = db.query(PipelineTask).filter(PipelineTask.id == task_id).first()
+                if task and task.status == "in_progress":
+                    if hasattr(task, 'last_heartbeat'):
+                        task.last_heartbeat = datetime.now()
+                        db.commit()
+                        logger.debug(f"Updated heartbeat for task {task_id}")
+                        return True
+                    else:
+                        logger.warning(f"Task {task_id} does not have heartbeat support")
+                        return False
+                else:
+                    logger.warning(f"Task {task_id} not found or not in progress")
+                    return False
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error updating heartbeat for task {task_id}: {e}")
+            return False

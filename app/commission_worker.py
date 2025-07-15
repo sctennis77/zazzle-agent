@@ -244,8 +244,20 @@ class CommissionWorker:
                 )
                 return
             self.pipeline_task.status = status
-            if status in ["completed", "failed"]:
+            
+            # Update timing fields
+            if status == "in_progress":
+                if hasattr(self.pipeline_task, 'started_at') and not self.pipeline_task.started_at:
+                    self.pipeline_task.started_at = datetime.now()
+                if hasattr(self.pipeline_task, 'last_heartbeat'):
+                    self.pipeline_task.last_heartbeat = datetime.now()
+            elif status in ["completed", "failed"]:
                 self.pipeline_task.completed_at = datetime.now()
+                
+            # Always update heartbeat for in_progress tasks
+            if status == "in_progress" and hasattr(self.pipeline_task, 'last_heartbeat'):
+                self.pipeline_task.last_heartbeat = datetime.now()
+                
             if error_message:
                 self.pipeline_task.error_message = error_message
             self.db.commit()
@@ -587,6 +599,17 @@ class CommissionWorker:
         except Exception as e:
             logger.error(f"Error updating donation status: {e}")
             self.db.rollback()
+            
+    def _send_heartbeat(self):
+        """Send a heartbeat to indicate the task is still running."""
+        try:
+            if self.pipeline_task and hasattr(self.pipeline_task, 'last_heartbeat'):
+                self.pipeline_task.last_heartbeat = datetime.now()
+                self.db.commit()
+                logger.debug(f"Sent heartbeat for task {self.pipeline_task.id}")
+        except Exception as e:
+            logger.error(f"Error sending heartbeat: {e}")
+            self.db.rollback()
 
     async def _progress_callback(self, stage: str, data: dict):
         """Callback for RedditAgent progress updates."""
@@ -594,6 +617,9 @@ class CommissionWorker:
             logger.debug(
                 f"Progress callback: {stage} ({data.get('progress', 'no progress')}%)"
             )
+
+            # Send heartbeat on every progress update
+            self._send_heartbeat()
 
             if stage == "post_fetched":
                 post_title = data.get("post_title", "Unknown Post")

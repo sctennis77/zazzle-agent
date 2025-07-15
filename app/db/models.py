@@ -251,6 +251,11 @@ class PipelineTask(Base):
     pipeline_run_id = Column(
         Integer, ForeignKey("pipeline_runs.id"), nullable=True, index=True
     )  # Associated pipeline run
+    started_at = Column(DateTime, nullable=True, index=True)  # When task started processing
+    last_heartbeat = Column(DateTime, nullable=True, index=True)  # Last heartbeat timestamp
+    retry_count = Column(Integer, default=0, nullable=False)  # Number of retry attempts
+    max_retries = Column(Integer, default=2, nullable=False)  # Maximum retry attempts
+    timeout_seconds = Column(Integer, default=300, nullable=False)  # Task timeout in seconds (5 minutes)
 
     subreddit = relationship("Subreddit", back_populates="pipeline_tasks")
     donation = relationship("Donation", backref="tasks")
