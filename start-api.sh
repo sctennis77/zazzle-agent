@@ -9,9 +9,9 @@ echo "🔧 Initializing database..."
 if python -c "
 import os
 from sqlalchemy import create_engine, text
-from app.config import DATABASE_URL
+from app.db.database import get_database_url
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(get_database_url())
 try:
     with engine.connect() as conn:
         result = conn.execute(text('SELECT version_num FROM alembic_version'))
@@ -26,9 +26,9 @@ except:
     echo "⚠️  Detected incompatible migration history. Resetting to fresh schema..."
     python -c "
 from sqlalchemy import create_engine, text
-from app.config import DATABASE_URL
+from app.db.database import get_database_url
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(get_database_url())
 with engine.connect() as conn:
     conn.execute(text('DROP TABLE IF EXISTS alembic_version'))
     conn.commit()
