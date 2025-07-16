@@ -361,7 +361,7 @@ async def redirect_to_product(image_name: str):
         image_name: The name of the image file
 
     Returns:
-        RedirectResponse: Redirect to the product URL
+        RedirectResponse: Redirect to the gallery with product parameter
     """
     try:
         db = SessionLocal()
@@ -376,8 +376,19 @@ async def redirect_to_product(image_name: str):
         if not product_info:
             raise HTTPException(status_code=404, detail="Product not found")
 
-        # Redirect to the product URL
-        return RedirectResponse(url=product_info.product_url)
+        # Find the associated Reddit post
+        reddit_post = (
+            db.query(RedditPost)
+            .filter(RedditPost.id == product_info.reddit_post_id)
+            .first()
+        )
+
+        if not reddit_post:
+            raise HTTPException(status_code=404, detail="Associated Reddit post not found")
+
+        # Redirect to the gallery with product parameter
+        gallery_url = f"https://clouvel.ai/?product={reddit_post.post_id}"
+        return RedirectResponse(url=gallery_url)
 
     except HTTPException:
         raise
