@@ -265,7 +265,7 @@ Return a JSON array of actions with the following structure:
 
         try:
             response = self.openai.chat.completions.create(
-                model=os.getenv("OPENAI_IDEA_MODEL", "gpt-4o-mini"),
+                model=os.getenv("OPENAI_COMMUNITY_AGENT_MODEL", "gpt-4o-mini"),
                 messages=[
                     {"role": "system", "content": self.personality},
                     {"role": "user", "content": prompt},

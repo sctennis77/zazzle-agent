@@ -123,7 +123,7 @@ services:
       - REDDIT_USERNAME=${REDDIT_USERNAME}
       - REDDIT_PASSWORD=${REDDIT_PASSWORD}
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
-      - OPENAI_IDEA_MODEL=${OPENAI_IDEA_MODEL:-gpt-4o-mini}
+      - OPENAI_COMMUNITY_AGENT_MODEL=${OPENAI_COMMUNITY_AGENT_MODEL:-gpt-4o-mini}
     depends_on:
       database:
         condition: service_healthy
