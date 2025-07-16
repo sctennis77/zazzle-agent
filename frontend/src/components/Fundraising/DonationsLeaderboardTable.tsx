@@ -124,7 +124,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Community Fundraising Leaderboard</h3>
         <p className="text-sm text-gray-600">
           Support your favorite subreddits to unlock custom banner art! When a community reaches its $1,000 goal, 
-          Claude will create beautiful, personalized banner artwork for that subreddit.
+          Clouvel will create beautiful, personalized banner artwork for that subreddit.
         </p>
       </div>
       <table className="min-w-full text-sm">
@@ -249,7 +249,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                         const remaining = Math.max(0, goalAmount - currentAmount);
                         return (
                           <div className="text-xs text-gray-600">
-                            ${remaining.toFixed(0)} more for custom banner art by Claude
+                            ${remaining.toFixed(0)} more for custom banner art by Clouvel
                           </div>
                         );
                       }
