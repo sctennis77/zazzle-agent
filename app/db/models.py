@@ -318,7 +318,7 @@ class ProductInfo(Base):
     reddit_post_id = Column(
         Integer, ForeignKey("reddit_posts.id", ondelete="CASCADE"), index=True
     )
-    theme = Column(String(256), index=True)
+    theme = Column(String(512), index=True)
     image_title = Column(String(256), nullable=True, index=True)
     image_url = Column(Text, nullable=True)  # URL to the product image
     product_url = Column(Text)
