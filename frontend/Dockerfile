@@ -4,6 +4,7 @@ FROM node:18-alpine AS builder
 # Accept VITE_API_BASE_URL as a build argument
 ARG VITE_API_BASE_URL
 ARG VITE_STRIPE_PUBLISHABLE_KEY
+ARG VITE_COMISSION_ART_ENABLED
 
 # Set working directory
 WORKDIR /app
@@ -20,6 +21,7 @@ COPY . .
 # Set VITE_API_BASE_URL as an environment variable for the build
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY
+ENV VITE_COMISSION_ART_ENABLED=$VITE_COMISSION_ART_ENABLED
 
 # Print environment variables for debugging
 RUN printenv
