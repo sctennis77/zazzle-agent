@@ -47,6 +47,7 @@ class TestCommunityAgentService:
     def test_service_initialization_single_subreddit(self, service):
         """Test service initializes correctly with single subreddit."""
         assert service.subreddit_names == ["clouvel"]
+        assert service.moderation_subreddit == "clouvel"
         assert service.dry_run is True
         assert service.running is False
         assert "clouvel" in service.agents
@@ -58,16 +59,32 @@ class TestCommunityAgentService:
             mock_redis_from_url.return_value = mock_redis
             with patch.dict("os.environ", {"REDIS_URL": "redis://localhost:6379"}):
                 service = CommunityAgentService(
-                    subreddit_names=["clouvel", "programming", "funny"],
+                    subreddit_names=["programming", "funny"],  # clouvel automatically added
                     dry_run=False
                 )
                 
                 assert service.subreddit_names == ["clouvel", "programming", "funny"]
+                assert service.moderation_subreddit == "clouvel"
                 assert service.dry_run is False
                 assert len(service.agents) == 3
                 assert "clouvel" in service.agents
                 assert "programming" in service.agents
                 assert "funny" in service.agents
+
+    def test_service_initialization_duplicate_clouvel(self, mock_redis):
+        """Test service handles duplicate clouvel correctly."""
+        with patch("app.services.community_agent_service.redis.from_url") as mock_redis_from_url:
+            mock_redis_from_url.return_value = mock_redis
+            with patch.dict("os.environ", {"REDIS_URL": "redis://localhost:6379"}):
+                service = CommunityAgentService(
+                    subreddit_names=["clouvel", "programming"],  # clouvel specified twice
+                    dry_run=False
+                )
+                
+                # Should only have clouvel once
+                assert service.subreddit_names == ["clouvel", "programming"]
+                assert service.moderation_subreddit == "clouvel"
+                assert len(service.agents) == 2
 
     def test_service_initialization_no_redis(self):
         """Test service initializes correctly without Redis."""

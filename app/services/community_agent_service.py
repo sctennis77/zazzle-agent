@@ -35,12 +35,24 @@ class CommunityAgentService:
         Initialize the Community Agent Service.
         
         Args:
-            subreddit_names: List of subreddits to monitor (default: ["clouvel"])
+            subreddit_names: List of additional subreddits to monitor beyond clouvel
             dry_run: Whether to run in dry-run mode (no actual Reddit actions)
             stream_chunk_size: Number of items to buffer before processing
             use_multi_stream: Use PRAW's optimized multi-subreddit streaming (default: True)
         """
-        self.subreddit_names = subreddit_names or ["clouvel"]
+        # Always monitor clouvel as the primary moderation subreddit
+        self.moderation_subreddit = "clouvel"
+        
+        # Combine moderation subreddit with additional subreddits, removing duplicates
+        additional_subreddits = subreddit_names or []
+        all_subreddits = [self.moderation_subreddit]
+        
+        # Add additional subreddits if they're not already clouvel
+        for sub in additional_subreddits:
+            if sub.lower() != self.moderation_subreddit.lower() and sub not in all_subreddits:
+                all_subreddits.append(sub)
+        
+        self.subreddit_names = all_subreddits
         self.dry_run = dry_run
         self.stream_chunk_size = stream_chunk_size
         self.use_multi_stream = use_multi_stream
@@ -168,9 +180,10 @@ class CommunityAgentService:
         """Stream multiple subreddits efficiently using PRAW's multi-subreddit feature."""
         try:
             # Join subreddits with '+' for PRAW multi-subreddit streaming
+            # Always include moderation subreddit first
             multi_subreddit_name = "+".join(self.subreddit_names)
             subreddit = self.reddit.subreddit(multi_subreddit_name)
-            logger.info(f"Starting optimized multi-stream for r/{multi_subreddit_name}")
+            logger.info(f"Starting optimized multi-stream for r/{multi_subreddit_name} (primary: r/{self.moderation_subreddit})")
             
             # Create combined stream of submissions and comments
             stream = praw.models.util.stream_generator(

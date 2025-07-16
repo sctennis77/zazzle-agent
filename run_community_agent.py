@@ -39,9 +39,9 @@ async def main():
     )
     parser.add_argument(
         "--subreddits",
-        nargs="+",
-        default=["clouvel"],
-        help="Subreddits to monitor (default: clouvel)",
+        nargs="*",
+        default=[],
+        help="Additional subreddits to monitor beyond clouvel (clouvel is always monitored)",
     )
     parser.add_argument(
         "--dry-run",
@@ -107,7 +107,11 @@ async def main():
     logger.info("=" * 60)
     logger.info("👑 QUEEN CLOUVEL'S ROYAL COMMUNITY AGENT 👑")
     logger.info("=" * 60)
-    logger.info(f"Monitoring subreddits: {args.subreddits}")
+    logger.info(f"Primary moderation: r/clouvel (always monitored)")
+    if args.subreddits:
+        logger.info(f"Additional subreddits: {args.subreddits}")
+    else:
+        logger.info("Additional subreddits: none")
     logger.info(f"Dry run mode: {args.dry_run}")
     logger.info(f"Log level: {args.log_level}")
     logger.info("=" * 60)
