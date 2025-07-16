@@ -68,7 +68,7 @@ class ContentGenerator:
             str: The response content
         """
         model = self._get_model()
-        
+
         # Apply tracking with the actual model being used
         @track_openai_call(model=model, operation="chat")
         def _tracked_call():
@@ -76,9 +76,9 @@ class ContentGenerator:
                 model=model, messages=[{"role": "user", "content": prompt}]
             )
             return response.choices[0].message.content.strip()
-            
+
         return _tracked_call()
-    
+
     def _get_model(self) -> str:
         """
         Get the model to use for content generation.

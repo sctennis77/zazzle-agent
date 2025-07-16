@@ -45,7 +45,9 @@ def sample_fundraising_goal(db_session):
     return goal.id
 
 
-def test_donation_creates_sponsor_and_task(mock_stripe_service, db_session, sample_fundraising_goal):
+def test_donation_creates_sponsor_and_task(
+    mock_stripe_service, db_session, sample_fundraising_goal
+):
     """Test that a successful donation creates a sponsor and pipeline task."""
     # Create a donation request
     donation_request = DonationRequest(
@@ -73,7 +75,7 @@ def test_donation_creates_sponsor_and_task(mock_stripe_service, db_session, samp
     )
     assert donation is not None
 
-    # Update donation status to succeeded  
+    # Update donation status to succeeded
     updated_donation = mock_stripe_service.update_donation_status(
         db_session, "pi_test123", DonationStatus.SUCCEEDED
     )
@@ -87,7 +89,9 @@ def test_donation_creates_sponsor_and_task(mock_stripe_service, db_session, samp
     assert goal is not None
 
 
-def test_donation_updates_fundraising_goal(mock_stripe_service, db_session, sample_fundraising_goal):
+def test_donation_updates_fundraising_goal(
+    mock_stripe_service, db_session, sample_fundraising_goal
+):
     """Test that a donation updates fundraising goal progress."""
     try:
         # Create a donation request
@@ -129,7 +133,7 @@ def test_donation_updates_fundraising_goal(mock_stripe_service, db_session, samp
         mock_stripe_service.update_donation_status.assert_called_once_with(
             db_session, "pi_test456", DonationStatus.SUCCEEDED
         )
-        
+
         # Note: The mock service doesn't implement fundraising goal updates
         # In a real implementation, this would update the goal
 
@@ -137,7 +141,9 @@ def test_donation_updates_fundraising_goal(mock_stripe_service, db_session, samp
         pass  # db_session is managed by fixture
 
 
-def test_donation_completes_fundraising_goal(mock_stripe_service, db_session, sample_fundraising_goal):
+def test_donation_completes_fundraising_goal(
+    mock_stripe_service, db_session, sample_fundraising_goal
+):
     """Test that a donation can complete a fundraising goal."""
     try:
         # Create a donation request that exceeds the goal
@@ -179,7 +185,7 @@ def test_donation_completes_fundraising_goal(mock_stripe_service, db_session, sa
         mock_stripe_service.update_donation_status.assert_called_once_with(
             db_session, "pi_test789", DonationStatus.SUCCEEDED
         )
-        
+
         # Note: The mock service doesn't implement fundraising goal completion
         # In a real implementation, this would complete the goal
 
@@ -187,7 +193,9 @@ def test_donation_completes_fundraising_goal(mock_stripe_service, db_session, sa
         pass  # db_session is managed by fixture
 
 
-def test_anonymous_donation_workflow(mock_stripe_service, db_session, sample_fundraising_goal):
+def test_anonymous_donation_workflow(
+    mock_stripe_service, db_session, sample_fundraising_goal
+):
     """Test that anonymous donations work correctly."""
     try:
         # Create an anonymous donation request
@@ -230,7 +238,7 @@ def test_anonymous_donation_workflow(mock_stripe_service, db_session, sample_fun
         mock_stripe_service.update_donation_status.assert_called_once_with(
             db_session, "pi_anonymous123", DonationStatus.SUCCEEDED
         )
-        
+
         # Note: The mock service doesn't implement fundraising goal updates
         # In a real implementation, this would update the goal
 

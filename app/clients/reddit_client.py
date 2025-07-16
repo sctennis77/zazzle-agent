@@ -907,7 +907,7 @@ class RedditClient:
     def fetch_random_subreddit(self) -> Optional[str]:
         """
         Fetch a random subreddit using popular/trending subreddits.
-        
+
         Reddit deprecated their random_subreddit() endpoint, so we use
         an alternative approach by getting random subreddits from popular posts.
 
@@ -927,7 +927,7 @@ class RedditClient:
 
             # Get random subreddit from popular posts across Reddit
             popular_posts = list(self.reddit.subreddit("all").hot(limit=100))
-            
+
             if not popular_posts:
                 log_operation(
                     logger,
@@ -936,17 +936,25 @@ class RedditClient:
                     {"mode": self.mode, "reason": "no_popular_posts"},
                 )
                 return None
-            
+
             # Pick a random post and get its subreddit
             random_post = random.choice(popular_posts)
             subreddit_name = random_post.subreddit.display_name
-            
+
             # Filter out unsuitable subreddits
             excluded_subreddits = {
-                'all', 'popular', 'announcements', 'blog', 'changelog',
-                'modnews', 'ModSupport', 'help', 'reddit', 'RedditEng'
+                "all",
+                "popular",
+                "announcements",
+                "blog",
+                "changelog",
+                "modnews",
+                "ModSupport",
+                "help",
+                "reddit",
+                "RedditEng",
             }
-            
+
             if subreddit_name.lower() in excluded_subreddits:
                 # Try a few more times to get a different subreddit
                 for _ in range(5):
@@ -962,7 +970,7 @@ class RedditClient:
                 {
                     "selected_subreddit": subreddit_name,
                     "subscribers": getattr(
-                        random_post.subreddit, 'subscribers', 'unknown'
+                        random_post.subreddit, "subscribers", "unknown"
                     ),
                     "mode": self.mode,
                     "method": "popular_posts",

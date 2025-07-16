@@ -33,7 +33,7 @@ class CommunityAgentService:
     ):
         """
         Initialize the Community Agent Service.
-        
+
         Args:
             subreddit_names: List of additional subreddits to monitor beyond clouvel
             dry_run: Whether to run in dry-run mode (no actual Reddit actions)
@@ -42,22 +42,25 @@ class CommunityAgentService:
         """
         # Always monitor clouvel as the primary moderation subreddit
         self.moderation_subreddit = "clouvel"
-        
+
         # Combine moderation subreddit with additional subreddits, removing duplicates
         additional_subreddits = subreddit_names or []
         all_subreddits = [self.moderation_subreddit]
-        
+
         # Add additional subreddits if they're not already clouvel
         for sub in additional_subreddits:
-            if sub.lower() != self.moderation_subreddit.lower() and sub not in all_subreddits:
+            if (
+                sub.lower() != self.moderation_subreddit.lower()
+                and sub not in all_subreddits
+            ):
                 all_subreddits.append(sub)
-        
+
         self.subreddit_names = all_subreddits
         self.dry_run = dry_run
         self.stream_chunk_size = stream_chunk_size
         self.use_multi_stream = use_multi_stream
         self.running = False
-        
+
         # Initialize Reddit client for streaming
         self.reddit = praw.Reddit(
             client_id=os.getenv("REDDIT_CLIENT_ID"),
@@ -68,7 +71,7 @@ class CommunityAgentService:
                 "REDDIT_USER_AGENT", "clouvel-agent by u/queen_clouvel"
             ),
         )
-        
+
         # Initialize Redis for real-time updates
         self.redis_client = None
         if os.getenv("REDIS_URL"):
@@ -82,14 +85,14 @@ class CommunityAgentService:
             except Exception as e:
                 logger.warning(f"Redis connection failed: {e}")
                 self.redis_client = None
-        
+
         # Create agents for each subreddit
         self.agents: Dict[str, ClouvelCommunityAgent] = {}
         for subreddit_name in self.subreddit_names:
             self.agents[subreddit_name] = ClouvelCommunityAgent(
                 subreddit_name=subreddit_name, dry_run=dry_run
             )
-        
+
         logger.info(
             f"Initialized CommunityAgentService for subreddits: {self.subreddit_names}"
         )
@@ -98,7 +101,7 @@ class CommunityAgentService:
         """Publish real-time update via Redis for WebSocket broadcasting."""
         if not self.redis_client:
             return
-            
+
         try:
             channel = f"community_agent:{subreddit_name}"
             message = {
@@ -116,7 +119,7 @@ class CommunityAgentService:
         """Process a single item from the Reddit stream."""
         try:
             agent = self.agents[subreddit_name]
-            
+
             # Check rate limits before processing
             with agent._get_db_session() as session:
                 state = agent._get_or_create_state(session)
@@ -129,34 +132,34 @@ class CommunityAgentService:
                 actions = await agent.decide_actions([item], [])
             else:  # comment
                 actions = await agent.decide_actions([], [item])
-            
+
             if not actions:
                 return
-                
+
             logger.info(
                 f"Processing {len(actions)} actions for {item_type} {item.id} in {subreddit_name}"
             )
-            
+
             # Execute actions and log results
             with agent._get_db_session() as session:
                 state = agent._get_or_create_state(session)
-                
+
                 for action in actions:
                     # Check rate limits before each action
                     if not agent._check_rate_limits(session, state):
                         logger.warning("Rate limit reached during action processing")
                         break
-                    
+
                     # Execute the action
                     result = await agent.execute_action(action)
-                    
+
                     # Log action to database
                     db_action = agent.log_action(session, action, result)
-                    
+
                     # Increment action count if successful
                     if result.get("success"):
                         agent._increment_action_count(session, state)
-                    
+
                     # Publish real-time update
                     update = {
                         "action_id": db_action.id,
@@ -169,7 +172,7 @@ class CommunityAgentService:
                         "dry_run": self.dry_run,
                     }
                     self._publish_agent_update(subreddit_name, update)
-                    
+
                     # Brief delay between actions for politeness
                     await asyncio.sleep(2)
 
@@ -183,32 +186,36 @@ class CommunityAgentService:
             # Always include moderation subreddit first
             multi_subreddit_name = "+".join(self.subreddit_names)
             subreddit = self.reddit.subreddit(multi_subreddit_name)
-            logger.info(f"Starting optimized multi-stream for r/{multi_subreddit_name} (primary: r/{self.moderation_subreddit})")
-            
+            logger.info(
+                f"Starting optimized multi-stream for r/{multi_subreddit_name} (primary: r/{self.moderation_subreddit})"
+            )
+
             # Create combined stream of submissions and comments
             stream = praw.models.util.stream_generator(
                 lambda **kwargs: [
                     *subreddit.new(limit=50),  # Higher limit for multi-subreddit
-                    *subreddit.comments(limit=100)
+                    *subreddit.comments(limit=100),
                 ],
                 max_wait=60,
                 skip_existing=True,
             )
-            
+
             async for item in self._async_wrapper(stream):
                 if not self.running:
                     break
-                    
+
                 # Determine which subreddit this item belongs to
                 item_subreddit = item.subreddit.display_name.lower()
-                
+
                 # Only process if it's from one of our monitored subreddits
                 if item_subreddit in [s.lower() for s in self.subreddit_names]:
                     if isinstance(item, Submission):
-                        await self._process_stream_item(item, "submission", item_subreddit)
+                        await self._process_stream_item(
+                            item, "submission", item_subreddit
+                        )
                     elif isinstance(item, Comment):
                         await self._process_stream_item(item, "comment", item_subreddit)
-                    
+
         except Exception as e:
             logger.error(f"Error streaming multi-subreddits: {e}")
             if self.running:
@@ -220,27 +227,27 @@ class CommunityAgentService:
         try:
             subreddit = self.reddit.subreddit(subreddit_name)
             logger.info(f"Starting stream for r/{subreddit_name}")
-            
+
             # Create combined stream of submissions and comments
             stream = praw.models.util.stream_generator(
                 lambda **kwargs: [
                     *subreddit.new(limit=25),
-                    *subreddit.comments(limit=50)
+                    *subreddit.comments(limit=50),
                 ],
                 max_wait=60,  # Wait up to 60 seconds between API calls
                 skip_existing=True,
             )
-            
+
             async for item in self._async_wrapper(stream):
                 if not self.running:
                     break
-                    
+
                 # Determine item type and process
                 if isinstance(item, Submission):
                     await self._process_stream_item(item, "submission", subreddit_name)
                 elif isinstance(item, Comment):
                     await self._process_stream_item(item, "comment", subreddit_name)
-                    
+
         except Exception as e:
             logger.error(f"Error streaming r/{subreddit_name}: {e}")
             if self.running:
@@ -250,12 +257,13 @@ class CommunityAgentService:
 
     async def _async_wrapper(self, sync_generator):
         """Wrap synchronous PRAW generator for async usage."""
+
         def run_sync():
             try:
                 return next(sync_generator)
             except StopIteration:
                 return None
-        
+
         while self.running:
             try:
                 # Run the synchronous operation in a thread pool
@@ -273,10 +281,10 @@ class CommunityAgentService:
         if self.running:
             logger.warning("Service is already running")
             return
-            
+
         self.running = True
         logger.info("Starting Community Agent Service...")
-        
+
         # Publish startup notification
         for subreddit_name in self.subreddit_names:
             startup_update = {
@@ -285,21 +293,25 @@ class CommunityAgentService:
                 "dry_run": self.dry_run,
             }
             self._publish_agent_update(subreddit_name, startup_update)
-        
+
         # Choose streaming approach based on configuration
         try:
             if self.use_multi_stream and len(self.subreddit_names) > 1:
                 # Use optimized multi-subreddit streaming
-                logger.info(f"Using optimized multi-stream for {len(self.subreddit_names)} subreddits")
+                logger.info(
+                    f"Using optimized multi-stream for {len(self.subreddit_names)} subreddits"
+                )
                 await self._stream_multi_subreddits()
             else:
                 # Use separate tasks for each subreddit
-                logger.info(f"Using separate streams for {len(self.subreddit_names)} subreddit(s)")
+                logger.info(
+                    f"Using separate streams for {len(self.subreddit_names)} subreddit(s)"
+                )
                 tasks = []
                 for subreddit_name in self.subreddit_names:
                     task = asyncio.create_task(self._stream_subreddit(subreddit_name))
                     tasks.append(task)
-                
+
                 # Wait for all streaming tasks
                 await asyncio.gather(*tasks)
         except asyncio.CancelledError:
@@ -313,7 +325,7 @@ class CommunityAgentService:
         """Stop the Community Agent Service."""
         logger.info("Stopping Community Agent Service...")
         self.running = False
-        
+
         # Publish shutdown notification
         for subreddit_name in self.subreddit_names:
             shutdown_update = {
@@ -332,23 +344,26 @@ class CommunityAgentService:
             "redis_connected": self.redis_client is not None,
             "agents": {},
         }
-        
+
         # Get stats from each agent
         for subreddit_name, agent in self.agents.items():
             try:
                 community_stats = agent.get_community_stats()
-                
+
                 # Get recent actions from database
                 with agent._get_db_session() as session:
                     from app.db.models import CommunityAgentAction
+
                     recent_actions = (
                         session.query(CommunityAgentAction)
-                        .filter_by(subreddit_id=agent._get_or_create_subreddit(session).id)
+                        .filter_by(
+                            subreddit_id=agent._get_or_create_subreddit(session).id
+                        )
                         .order_by(CommunityAgentAction.timestamp.desc())
                         .limit(10)
                         .all()
                     )
-                    
+
                     status["agents"][subreddit_name] = {
                         "community_stats": community_stats,
                         "recent_actions_count": len(recent_actions),
@@ -360,7 +375,7 @@ class CommunityAgentService:
                     }
             except Exception as e:
                 status["agents"][subreddit_name] = {"error": str(e)}
-        
+
         return status
 
     def get_health_status(self) -> Dict:
@@ -368,16 +383,16 @@ class CommunityAgentService:
         status = self.get_service_status()
         return {
             "status": "healthy" if status["running"] else "unhealthy",
-            "service": status
+            "service": status,
         }
 
     async def start_health_server(self):
         """Start a simple health check server on port 8001."""
         # For Docker health checks, we'll write status to a file instead
         # This is simpler than adding aiohttp dependency
-        import json
         import asyncio
-        
+        import json
+
         async def write_health_status():
             while self.running:
                 try:
@@ -388,6 +403,8 @@ class CommunityAgentService:
                 except Exception as e:
                     logger.error(f"Error writing health status: {e}")
                     await asyncio.sleep(5)
-        
+
         asyncio.create_task(write_health_status())
-        logger.info("Health status monitoring started (writing to /tmp/community_agent_health.json)")
+        logger.info(
+            "Health status monitoring started (writing to /tmp/community_agent_health.json)"
+        )

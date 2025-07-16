@@ -29,8 +29,10 @@ if openai_api_key_loaded:
 else:
     logger.warning("OPENAI_API_KEY not loaded.")
     # Check if any env vars contain 'openai' or 'OPENAI'
-    openai_vars = {k: v for k, v in os.environ.items() if 'openai' in k.lower()}
-    logger.info(f"Environment variables containing 'openai': {list(openai_vars.keys())}")
+    openai_vars = {k: v for k, v in os.environ.items() if "openai" in k.lower()}
+    logger.info(
+        f"Environment variables containing 'openai': {list(openai_vars.keys())}"
+    )
 
 
 @contextmanager

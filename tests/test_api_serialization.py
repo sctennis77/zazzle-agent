@@ -24,11 +24,7 @@ def create_test_data():
     session = Session()
 
     # Create a subreddit first
-    subreddit = Subreddit(
-        id=1,
-        subreddit_name="test",
-        display_name="Test Subreddit"
-    )
+    subreddit = Subreddit(id=1, subreddit_name="test", display_name="Test Subreddit")
     session.add(subreddit)
 
     # Create a pipeline run

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api import get_image_quality_for_tier
 from app.db.models import Donation, SchedulerConfig, SourceType
-from app.models import DonationStatus, DonationTier, TIER_AMOUNTS
+from app.models import TIER_AMOUNTS, DonationStatus, DonationTier
 from app.redis_service import RedisService
 from app.subreddit_service import get_subreddit_service
 from app.task_manager import TaskManager
@@ -42,7 +42,7 @@ class SchedulerService:
         last_run_time = config.last_run_at
         if last_run_time.tzinfo is None:
             last_run_time = last_run_time.replace(tzinfo=timezone.utc)
-        
+
         next_run_time = last_run_time + timedelta(hours=config.interval_hours)
         return now >= next_run_time
 
@@ -61,7 +61,9 @@ class SchedulerService:
         """
         return await self._run_commission_with_lock(db, check_interval=False)
 
-    async def _run_commission_with_lock(self, db: Session, check_interval: bool = True) -> Optional[dict]:
+    async def _run_commission_with_lock(
+        self, db: Session, check_interval: bool = True
+    ) -> Optional[dict]:
         """
         Execute a bronze tier commission with distributed locking.
         Returns commission details if created, None if skipped.
@@ -231,10 +233,14 @@ class SchedulerService:
             "enabled": config.enabled,
             "interval_hours": config.interval_hours,
             "last_run_at": (
-                config.last_run_at.replace(tzinfo=timezone.utc).isoformat() if config.last_run_at else None
+                config.last_run_at.replace(tzinfo=timezone.utc).isoformat()
+                if config.last_run_at
+                else None
             ),
             "next_run_at": (
-                config.next_run_at.replace(tzinfo=timezone.utc).isoformat() if config.next_run_at else None
+                config.next_run_at.replace(tzinfo=timezone.utc).isoformat()
+                if config.next_run_at
+                else None
             ),
         }
 
@@ -271,9 +277,13 @@ class SchedulerService:
             "enabled": config.enabled,
             "interval_hours": config.interval_hours,
             "last_run_at": (
-                config.last_run_at.replace(tzinfo=timezone.utc).isoformat() if config.last_run_at else None
+                config.last_run_at.replace(tzinfo=timezone.utc).isoformat()
+                if config.last_run_at
+                else None
             ),
             "next_run_at": (
-                config.next_run_at.replace(tzinfo=timezone.utc).isoformat() if config.next_run_at else None
+                config.next_run_at.replace(tzinfo=timezone.utc).isoformat()
+                if config.next_run_at
+                else None
             ),
         }

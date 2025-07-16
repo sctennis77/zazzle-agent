@@ -17,7 +17,7 @@ def test_donation_tiers_endpoint(client):
 def test_create_support_donation(client, test_data):
     """Test creating a basic support donation."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     donation_data = {
         "amount_usd": 5.00,
         "customer_email": "supporter@example.com",
@@ -28,10 +28,10 @@ def test_create_support_donation(client, test_data):
         "message": "Keep up the great work!",
         "is_anonymous": False,
     }
-    
+
     resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
-    
+
     # Check response structure
     data = resp.json()
     assert "client_secret" in data
@@ -41,7 +41,7 @@ def test_create_support_donation(client, test_data):
 def test_create_commission_donation(client, test_data):
     """Test creating a basic commission donation."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     donation_data = {
         "amount_usd": 10.00,
         "customer_email": "commissioner@example.com",
@@ -53,10 +53,10 @@ def test_create_commission_donation(client, test_data):
         "commission_message": "Please make this special!",
         "is_anonymous": False,
     }
-    
+
     resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
-    
+
     # Check response structure
     data = resp.json()
     assert "client_secret" in data
@@ -66,7 +66,7 @@ def test_create_commission_donation(client, test_data):
 def test_create_random_random_commission_donation(client, test_data):
     """Test creating a random_random commission donation with normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     donation_data = {
         "amount_usd": 1.00,
         "customer_email": "random_commissioner@example.com",
@@ -78,10 +78,10 @@ def test_create_random_random_commission_donation(client, test_data):
         "commission_message": "Surprise me!",
         "is_anonymous": False,
     }
-    
+
     resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200
-    
+
     # Check response structure
     data = resp.json()
     assert "client_secret" in data
@@ -91,7 +91,7 @@ def test_create_random_random_commission_donation(client, test_data):
 def test_random_random_commission_validation_accepts_subreddit(client, test_data):
     """Test that random_random commission type accepts subreddit parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     donation_data = {
         "amount_usd": 1.00,
         "customer_email": "test@example.com",
@@ -102,7 +102,7 @@ def test_random_random_commission_validation_accepts_subreddit(client, test_data
         "commission_message": "Test message",
         "is_anonymous": False,
     }
-    
+
     resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200  # Should succeed with normalized interface
 
@@ -110,7 +110,7 @@ def test_random_random_commission_validation_accepts_subreddit(client, test_data
 def test_random_random_commission_validation_accepts_post_id(client, test_data):
     """Test that random_random commission type accepts post_id parameter in normalized interface."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     donation_data = {
         "amount_usd": 1.00,
         "customer_email": "test@example.com",
@@ -121,7 +121,7 @@ def test_random_random_commission_validation_accepts_post_id(client, test_data):
         "commission_message": "Test message",
         "is_anonymous": False,
     }
-    
+
     resp = client.post("/api/donations/create-payment-intent", json=donation_data)
     assert resp.status_code == 200  # Should succeed with normalized interface
 
@@ -137,11 +137,11 @@ def test_donations_endpoint(client, test_data):
 def test_post_donations_endpoint(client, test_data):
     """Test retrieving donations for a specific post."""
     subreddit, pipeline_run, reddit_post = test_data
-    
+
     resp = client.get(f"/api/posts/{reddit_post.post_id}/donations")
     assert resp.status_code == 200
     donations = resp.json()
-    assert isinstance(donations, list) 
+    assert isinstance(donations, list)
 
 
 def test_donations_by_subreddit_endpoint(client, test_data):
@@ -150,13 +150,13 @@ def test_donations_by_subreddit_endpoint(client, test_data):
     assert resp.status_code == 200
     donations_by_subreddit = resp.json()
     assert isinstance(donations_by_subreddit, dict)
-    
+
     # Check that each subreddit has the expected structure
     for subreddit_name, donations in donations_by_subreddit.items():
         assert "commission" in donations
         assert "support" in donations
         assert isinstance(donations["support"], list)
-        
+
         # Check support donations structure
         for donation in donations["support"]:
             assert "reddit_username" in donation
@@ -165,4 +165,4 @@ def test_donations_by_subreddit_endpoint(client, test_data):
             assert "donation_amount" in donation
             assert "is_anonymous" in donation
             assert "created_at" in donation
-            assert "donation_id" in donation 
+            assert "donation_id" in donation

@@ -440,15 +440,17 @@ class TestSubredditPublisher:
         mock_existing_post = Mock()
         mock_existing_post.dry_run = True
         mock_existing_post.reddit_post_id = "dryrun_post_id"
-        
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_existing_post
-        
+
+        mock_session.query.return_value.filter.return_value.first.return_value = (
+            mock_existing_post
+        )
+
         # Create publisher in LIVE mode (dry_run=False)
         publisher = SubredditPublisher(dry_run=False, session=mock_session)
-        
+
         # Should return False (not already posted) after deleting dry run post
         result = publisher._is_product_already_posted("1")
-        
+
         assert result is False
         mock_session.delete.assert_called_once_with(mock_existing_post)
         mock_session.commit.assert_called_once()
@@ -459,15 +461,17 @@ class TestSubredditPublisher:
         mock_existing_post = Mock()
         mock_existing_post.dry_run = False
         mock_existing_post.reddit_post_id = "live_post_id"
-        
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_existing_post
-        
+
+        mock_session.query.return_value.filter.return_value.first.return_value = (
+            mock_existing_post
+        )
+
         # Create publisher in LIVE mode
         publisher = SubredditPublisher(dry_run=False, session=mock_session)
-        
+
         # Should return True (already posted) and NOT delete the post
         result = publisher._is_product_already_posted("1")
-        
+
         assert result is True
         mock_session.delete.assert_not_called()
         mock_session.commit.assert_not_called()

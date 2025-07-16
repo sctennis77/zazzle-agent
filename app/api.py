@@ -1796,7 +1796,8 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
 async def publish_product_to_subreddit(
     product_id: str,
     dry_run: bool = Query(
-        os.getenv("REDDIT_MODE", "dryrun") == "dryrun", description="Whether to run in dry run mode (defaults based on REDDIT_MODE env var)"
+        os.getenv("REDDIT_MODE", "dryrun") == "dryrun",
+        description="Whether to run in dry run mode (defaults based on REDDIT_MODE env var)",
     ),
     db: Session = Depends(get_db),
 ):

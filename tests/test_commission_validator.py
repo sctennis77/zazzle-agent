@@ -1,9 +1,11 @@
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.services.commission_validator import CommissionValidator, ValidationResult
+
 from app.api import app, get_commission_validator
 from app.models import CommissionValidationRequest, CommissionValidationResponse
+from app.services.commission_validator import CommissionValidator, ValidationResult
 
 
 class TestCommissionValidator:
@@ -12,7 +14,7 @@ class TestCommissionValidator:
     @pytest.fixture
     def mock_session(self):
         """Mock database session"""
-        with patch('app.services.commission_validator.SessionLocal') as mock_session:
+        with patch("app.services.commission_validator.SessionLocal") as mock_session:
             mock_instance = Mock()
             mock_session.return_value = mock_instance
             yield mock_instance
@@ -20,23 +22,25 @@ class TestCommissionValidator:
     @pytest.fixture
     def validator(self, mock_session):
         """Create a CommissionValidator instance for testing with mocked dependencies"""
-        with patch('app.services.commission_validator.RedditClient') as mock_client, \
-             patch('app.services.commission_validator.RedditAgent') as mock_agent:
-            
+        with (
+            patch("app.services.commission_validator.RedditClient") as mock_client,
+            patch("app.services.commission_validator.RedditAgent") as mock_agent,
+        ):
+
             # Create validator with mocked dependencies
             validator = CommissionValidator()
-            
+
             # Mock the internal dependencies
             validator.reddit_client = Mock()
             validator.reddit_agent = Mock()
             validator.session = mock_session
-            
+
             yield validator
 
     @pytest.fixture
     def mock_reddit_client(self):
         """Mock RedditClient for testing"""
-        with patch('app.services.commission_validator.RedditClient') as mock_client:
+        with patch("app.services.commission_validator.RedditClient") as mock_client:
             mock_instance = Mock()
             mock_client.return_value = mock_instance
             yield mock_instance
@@ -44,13 +48,15 @@ class TestCommissionValidator:
     @pytest.fixture
     def mock_reddit_agent(self):
         """Mock RedditAgent for testing"""
-        with patch('app.services.commission_validator.RedditAgent') as mock_agent:
+        with patch("app.services.commission_validator.RedditAgent") as mock_agent:
             mock_instance = Mock()
             mock_agent.return_value = mock_instance
             yield mock_instance
 
     @pytest.mark.asyncio
-    async def test_validate_random_subreddit_success(self, validator, mock_reddit_client, mock_reddit_agent):
+    async def test_validate_random_subreddit_success(
+        self, validator, mock_reddit_client, mock_reddit_agent
+    ):
         """Test successful validation of random subreddit commission"""
         # Mock Reddit submission
         mock_submission = Mock()
@@ -61,16 +67,20 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=mock_submission)
-        
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(
+            return_value=mock_submission
+        )
+
         # Mock RedditClient methods
         validator.reddit_client.get_post.return_value = mock_submission
         validator.reddit_client.get_subreddit.return_value = Mock()
 
         # Mock subreddit validation
-        with patch.object(validator, '_validate_subreddit_exists', return_value=True), \
-             patch.object(validator, '_get_subreddit_id', return_value=5):
-            
+        with (
+            patch.object(validator, "_validate_subreddit_exists", return_value=True),
+            patch.object(validator, "_get_subreddit_id", return_value=5),
+        ):
+
             # Test validation
             result = await validator.validate_commission("random_subreddit", "golf")
 
@@ -81,7 +91,10 @@ class TestCommissionValidator:
             assert result.post_id == "1lp1zam"
             assert result.post_title == "Golf is weird."
             assert result.post_content == "For comparison, I also play tennis..."
-            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert (
+                result.post_url
+                == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            )
             assert result.commission_type == "random_subreddit"
             assert result.error is None
 
@@ -89,8 +102,10 @@ class TestCommissionValidator:
     async def test_validate_random_subreddit_invalid_subreddit(self, validator):
         """Test validation failure for invalid subreddit"""
         # Mock subreddit validation to fail
-        with patch.object(validator, '_validate_subreddit_exists', return_value=False):
-            result = await validator.validate_commission("random_subreddit", "invalid_subreddit")
+        with patch.object(validator, "_validate_subreddit_exists", return_value=False):
+            result = await validator.validate_commission(
+                "random_subreddit", "invalid_subreddit"
+            )
 
             assert result.valid is False
             assert "not found or not accessible" in result.error
@@ -109,9 +124,11 @@ class TestCommissionValidator:
         validator.reddit_client.get_post.return_value = mock_submission
 
         # Mock subreddit ID lookup
-        with patch.object(validator, '_get_subreddit_id', return_value=5):
+        with patch.object(validator, "_get_subreddit_id", return_value=5):
             # Test validation
-            result = await validator.validate_commission("specific_post", post_id="1lp1zam")
+            result = await validator.validate_commission(
+                "specific_post", post_id="1lp1zam"
+            )
 
             # Verify result
             assert result.valid is True
@@ -119,7 +136,10 @@ class TestCommissionValidator:
             assert result.post_id == "1lp1zam"
             assert result.post_title == "Golf is weird."
             assert result.post_content == "For comparison, I also play tennis..."
-            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert (
+                result.post_url
+                == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            )
             assert result.commission_type == "specific_post"
             assert result.error is None
 
@@ -127,8 +147,10 @@ class TestCommissionValidator:
     async def test_validate_specific_post_post_not_found(self, validator):
         """Test validation failure when post is not found"""
         validator.reddit_client.get_post.return_value = None
-        
-        result = await validator.validate_commission("specific_post", post_id="nonexistent_post")
+
+        result = await validator.validate_commission(
+            "specific_post", post_id="nonexistent_post"
+        )
 
         assert result.valid is False
         assert "not found" in result.error
@@ -148,8 +170,10 @@ class TestCommissionValidator:
         validator.reddit_client.get_post.return_value = mock_submission
 
         # Mock subreddit ID lookup
-        with patch.object(validator, '_get_subreddit_id', return_value=10):
-            result = await validator.validate_commission("specific_post", post_id="1lp1zam")
+        with patch.object(validator, "_get_subreddit_id", return_value=10):
+            result = await validator.validate_commission(
+                "specific_post", post_id="1lp1zam"
+            )
 
             # This should work since we get the subreddit from the post itself
             assert result.valid is True
@@ -168,15 +192,21 @@ class TestCommissionValidator:
         mock_submission.subreddit.display_name = "golf"
 
         # Mock RedditAgent methods
-        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=mock_submission)
-        
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(
+            return_value=mock_submission
+        )
+
         # Mock RedditClient methods
         validator.reddit_client.get_post.return_value = mock_submission
 
         # Mock subreddit selection and validation
-        with patch('app.services.commission_validator.pick_subreddit', return_value="golf"), \
-             patch.object(validator, '_get_subreddit_id', return_value=5):
-            
+        with (
+            patch(
+                "app.services.commission_validator.pick_subreddit", return_value="golf"
+            ),
+            patch.object(validator, "_get_subreddit_id", return_value=5),
+        ):
+
             # Test validation
             result = await validator.validate_commission("random_random")
 
@@ -186,7 +216,10 @@ class TestCommissionValidator:
             assert result.post_id == "1lp1zam"
             assert result.post_title == "Golf is weird."
             assert result.post_content == "For comparison, I also play tennis..."
-            assert result.post_url == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            assert (
+                result.post_url
+                == "https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/"
+            )
             assert result.commission_type == "random_random"
             assert result.error is None
 
@@ -194,10 +227,14 @@ class TestCommissionValidator:
     async def test_validate_random_random_no_subreddits(self, validator):
         """Test validation failure when no top posts are found"""
         # Mock RedditAgent to return None (no posts found)
-        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(return_value=None)
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(
+            return_value=None
+        )
 
         # Mock subreddit selection
-        with patch('app.services.commission_validator.pick_subreddit', return_value="golf"):
+        with patch(
+            "app.services.commission_validator.pick_subreddit", return_value="golf"
+        ):
             # Test validation
             result = await validator.validate_commission("random_random")
 
@@ -263,7 +300,7 @@ class TestCommissionValidationEndpoint:
             post_content="For comparison, I also play tennis...",
             post_url="https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/",
             commission_type="random_subreddit",
-            error=None
+            error=None,
         )
 
         mock_validator.validate_commission.return_value = mock_response
@@ -271,10 +308,7 @@ class TestCommissionValidationEndpoint:
         # Test endpoint
         response = client.post(
             "/api/commissions/validate",
-            json={
-                "commission_type": "random_subreddit",
-                "subreddit": "golf"
-            }
+            json={"commission_type": "random_subreddit", "subreddit": "golf"},
         )
 
         assert response.status_code == 200
@@ -287,7 +321,10 @@ class TestCommissionValidationEndpoint:
 
         # Verify validator was called correctly
         mock_validator.validate_commission.assert_called_once_with(
-            commission_type="random_subreddit", subreddit="golf", post_id=None, post_url=None
+            commission_type="random_subreddit",
+            subreddit="golf",
+            post_id=None,
+            post_url=None,
         )
 
     def test_validate_specific_post_endpoint(self, client, mock_validator):
@@ -302,7 +339,7 @@ class TestCommissionValidationEndpoint:
             post_content="For comparison, I also play tennis...",
             post_url="https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/",
             commission_type="specific_post",
-            error=None
+            error=None,
         )
 
         mock_validator.validate_commission.return_value = mock_response
@@ -313,8 +350,8 @@ class TestCommissionValidationEndpoint:
             json={
                 "commission_type": "specific_post",
                 "subreddit": "golf",
-                "post_id": "1lp1zam"
-            }
+                "post_id": "1lp1zam",
+            },
         )
 
         assert response.status_code == 200
@@ -327,7 +364,10 @@ class TestCommissionValidationEndpoint:
 
         # Verify validator was called correctly
         mock_validator.validate_commission.assert_called_once_with(
-            commission_type="specific_post", subreddit="golf", post_id="1lp1zam", post_url=None
+            commission_type="specific_post",
+            subreddit="golf",
+            post_id="1lp1zam",
+            post_url=None,
         )
 
     def test_validate_random_random_endpoint(self, client, mock_validator):
@@ -342,17 +382,14 @@ class TestCommissionValidationEndpoint:
             post_content="For comparison, I also play tennis...",
             post_url="https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/",
             commission_type="random_random",
-            error=None
+            error=None,
         )
 
         mock_validator.validate_commission.return_value = mock_response
 
         # Test endpoint
         response = client.post(
-            "/api/commissions/validate",
-            json={
-                "commission_type": "random_random"
-            }
+            "/api/commissions/validate", json={"commission_type": "random_random"}
         )
 
         assert response.status_code == 200
@@ -381,7 +418,7 @@ class TestCommissionValidationEndpoint:
             post_content=None,
             post_url=None,
             commission_type="random_subreddit",
-            error="Subreddit 'invalid_subreddit' not found in database"
+            error="Subreddit 'invalid_subreddit' not found in database",
         )
 
         mock_validator.validate_commission.return_value = mock_response
@@ -391,34 +428,29 @@ class TestCommissionValidationEndpoint:
             "/api/commissions/validate",
             json={
                 "commission_type": "random_subreddit",
-                "subreddit": "invalid_subreddit"
-            }
+                "subreddit": "invalid_subreddit",
+            },
         )
 
         assert response.status_code == 422
         data = response.json()
         assert data["detail"]["valid"] is False
         assert data["detail"]["subreddit"] == "invalid_subreddit"
-        assert data["detail"]["error"] == "Subreddit 'invalid_subreddit' not found in database"
+        assert (
+            data["detail"]["error"]
+            == "Subreddit 'invalid_subreddit' not found in database"
+        )
 
     def test_validate_endpoint_invalid_request(self, client):
         """Test validation endpoint with invalid request data"""
         # Test missing commission_type
-        response = client.post(
-            "/api/commissions/validate",
-            json={
-                "subreddit": "golf"
-            }
-        )
+        response = client.post("/api/commissions/validate", json={"subreddit": "golf"})
         assert response.status_code == 422
 
         # Test invalid commission_type
         response = client.post(
             "/api/commissions/validate",
-            json={
-                "commission_type": "invalid_type",
-                "subreddit": "golf"
-            }
+            json={"commission_type": "invalid_type", "subreddit": "golf"},
         )
         assert response.status_code == 422
 
@@ -427,19 +459,13 @@ class TestCommissionValidationEndpoint:
         # Test specific_post without post_id
         response = client.post(
             "/api/commissions/validate",
-            json={
-                "commission_type": "specific_post",
-                "subreddit": "golf"
-            }
+            json={"commission_type": "specific_post", "subreddit": "golf"},
         )
         assert response.status_code == 422
 
         # Test random_subreddit without subreddit
         response = client.post(
-            "/api/commissions/validate",
-            json={
-                "commission_type": "random_subreddit"
-            }
+            "/api/commissions/validate", json={"commission_type": "random_subreddit"}
         )
         assert response.status_code == 422
 
@@ -450,8 +476,7 @@ class TestCommissionValidationModels:
     def test_commission_validation_request_valid(self):
         """Test valid CommissionValidationRequest"""
         request = CommissionValidationRequest(
-            commission_type="random_subreddit",
-            subreddit="golf"
+            commission_type="random_subreddit", subreddit="golf"
         )
         assert request.commission_type == "random_subreddit"
         assert request.subreddit == "golf"
@@ -460,9 +485,7 @@ class TestCommissionValidationModels:
     def test_commission_validation_request_specific_post(self):
         """Test CommissionValidationRequest for specific post"""
         request = CommissionValidationRequest(
-            commission_type="specific_post",
-            subreddit="golf",
-            post_id="1lp1zam"
+            commission_type="specific_post", subreddit="golf", post_id="1lp1zam"
         )
         assert request.commission_type == "specific_post"
         assert request.subreddit == "golf"
@@ -470,9 +493,7 @@ class TestCommissionValidationModels:
 
     def test_commission_validation_request_random_random(self):
         """Test CommissionValidationRequest for random random"""
-        request = CommissionValidationRequest(
-            commission_type="random_random"
-        )
+        request = CommissionValidationRequest(commission_type="random_random")
         assert request.commission_type == "random_random"
         assert request.subreddit is None
         assert request.post_id is None
@@ -488,7 +509,7 @@ class TestCommissionValidationModels:
             post_content="For comparison, I also play tennis...",
             post_url="https://reddit.com/r/golf/comments/1lp1zam/golf_is_weird/",
             commission_type="random_subreddit",
-            error=None
+            error=None,
         )
         assert response.valid is True
         assert response.subreddit == "golf"
@@ -507,10 +528,10 @@ class TestCommissionValidationModels:
             post_content=None,
             post_url=None,
             commission_type="random_subreddit",
-            error="Subreddit 'invalid_subreddit' not found in database"
+            error="Subreddit 'invalid_subreddit' not found in database",
         )
         assert response.valid is False
         assert response.subreddit == "invalid_subreddit"
         assert response.subreddit_id is None
         assert response.post_id is None
-        assert response.error == "Subreddit 'invalid_subreddit' not found in database" 
+        assert response.error == "Subreddit 'invalid_subreddit' not found in database"

@@ -477,9 +477,10 @@ def pick_subreddit(db: Session = None) -> str:
         should_close = False
 
     try:
+        import logging
+
         from app.clients.reddit_client import RedditClient
         from app.db.models import Subreddit
-        import logging
 
         logger = logging.getLogger(__name__)
 
@@ -489,9 +490,11 @@ def pick_subreddit(db: Session = None) -> str:
 
         if random_subreddit_name:
             # Check if this subreddit already exists in our database
-            existing_subreddit = db.query(Subreddit).filter_by(
-                subreddit_name=random_subreddit_name
-            ).first()
+            existing_subreddit = (
+                db.query(Subreddit)
+                .filter_by(subreddit_name=random_subreddit_name)
+                .first()
+            )
 
             if not existing_subreddit:
                 # Try to get subreddit info and add it to database
@@ -499,7 +502,7 @@ def pick_subreddit(db: Session = None) -> str:
                     subreddit_info = reddit_client.get_subreddit_info(
                         random_subreddit_name
                     )
-                    
+
                     # Create new subreddit entry
                     new_subreddit = Subreddit(
                         subreddit_name=random_subreddit_name,
@@ -507,16 +510,16 @@ def pick_subreddit(db: Session = None) -> str:
                         description=subreddit_info.get("description"),
                         public_description=subreddit_info.get("public_description"),
                         subscribers=subreddit_info.get("subscribers"),
-                        over18=subreddit_info.get("over18", False)
+                        over18=subreddit_info.get("over18", False),
                     )
-                    
+
                     db.add(new_subreddit)
                     db.commit()
-                    
+
                     logger.info(
                         f"Added new subreddit to database: {random_subreddit_name}"
                     )
-                    
+
                 except Exception as e:
                     logger.warning(
                         f"Failed to get info for subreddit {random_subreddit_name}: {e}"
@@ -679,13 +682,15 @@ class RedditAgent:
         Uses the model specified by _get_idea_model().
         """
         model = self._get_idea_model()
-        
+
         # Apply tracking with the actual model being used
         @track_openai_call(model=model, operation="chat")
         def _tracked_call():
-            response = self.openai.chat.completions.create(model=model, messages=messages)
+            response = self.openai.chat.completions.create(
+                model=model, messages=messages
+            )
             return response.choices[0].message.content
-            
+
         return _tracked_call()
 
     async def _determine_product_idea(
@@ -869,7 +874,7 @@ class RedditAgent:
 
             # Initialize progress_task to avoid UnboundLocalError
             progress_task = None
-            
+
             # Call image generation started callback
             if self.progress_callback:
                 try:

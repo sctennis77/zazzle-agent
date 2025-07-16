@@ -2,8 +2,9 @@
 Reddit Agent tests - simplified and focused on core functionality.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from app.agents.reddit_agent import RedditAgent, pick_subreddit
 from app.models import PipelineConfig, ProductIdea, RedditContext
@@ -25,9 +26,13 @@ def reddit_agent(pipeline_config):
     """Create a Reddit Agent with mocked dependencies."""
     mock_reddit_client = MagicMock()
     mock_openai_client = MagicMock()
-    
-    with patch("app.agents.reddit_agent.openai.OpenAI", return_value=mock_openai_client):
-        with patch("app.agents.reddit_agent.praw.Reddit", return_value=mock_reddit_client):
+
+    with patch(
+        "app.agents.reddit_agent.openai.OpenAI", return_value=mock_openai_client
+    ):
+        with patch(
+            "app.agents.reddit_agent.praw.Reddit", return_value=mock_reddit_client
+        ):
             agent = RedditAgent(config=pipeline_config)
             # Directly assign mocks to ensure they're used
             agent.openai = mock_openai_client
@@ -56,16 +61,16 @@ class TestRedditAgent:
             post_content="This is a funny meme about cats",
             subreddit="cats",
             score=100,
-            comments=[{"text": "Great meme!"}]
+            comments=[{"text": "Great meme!"}],
         )
 
         # Mock OpenAI response in correct format
-        reddit_agent.openai.chat.completions.create.return_value.choices[0].message.content = (
-            'Theme: Cat Humor\nImage Title: Funny Cat Meme\nImage Description: A funny cat doing something cute'
-        )
+        reddit_agent.openai.chat.completions.create.return_value.choices[
+            0
+        ].message.content = "Theme: Cat Humor\nImage Title: Funny Cat Meme\nImage Description: A funny cat doing something cute"
 
         result = await reddit_agent._determine_product_idea(reddit_context)
-        
+
         assert result is not None
         assert result.theme == "Cat Humor"
         assert result.image_description == "A funny cat doing something cute"
@@ -81,7 +86,7 @@ class TestRedditAgent:
             post_content="Test content",
             subreddit="test",
             score=100,
-            comments=[{"text": "Test comment"}]
+            comments=[{"text": "Test comment"}],
         )
 
         # Mock OpenAI to raise an exception
@@ -116,37 +121,44 @@ class TestRedditAgent:
         mock_submission.stickied = False
         mock_submission.created_utc = 1752579513
         mock_submission.is_self = True
-        
+
         # Mock comments
         mock_comment = MagicMock()
         mock_comment.body = "Great post!"
         mock_submission.comments.replace_more = MagicMock()
         mock_submission.comments.list.return_value = [mock_comment]
 
-        reddit_agent.reddit_client.reddit.subreddit().hot.return_value = [mock_submission]
+        reddit_agent.reddit_client.reddit.subreddit().hot.return_value = [
+            mock_submission
+        ]
 
         # Mock OpenAI responses for both comment summary and product idea
         openai_responses = [
             MagicMock(),  # First call: comment summary
-            MagicMock()   # Second call: product idea
+            MagicMock(),  # Second call: product idea
         ]
         openai_responses[0].choices[0].message.content = "Test comment summary"
-        openai_responses[1].choices[0].message.content = (
-            'Theme: Test Theme\nImage Title: Amazing Test Title\nImage Description: A vivid and creative test image'
-        )
+        openai_responses[1].choices[
+            0
+        ].message.content = "Theme: Test Theme\nImage Title: Amazing Test Title\nImage Description: A vivid and creative test image"
         reddit_agent.openai.chat.completions.create.side_effect = openai_responses
 
         # Mock image generation and product creation
-        with patch('app.agents.reddit_agent.AsyncImageGenerator') as mock_image_gen:
-            with patch('app.agents.reddit_agent.ZazzleProductDesigner') as mock_designer:
+        with patch("app.agents.reddit_agent.AsyncImageGenerator") as mock_image_gen:
+            with patch(
+                "app.agents.reddit_agent.ZazzleProductDesigner"
+            ) as mock_designer:
                 mock_image_gen.return_value.generate_image = AsyncMock()
-                mock_image_gen.return_value.generate_image.return_value = ("https://example.com/image.jpg", "/tmp/test.jpg")
-                
+                mock_image_gen.return_value.generate_image.return_value = (
+                    "https://example.com/image.jpg",
+                    "/tmp/test.jpg",
+                )
+
                 # Mock product creation to return a realistic product
                 mock_designer.return_value.create_product = AsyncMock()
                 mock_designer.return_value.create_product.return_value = MagicMock(
                     theme="Test Theme",
-                    product_url="https://www.zazzle.com/test-product"
+                    product_url="https://www.zazzle.com/test-product",
                 )
 
                 result = await reddit_agent.find_and_create_product_for_task()

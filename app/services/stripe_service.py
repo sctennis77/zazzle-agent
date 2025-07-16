@@ -32,43 +32,51 @@ class StripeService:
             logger.warning(
                 "STRIPE_PUBLISHABLE_KEY not set - client-side operations may fail"
             )
-        
+
         # In-memory lock for payment intent operations
         self._payment_intent_locks = {}
         self._lock_mutex = threading.Lock()
 
-    def _acquire_payment_intent_lock(self, payment_intent_id: str, timeout: int = 30) -> bool:
+    def _acquire_payment_intent_lock(
+        self, payment_intent_id: str, timeout: int = 30
+    ) -> bool:
         """
         Acquire a lock for a payment intent to prevent concurrent modifications.
-        
+
         Args:
             payment_intent_id: The payment intent ID to lock
             timeout: Maximum time to wait for the lock in seconds
-            
+
         Returns:
             bool: True if lock was acquired, False otherwise
         """
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             with self._lock_mutex:
                 if payment_intent_id not in self._payment_intent_locks:
                     self._payment_intent_locks[payment_intent_id] = threading.Lock()
-                
-                if self._payment_intent_locks[payment_intent_id].acquire(blocking=False):
-                    logger.debug(f"Acquired lock for payment intent {payment_intent_id}")
+
+                if self._payment_intent_locks[payment_intent_id].acquire(
+                    blocking=False
+                ):
+                    logger.debug(
+                        f"Acquired lock for payment intent {payment_intent_id}"
+                    )
                     return True
-            
+
             # Wait a bit before trying again
             time.sleep(0.1)
-        
-        logger.warning(f"Failed to acquire lock for payment intent {payment_intent_id} after {timeout}s")
+
+        logger.warning(
+            f"Failed to acquire lock for payment intent {payment_intent_id} after {timeout}s"
+        )
         return False
 
     def _release_payment_intent_lock(self, payment_intent_id: str):
         """
         Release a lock for a payment intent.
-        
+
         Args:
             payment_intent_id: The payment intent ID to unlock
         """
@@ -80,57 +88,59 @@ class StripeService:
     def _validate_and_prepare_metadata(self, donation_request: DonationRequest) -> Dict:
         """
         Validate and prepare metadata for Stripe payment intent.
-        
+
         Stripe limits:
         - 500 characters per metadata key
         - 1KB total metadata size
         - 50 keys maximum
-        
+
         Args:
             donation_request: The donation request containing metadata
-            
+
         Returns:
             Dict: Validated and sanitized metadata
-            
+
         Raises:
             ValueError: If metadata validation fails
         """
         metadata = {}
         total_size = 0
-        
+
         # Core required fields
         metadata["donation_type"] = str(donation_request.donation_type)[:50]
         metadata["is_anonymous"] = str(donation_request.is_anonymous)
-        
+
         # Optional fields with validation
         if donation_request.message:
             sanitized_message = str(donation_request.message)[:500]
             metadata["message"] = sanitized_message
-            
+
         if donation_request.subreddit:
             sanitized_subreddit = str(donation_request.subreddit)[:100]
             metadata["subreddit"] = sanitized_subreddit
-            
+
         if donation_request.reddit_username:
             sanitized_username = str(donation_request.reddit_username)[:100]
             metadata["reddit_username"] = sanitized_username
-            
+
         if donation_request.post_id:
             sanitized_post_id = str(donation_request.post_id)[:32]
             metadata["post_id"] = sanitized_post_id
-            
+
         if donation_request.commission_message:
-            sanitized_commission_message = str(donation_request.commission_message)[:500]
+            sanitized_commission_message = str(donation_request.commission_message)[
+                :500
+            ]
             metadata["commission_message"] = sanitized_commission_message
-            
+
         if donation_request.commission_type:
             sanitized_commission_type = str(donation_request.commission_type)[:50]
             metadata["commission_type"] = sanitized_commission_type
-        
+
         # Validate total metadata size (1KB limit)
         for key, value in metadata.items():
             total_size += len(key) + len(str(value))
-            
+
         if total_size > 1024:  # 1KB limit
             logger.warning(f"Metadata size {total_size} exceeds 1KB limit, truncating")
             # Remove less important fields first
@@ -141,8 +151,10 @@ class StripeService:
                 del metadata["commission_message"]
                 total_size = sum(len(k) + len(str(v)) for k, v in metadata.items())
             if total_size > 1024:
-                raise ValueError(f"Metadata size {total_size} still exceeds 1KB limit after truncation")
-        
+                raise ValueError(
+                    f"Metadata size {total_size} still exceeds 1KB limit after truncation"
+                )
+
         logger.debug(f"Prepared metadata with {len(metadata)} keys, {total_size} bytes")
         return metadata
 
@@ -247,8 +259,10 @@ class StripeService:
         """
         # Acquire lock to prevent concurrent modifications
         if not self._acquire_payment_intent_lock(payment_intent_id):
-            raise Exception(f"Unable to acquire lock for payment intent {payment_intent_id}")
-        
+            raise Exception(
+                f"Unable to acquire lock for payment intent {payment_intent_id}"
+            )
+
         try:
             # First, retrieve the payment intent to check if it exists and can be updated
             try:

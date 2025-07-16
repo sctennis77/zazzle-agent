@@ -1,12 +1,7 @@
 import pytest
 
 from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS
-from app.models import (
-    AffiliateLinker,
-    PipelineConfig,
-    ProductIdea,
-    RedditContext,
-)
+from app.models import AffiliateLinker, PipelineConfig, ProductIdea, RedditContext
 
 
 def test_pipeline_config():

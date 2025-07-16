@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.db.mappers import (
     db_to_product_idea,
@@ -21,27 +22,32 @@ def test_reddit_context_to_db_and_back():
         post_content="This is a test post.",
         comments=[{"text": "Nice!"}],
     )
+
     class DummySubreddit:
         @property
         def subreddit_name(self):
             return "golf"
-    
+
     class DummyResult:
         @property
         def id(self):
             return 1
+
         @property
         def subreddit(self):
             return DummySubreddit()
-    
+
     class DummyQuery:
         def filter_by(self, **kwargs):
             return self
+
         def first(self):
             return DummyResult()
+
     class DummyDB:
         def query(self, model):
             return DummyQuery()
+
     orm_post = reddit_context_to_db(ctx, pipeline_run_id=1, db=DummyDB())
     # Patch the ORM object for round-trip using MagicMock
     orm_post_mock = MagicMock()

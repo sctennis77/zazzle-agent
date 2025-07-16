@@ -61,30 +61,78 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
 
         # Tools available based on context and role
         self.moderation_tools = [
-            {"name": "welcome_new_user", "description": "Welcome new subjects with regal charm"},
+            {
+                "name": "welcome_new_user",
+                "description": "Welcome new subjects with regal charm",
+            },
             {"name": "moderate_content", "description": "Remove rule-breaking content"},
-            {"name": "gentle_redirect", "description": "Guide off-topic content kindly"},
+            {
+                "name": "gentle_redirect",
+                "description": "Guide off-topic content kindly",
+            },
             {"name": "royal_decree", "description": "Issue community guidelines"},
             {"name": "grant_title", "description": "Bestow creative nobility titles"},
-            {"name": "highlight_creativity", "description": "Celebrate creative contributions"},
-            {"name": "royal_inspiration", "description": "Share artistic prompts and challenges"},
-            {"name": "update_wiki", "description": "Update kingdom wiki with community knowledge"},
+            {
+                "name": "highlight_creativity",
+                "description": "Celebrate creative contributions",
+            },
+            {
+                "name": "royal_inspiration",
+                "description": "Share artistic prompts and challenges",
+            },
+            {
+                "name": "update_wiki",
+                "description": "Update kingdom wiki with community knowledge",
+            },
             {"name": "update_sidebar", "description": "Update subreddit announcements"},
             {"name": "royal_upvote", "description": "Upvote excellent content"},
-            {"name": "royal_downvote", "description": "Downvote spam or inappropriate content"},
+            {
+                "name": "royal_downvote",
+                "description": "Downvote spam or inappropriate content",
+            },
         ]
-        
+
         self.ambassador_tools = [
-            {"name": "royal_upvote", "description": "Upvote excellent content that resonates with creative values"},
-            {"name": "royal_downvote", "description": "Downvote spam, low-effort, or inappropriate content"},
-            {"name": "helpful_comment", "description": "Leave helpful feedback or encouragement without promoting"},
-            {"name": "technique_advice", "description": "Share specific artistic or creative techniques"},
-            {"name": "resource_share", "description": "Share helpful creative resources or tools"},
-            {"name": "gentle_invite", "description": "Naturally invite artists who would love r/clouvel"},
-            {"name": "story_appreciation", "description": "Appreciate and analyze storytelling elements"},
-            {"name": "ask_thoughtful_question", "description": "Ask engaging questions about their creative process"},
-            {"name": "share_inspiration", "description": "Share related creative inspiration or ideas"},
-            {"name": "bridge_communities", "description": "Connect ideas between communities when genuinely relevant"},
+            {
+                "name": "royal_upvote",
+                "description": "Upvote excellent content that resonates with creative values",
+            },
+            {
+                "name": "royal_downvote",
+                "description": "Downvote spam, low-effort, or inappropriate content",
+            },
+            {
+                "name": "helpful_comment",
+                "description": "Leave helpful feedback or encouragement without promoting",
+            },
+            {
+                "name": "technique_advice",
+                "description": "Share specific artistic or creative techniques",
+            },
+            {
+                "name": "resource_share",
+                "description": "Share helpful creative resources or tools",
+            },
+            {
+                "name": "gentle_invite",
+                "description": "Naturally invite artists who would love r/clouvel",
+            },
+            {
+                "name": "story_appreciation",
+                "description": "Appreciate and analyze storytelling elements",
+            },
+            {
+                "name": "ask_thoughtful_question",
+                "description": "Ask engaging questions about their creative process",
+            },
+            {
+                "name": "share_inspiration",
+                "description": "Share related creative inspiration or ideas",
+            },
+            {
+                "name": "bridge_communities",
+                "description": "Connect ideas between communities when genuinely relevant",
+            },
         ]
 
     def _get_db_session(self):
@@ -202,7 +250,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             return []
 
         role, available_tools = self._get_role_context()
-        
+
         # Prepare enhanced context for LLM
         context = {
             "subreddit": self.subreddit_name,
@@ -216,7 +264,9 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                     "score": p.score,
                     "num_comments": p.num_comments,
                     "subreddit": p.subreddit.display_name,
-                    "flair": p.link_flair_text if hasattr(p, 'link_flair_text') else None,
+                    "flair": (
+                        p.link_flair_text if hasattr(p, "link_flair_text") else None
+                    ),
                 }
                 for p in posts[:10]
             ],
@@ -243,9 +293,13 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
 
         # Create role-specific prompt
         if role == "moderator":
-            prompt = self._create_moderator_prompt(context, welcomed_users, available_tools)
+            prompt = self._create_moderator_prompt(
+                context, welcomed_users, available_tools
+            )
         else:
-            prompt = self._create_ambassador_prompt(context, community_knowledge, available_tools)
+            prompt = self._create_ambassador_prompt(
+                context, community_knowledge, available_tools
+            )
 
         try:
             response = self.openai.chat.completions.create(
@@ -269,10 +323,14 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             logger.error(f"Error deciding actions: {e}")
             return []
 
-    def _create_moderator_prompt(self, context: dict, welcomed_users: list, tools: list) -> str:
+    def _create_moderator_prompt(
+        self, context: dict, welcomed_users: list, tools: list
+    ) -> str:
         """Create prompt for moderator role in r/clouvel."""
-        tool_descriptions = "\n".join([f"- {tool['name']}: {tool['description']}" for tool in tools])
-        
+        tool_descriptions = "\n".join(
+            [f"- {tool['name']}: {tool['description']}" for tool in tools]
+        )
+
         return f"""You are moderating your own kingdom, r/clouvel! Your primary duties:
 
 1. **Community Building**: Welcome newcomers, celebrate creativity, foster positive culture
@@ -319,55 +377,90 @@ Return JSON with this structure:
             "struggling_artists": [],
             "story_content": [],
             "spam_or_low_effort": [],
-            "potential_clouvel_fits": []
+            "potential_clouvel_fits": [],
         }
-        
+
         # Analyze posts
         for post in posts:
-            content_lower = (post.get('title', '') + ' ' + post.get('content', '')).lower()
-            score = post.get('score', 0)
-            
+            content_lower = (
+                post.get("title", "") + " " + post.get("content", "")
+            ).lower()
+            score = post.get("score", 0)
+
             # High quality art (good score, art-related keywords)
-            if score > 50 and any(word in content_lower for word in ['art', 'drawing', 'painting', 'illustration', 'design', 'creative']):
-                analysis['high_quality_art'].append(post)
-            
+            if score > 50 and any(
+                word in content_lower
+                for word in [
+                    "art",
+                    "drawing",
+                    "painting",
+                    "illustration",
+                    "design",
+                    "creative",
+                ]
+            ):
+                analysis["high_quality_art"].append(post)
+
             # Creative questions or requests for feedback
-            elif any(word in content_lower for word in ['feedback', 'critique', 'thoughts', 'advice', 'help', 'tips']):
-                analysis['creative_questions'].append(post)
-            
+            elif any(
+                word in content_lower
+                for word in [
+                    "feedback",
+                    "critique",
+                    "thoughts",
+                    "advice",
+                    "help",
+                    "tips",
+                ]
+            ):
+                analysis["creative_questions"].append(post)
+
             # Story content
-            elif any(word in content_lower for word in ['story', 'narrative', 'character', 'plot', 'writing']):
-                analysis['story_content'].append(post)
-            
+            elif any(
+                word in content_lower
+                for word in ["story", "narrative", "character", "plot", "writing"]
+            ):
+                analysis["story_content"].append(post)
+
             # Potential r/clouvel fits (creative but not yet discovered)
-            elif score < 20 and any(word in content_lower for word in ['original', 'created', 'made', 'drew', 'painted', 'wrote']):
-                analysis['potential_clouvel_fits'].append(post)
-            
+            elif score < 20 and any(
+                word in content_lower
+                for word in ["original", "created", "made", "drew", "painted", "wrote"]
+            ):
+                analysis["potential_clouvel_fits"].append(post)
+
             # Low effort or spam indicators
             elif score < 0 or len(content_lower) < 20:
-                analysis['spam_or_low_effort'].append(post)
-        
+                analysis["spam_or_low_effort"].append(post)
+
         # Analyze comments similarly
         for comment in comments:
-            content_lower = comment.get('content', '').lower()
-            score = comment.get('score', 0)
-            
-            if score < -2 or any(spam_word in content_lower for spam_word in ['buy now', 'click here', 'subscribe']):
-                analysis['spam_or_low_effort'].append(comment)
-            elif 'advice' in content_lower or 'help' in content_lower:
-                analysis['creative_questions'].append(comment)
-        
+            content_lower = comment.get("content", "").lower()
+            score = comment.get("score", 0)
+
+            if score < -2 or any(
+                spam_word in content_lower
+                for spam_word in ["buy now", "click here", "subscribe"]
+            ):
+                analysis["spam_or_low_effort"].append(comment)
+            elif "advice" in content_lower or "help" in content_lower:
+                analysis["creative_questions"].append(comment)
+
         return analysis
-    
-    def _create_ambassador_prompt(self, context: dict, community_knowledge: dict, tools: list) -> str:
+
+    def _create_ambassador_prompt(
+        self, context: dict, community_knowledge: dict, tools: list
+    ) -> str:
         """Create prompt for ambassador role in other subreddits."""
-        tool_descriptions = "\n".join([f"- {tool['name']}: {tool['description']}" for tool in tools])
-        
+        tool_descriptions = "\n".join(
+            [f"- {tool['name']}: {tool['description']}" for tool in tools]
+        )
+
         # Analyze content for engagement strategy
         content_analysis = self._analyze_content_for_engagement(
-            context.get('new_posts', []), context.get('new_comments', [])
+            context.get("new_posts", []), context.get("new_comments", [])
         )
-        
+
         return f"""You are Queen Clouvel's ambassador in r/{context['subreddit']}! Your priority is AUTHENTIC ENGAGEMENT.
 
 **ENGAGEMENT STRATEGY (in order of priority):**
@@ -458,11 +551,24 @@ Return JSON:
                 return result
 
             # Execute based on action type
-            
+
             # Universal actions (work in any subreddit)
-            if action_type in ["welcome_new_user", "invite_to_clouvel", "share_clouvel_magic", 
-                              "cross_promote", "collaborate", "royal_compliment", "gentle_guidance",
-                              "highlight_creativity", "gentle_redirect", "grant_title"] and target_id:
+            if (
+                action_type
+                in [
+                    "welcome_new_user",
+                    "invite_to_clouvel",
+                    "share_clouvel_magic",
+                    "cross_promote",
+                    "collaborate",
+                    "royal_compliment",
+                    "gentle_guidance",
+                    "highlight_creativity",
+                    "gentle_redirect",
+                    "grant_title",
+                ]
+                and target_id
+            ):
                 # Reply to post or comment
                 if target_type == "post":
                     submission = self.reddit.submission(id=target_id)
@@ -480,7 +586,7 @@ Return JSON:
                     selftext=content,
                 )
                 result["success"] = True
-                
+
             elif action_type == "moderate_content" and target_id:
                 # Moderation action (only in r/clouvel)
                 if self.subreddit_name.lower() == "clouvel":
@@ -496,7 +602,9 @@ Return JSON:
                             comment.reply(content)
                         result["success"] = True
                     except Exception as mod_error:
-                        logger.warning(f"Moderation action failed, may need mod permissions: {mod_error}")
+                        logger.warning(
+                            f"Moderation action failed, may need mod permissions: {mod_error}"
+                        )
                         result["error"] = f"Moderation failed: {str(mod_error)}"
                 else:
                     logger.warning(f"Cannot moderate content outside of r/clouvel")
@@ -575,7 +683,7 @@ Return JSON:
             if result["success"]:
                 with self._get_db_session() as session:
                     state = self._get_or_create_state(session)
-                    
+
                     # Track welcomed users
                     if action_type in ["welcome_new_user", "invite_to_clouvel"]:
                         welcomed_users = state.welcomed_users or []
@@ -583,23 +691,29 @@ Return JSON:
                         if author and author not in welcomed_users:
                             welcomed_users.append(author)
                             state.welcomed_users = welcomed_users
-                    
+
                     # Update community knowledge for ambassador interactions
-                    if action_type in ["share_clouvel_magic", "cross_promote", "collaborate"]:
+                    if action_type in [
+                        "share_clouvel_magic",
+                        "cross_promote",
+                        "collaborate",
+                    ]:
                         knowledge = state.community_knowledge or {}
                         subreddit_key = f"interactions_{self.subreddit_name}"
                         if subreddit_key not in knowledge:
                             knowledge[subreddit_key] = []
-                        knowledge[subreddit_key].append({
-                            "date": datetime.now(timezone.utc).isoformat(),
-                            "action": action_type,
-                            "target_author": action.get("target_author"),
-                            "success": True
-                        })
+                        knowledge[subreddit_key].append(
+                            {
+                                "date": datetime.now(timezone.utc).isoformat(),
+                                "action": action_type,
+                                "target_author": action.get("target_author"),
+                                "success": True,
+                            }
+                        )
                         # Keep only last 50 interactions per subreddit
                         knowledge[subreddit_key] = knowledge[subreddit_key][-50:]
                         state.community_knowledge = knowledge
-                    
+
                     session.commit()
 
         except Exception as e:
@@ -644,7 +758,7 @@ Return JSON:
                 "role": role,
                 "subreddit": self.subreddit_name,
             }
-            
+
             # Add role-specific stats
             if role == "moderator":
                 with self._get_db_session() as session:
@@ -656,11 +770,16 @@ Return JSON:
                     state = self._get_or_create_state(session)
                     knowledge = state.community_knowledge or {}
                     interaction_key = f"interactions_{self.subreddit_name}"
-                    base_stats["ambassador_interactions"] = len(knowledge.get(interaction_key, []))
+                    base_stats["ambassador_interactions"] = len(
+                        knowledge.get(interaction_key, [])
+                    )
                     base_stats["is_home_kingdom"] = False
-            
+
             return base_stats
-            
+
         except Exception as e:
             logger.error(f"Error getting community stats: {e}")
-            return {"role": self._get_role_context()[0], "subreddit": self.subreddit_name}
+            return {
+                "role": self._get_role_context()[0],
+                "subreddit": self.subreddit_name,
+            }

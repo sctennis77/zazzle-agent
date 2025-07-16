@@ -1,11 +1,15 @@
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import unittest
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from app.commission_worker import CommissionWorker
+
 
 class TestCommissionWorkerProgress(unittest.TestCase):
     def test_incremental_progress_updates(self):
@@ -24,19 +28,20 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         # Arrange
         worker = CommissionWorker(donation_id=1, task_data={})
         worker._update_task_status = MagicMock()
-        
+
         # Act
-        await worker._progress_callback("image_generation_started", {
-            "post_id": "abc123",
-            "subreddit_name": "golf"
-        })
-        
+        await worker._progress_callback(
+            "image_generation_started", {"post_id": "abc123", "subreddit_name": "golf"}
+        )
+
         # Assert
         worker._update_task_status.assert_called_once()
         call_args = worker._update_task_status.call_args
-        self.assertEqual(call_args[1]['progress'], 40)
-        self.assertEqual(call_args[1]['stage'], 'image_generation_started')
-        self.assertEqual(call_args[1]['message'], 'Clouvel illustrating abc123 from r/golf')
+        self.assertEqual(call_args[1]["progress"], 40)
+        self.assertEqual(call_args[1]["stage"], "image_generation_started")
+        self.assertEqual(
+            call_args[1]["message"], "Clouvel illustrating abc123 from r/golf"
+        )
 
     @pytest.mark.asyncio
     async def test_progress_callback_image_generation_started_no_subreddit(self):
@@ -44,19 +49,20 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         # Arrange
         worker = CommissionWorker(donation_id=1, task_data={})
         worker._update_task_status = MagicMock()
-        
+
         # Act
-        await worker._progress_callback("image_generation_started", {
-            "post_id": "abc123",
-            "subreddit_name": None
-        })
-        
+        await worker._progress_callback(
+            "image_generation_started", {"post_id": "abc123", "subreddit_name": None}
+        )
+
         # Assert
         worker._update_task_status.assert_called_once()
         call_args = worker._update_task_status.call_args
-        self.assertEqual(call_args[1]['progress'], 40)
-        self.assertEqual(call_args[1]['stage'], 'image_generation_started')
-        self.assertEqual(call_args[1]['message'], 'Clouvel illustrating abc123 from r/unknown')
+        self.assertEqual(call_args[1]["progress"], 40)
+        self.assertEqual(call_args[1]["stage"], "image_generation_started")
+        self.assertEqual(
+            call_args[1]["message"], "Clouvel illustrating abc123 from r/unknown"
+        )
 
     @pytest.mark.asyncio
     async def test_progress_callback_image_generation_progress(self):
@@ -64,18 +70,18 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         # Arrange
         worker = CommissionWorker(donation_id=1, task_data={})
         worker._update_task_status = MagicMock()
-        
+
         # Act
-        await worker._progress_callback("image_generation_progress", {
-            "progress": 65
-        })
-        
+        await worker._progress_callback("image_generation_progress", {"progress": 65})
+
         # Assert
         worker._update_task_status.assert_called_once()
         call_args = worker._update_task_status.call_args
-        self.assertEqual(call_args[1]['progress'], 65)
-        self.assertEqual(call_args[1]['stage'], 'image_generation_in_progress')
-        self.assertEqual(call_args[1]['message'], 'Image generation in progress... (65%)')
+        self.assertEqual(call_args[1]["progress"], 65)
+        self.assertEqual(call_args[1]["stage"], "image_generation_in_progress")
+        self.assertEqual(
+            call_args[1]["message"], "Image generation in progress... (65%)"
+        )
 
     @pytest.mark.asyncio
     async def test_progress_callback_image_generation_complete(self):
@@ -83,16 +89,17 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         # Arrange
         worker = CommissionWorker(donation_id=1, task_data={})
         worker._update_task_status = MagicMock()
-        
+
         # Act
         await worker._progress_callback("image_generation_complete", {})
-        
+
         # Assert
         worker._update_task_status.assert_called_once()
         call_args = worker._update_task_status.call_args
-        self.assertEqual(call_args[1]['progress'], 90)
-        self.assertEqual(call_args[1]['stage'], 'image_generated')
-        self.assertEqual(call_args[1]['message'], 'Image generated successfully')
+        self.assertEqual(call_args[1]["progress"], 90)
+        self.assertEqual(call_args[1]["stage"], "image_generated")
+        self.assertEqual(call_args[1]["message"], "Image generated successfully")
 
-if __name__ == '__main__':
-    unittest.main() 
+
+if __name__ == "__main__":
+    unittest.main()

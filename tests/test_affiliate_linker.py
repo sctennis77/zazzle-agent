@@ -164,5 +164,3 @@ class TestZazzleAffiliateLinker:
         # Test error handling
         with pytest.raises(ZazzleAffiliateLinkerError):
             await affiliate_linker._generate_affiliate_link(mock_product_info)
-
-

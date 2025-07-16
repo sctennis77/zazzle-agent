@@ -6,8 +6,8 @@ This script runs the autonomous Reddit community agent that embodies Queen Clouv
 monitoring and engaging with subreddits to build and moderate the community.
 """
 
-import asyncio
 import argparse
+import asyncio
 import logging
 import os
 import signal
@@ -75,12 +75,12 @@ async def main():
     # Validate required environment variables
     required_env_vars = [
         "REDDIT_CLIENT_ID",
-        "REDDIT_CLIENT_SECRET", 
+        "REDDIT_CLIENT_SECRET",
         "REDDIT_USERNAME",
         "REDDIT_PASSWORD",
         "OPENAI_API_KEY",
     ]
-    
+
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         logger.error(f"Missing required environment variables: {missing_vars}")
@@ -119,7 +119,7 @@ async def main():
     try:
         # Start health server for Docker health checks
         await service.start_health_server()
-        
+
         # Start the service
         await service.start()
     except KeyboardInterrupt:

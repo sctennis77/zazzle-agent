@@ -369,17 +369,17 @@ class TestRedditClientCommon:
         mock_post = MagicMock()
         mock_post.subreddit.display_name = "test_random_subreddit"
         mock_post.subreddit.subscribers = 12345
-        
+
         mock_subreddit = MagicMock()
         mock_subreddit.hot.return_value = [mock_post]
         mock_reddit.return_value.subreddit.return_value = mock_subreddit
-        
+
         # Call the method
         result = reddit_client.fetch_random_subreddit()
-        
+
         # Verify the result
         assert result == "test_random_subreddit"
-        
+
         # Verify the Reddit API was called with "all"
         mock_reddit.return_value.subreddit.assert_called_with("all")
 
@@ -387,10 +387,10 @@ class TestRedditClientCommon:
         """Test fetching a random subreddit when API call fails."""
         # Mock the subreddit method to raise an exception
         mock_reddit.return_value.subreddit.side_effect = Exception("API Error")
-        
+
         # Call the method - it should return None on error
         result = reddit_client.fetch_random_subreddit()
-        
+
         # Verify it returns None instead of raising
         assert result is None
 
