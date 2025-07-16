@@ -6,11 +6,14 @@ import { ProductModal } from './ProductModal';
 import { CommissionStatusBanner } from './CommissionStatusBanner';
 import { InProgressProductCard } from './InProgressProductCard';
 import { CompletedProductCard } from './CompletedProductCard';
+import { SortingControls } from './SortingControls';
 import CommissionModal from '../common/CommissionModal';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
 import { API_BASE, WS_BASE } from '../../utils/apiBase';
+import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '../../utils/productSorting';
+import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
@@ -35,6 +38,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const location = useLocation();
   const navigate = useNavigate();
   const [justPublishedId, setJustPublishedId] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState('time-desc');
+  const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
+  const [sortedAndFilteredProducts, setSortedAndFilteredProducts] = useState<ProductWithFullDonationData[]>([]);
+  const { productsWithDonations, loading: donationsLoading } = useProductsWithDonations(products);
   
   // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {
@@ -338,6 +345,28 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     );
   };
 
+  // Update sorted and filtered products when products, sorting, or filters change
+  useEffect(() => {
+    // If donation data is still loading, use original products with fallback donation amounts
+    const sourceProducts = productsWithDonations.length > 0 ? productsWithDonations : 
+      products.map(product => ({
+        ...product,
+        totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
+        commissionInfo: undefined,
+        supportDonations: []
+      }));
+    
+    if (sourceProducts.length === 0) {
+      setSortedAndFilteredProducts([]);
+      return;
+    }
+    
+    const filteredProducts = sourceProducts.filter(product => !shouldHideProduct(product));
+    const sorted = sortProducts(filteredProducts, sortBy);
+    const filtered = filterProductsBySubreddits(sorted, selectedSubreddits);
+    setSortedAndFilteredProducts(filtered);
+  }, [products, productsWithDonations, sortBy, selectedSubreddits, completingTasks]);
+
   // Helper function to check if a product is newly completed (should show with animation)
   const isProductJustCompleted = (product: GeneratedProduct) => {
     // Check if this product was recently completed (has a completion task that's in removing stage)
@@ -531,37 +560,53 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       {/* Removed sticky header banner for active commissions - will try something different later */}
 
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
+        {/* Sorting Controls */}
+        {(products.length > 0 || inProgressTasks.length > 0) && (
+          <SortingControls
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            selectedSubreddits={selectedSubreddits}
+            onSubredditChange={setSelectedSubreddits}
+            availableSubreddits={getUniqueSubreddits(products)}
+          />
+        )}
+
         {/* Product Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-          {/* In-progress commission cards */}
-          {inProgressTasks.map((task) => (
-            <InProgressProductCard
-              key={task.task_id}
-              task={task}
-              onCancel={handleCancelTask}
-            />
-          ))}
-          {/* Completed commission cards (transitioning) */}
-          {Array.from(completingTasks.values()).map(({ task, stage }) => (
-            <CompletedProductCard
-              key={task.task_id}
-              task={task}
-              transitioning={stage === 'transitioning'}
-            />
-          ))}
+        <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+          {/* In-progress and completing tasks */}
+          {(inProgressTasks.length > 0 || completingTasks.size > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+              {/* In-progress commission cards */}
+              {inProgressTasks.map((task) => (
+                <InProgressProductCard
+                  key={task.task_id}
+                  task={task}
+                  onCancel={handleCancelTask}
+                />
+              ))}
+              {/* Completed commission cards (transitioning) */}
+              {Array.from(completingTasks.values()).map(({ task, stage }) => (
+                <CompletedProductCard
+                  key={task.task_id}
+                  task={task}
+                  transitioning={stage === 'transitioning'}
+                />
+              ))}
+            </div>
+          )}
+          
           {/* Generated product cards */}
-          {[...products]
-            .sort((a, b) => b.product_info.id - a.product_info.id)
-            .filter(product => !shouldHideProduct(product))
-            .map((product) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+            {sortedAndFilteredProducts.map((product) => (
               <ProductCard
                 key={product.product_info.id}
-                product={product}
+                product={product as GeneratedProduct}
                 activeTasks={activeTasks}
                 justPublished={justPublishedId === product.product_info.id}
                 justCompleted={isProductJustCompleted(product)}
               />
             ))}
+          </div>
         </div>
 
         {/* Empty state - simplified */}
