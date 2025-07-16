@@ -61,6 +61,9 @@ class TaskManager:
         # Create the pipeline task in the database
         task_id = self._create_pipeline_task(donation_id, task_data, db)
 
+        # Broadcast new task creation to all WebSocket clients
+        self._broadcast_task_creation(task_id, donation_id, db)
+
         if self.use_k8s:
             # Use Kubernetes Jobs
             logger.info(
@@ -75,6 +78,100 @@ class TaskManager:
             self._run_commission_task_directly(task_id, donation_id, task_data)
 
         return task_id
+
+    def _broadcast_task_creation(
+        self, task_id: str, donation_id: int, db: Optional[Session] = None
+    ):
+        """Broadcast new task creation to all WebSocket clients."""
+        should_close_db = False
+        if db is None:
+            db = SessionLocal()
+            should_close_db = True
+
+        try:
+            # Get the task and related data
+            task = db.query(PipelineTask).filter(
+                PipelineTask.id == task_id
+            ).first()
+            if not task:
+                logger.warning(f"Task {task_id} not found for broadcasting")
+                return
+
+            donation = task.donation
+            subreddit = task.subreddit
+
+            # Create task info for broadcasting
+            task_info = {
+                "task_id": str(task.id),
+                "status": task.status,
+                "created_at": (
+                    task.created_at.isoformat() if task.created_at else None
+                ),
+                "donation_id": task.donation_id,
+                "stage": "pending",
+                "message": "Commission created",
+                "progress": 0,
+                "reddit_username": (
+                    donation.reddit_username
+                    if donation
+                    and donation.reddit_username
+                    and not donation.is_anonymous
+                    else "Anonymous"
+                ),
+                "tier": donation.tier if donation else None,
+                "subreddit": subreddit.subreddit_name if subreddit else None,
+                "amount_usd": float(donation.amount_usd) if donation else None,
+                "is_anonymous": donation.is_anonymous if donation else None,
+                "timestamp": (
+                    task.created_at.timestamp() if task.created_at else None
+                ),
+            }
+
+            # Broadcast via Redis pub/sub
+            try:
+                import redis
+
+                from app.config import (
+                    REDIS_DB,
+                    REDIS_HOST,
+                    REDIS_PASSWORD,
+                    REDIS_PORT,
+                    REDIS_SSL,
+                )
+
+                r = redis.Redis(
+                    host=REDIS_HOST,
+                    port=REDIS_PORT,
+                    db=REDIS_DB,
+                    password=REDIS_PASSWORD,
+                    ssl=REDIS_SSL,
+                    decode_responses=True,
+                )
+
+                # Broadcast general update for task creation
+                message = {
+                    "type": "general_update",
+                    "data": {"type": "task_created", "task_info": task_info},
+                    "timestamp": datetime.now().isoformat(),
+                }
+
+                r.publish("general_updates", json.dumps(message))
+                logger.info(
+                    f"Broadcasted task creation for task {task_id} to all clients"
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to broadcast task creation for task {task_id}: {str(e)}"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Error broadcasting task creation for task {task_id}: {str(e)}"
+            )
+        finally:
+            if should_close_db:
+                db.close()
 
     def _create_pipeline_task(
         self, donation_id: int, task_data: Dict[str, Any], db: Optional[Session] = None
