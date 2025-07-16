@@ -109,8 +109,18 @@ if openai_api_key_loaded:
 else:
     logger.warning("OPENAI_API_KEY not loaded.")
     # Check if any env vars contain 'openai' or 'OPENAI'
-    openai_vars = {k: v for k, v in os.environ.items() if 'openai' in k.lower()}
-    logger.info(f"Environment variables containing 'openai': {list(openai_vars.keys())}")
+    openai_vars = {k: v for k, v in os.environ.items() if "openai" in k.lower()}
+    logger.info(
+        f"Environment variables containing 'openai': {list(openai_vars.keys())}"
+    )
+
+# Log Reddit mode configuration
+reddit_mode = os.getenv("REDDIT_MODE", "not set")
+logger.info(f"REDDIT_MODE: {reddit_mode}")
+
+# Log OpenAI model configuration  
+openai_model = os.getenv("OPENAI_IDEA_MODEL", "not set")
+logger.info(f"OPENAI_IDEA_MODEL: {openai_model}")
 
 # Add CORS middleware
 app.add_middleware(
