@@ -40,7 +40,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]["progress"], 40)
         self.assertEqual(call_args[1]["stage"], "image_generation_started")
         self.assertEqual(
-            call_args[1]["message"], "Clouvel illustrating abc123 from r/golf"
+            call_args[1]["message"], "Clouvel started working on abc123 from r/golf"
         )
 
     @pytest.mark.asyncio
@@ -61,7 +61,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]["progress"], 40)
         self.assertEqual(call_args[1]["stage"], "image_generation_started")
         self.assertEqual(
-            call_args[1]["message"], "Clouvel illustrating abc123 from r/unknown"
+            call_args[1]["message"], "Clouvel started working on abc123 from r/unknown"
         )
 
     @pytest.mark.asyncio
@@ -80,7 +80,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         self.assertEqual(call_args[1]["progress"], 65)
         self.assertEqual(call_args[1]["stage"], "image_generation_in_progress")
         self.assertEqual(
-            call_args[1]["message"], "Image generation in progress... (65%)"
+            call_args[1]["message"], "Clouvel illustrating ...  (65%)"
         )
 
     @pytest.mark.asyncio

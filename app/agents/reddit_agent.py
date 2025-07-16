@@ -648,8 +648,12 @@ class RedditAgent:
             logger.debug("Starting image generation progress updates")
             await asyncio.sleep(delay)
 
-            # Only log key milestones: start, 25%, 50%, 75%, 90%
-            milestones = [40, 55, 70, 85, 89]
+            # 11 milestones over 25 seconds total
+            milestones = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 89]
+            
+            # Calculate delay between milestones to reach ~25 seconds total
+            # 25 seconds - 1 second initial delay = 24 seconds for 10 intervals
+            interval_delay = 24.0 / 10.0  # 2.4 seconds per interval
 
             for i, progress in enumerate(milestones):
                 if self.progress_callback:
@@ -663,7 +667,7 @@ class RedditAgent:
                         logger.error(f"Progress callback failed at {progress}%: {e}")
 
                 if i < len(milestones) - 1:
-                    await asyncio.sleep(random.uniform(2.0, 3.0))  # Longer intervals
+                    await asyncio.sleep(random.uniform(interval_delay - 0.3, interval_delay + 0.3))  # ~2.4-3.0 seconds
 
             # Simplified event coordination
             if hasattr(self, "image_generation_event") and self.image_generation_event:
@@ -737,11 +741,29 @@ class RedditAgent:
             image_description = None
             for line in lines:
                 if line.startswith("Theme:") or line.startswith("**Theme:**"):
-                    theme = line.replace("**Theme:**", "").replace("Theme:", "").strip().strip('"')
-                elif line.startswith("Image Title:") or line.startswith("**Image Title:**"):
-                    image_title = line.replace("**Image Title:**", "").replace("Image Title:", "").strip().strip('"')
-                elif line.startswith("Image Description:") or line.startswith("**Image Description:**"):
-                    image_description = line.replace("**Image Description:**", "").replace("Image Description:", "").strip()
+                    theme = (
+                        line.replace("**Theme:**", "")
+                        .replace("Theme:", "")
+                        .strip()
+                        .strip('"')
+                    )
+                elif line.startswith("Image Title:") or line.startswith(
+                    "**Image Title:**"
+                ):
+                    image_title = (
+                        line.replace("**Image Title:**", "")
+                        .replace("Image Title:", "")
+                        .strip()
+                        .strip('"')
+                    )
+                elif line.startswith("Image Description:") or line.startswith(
+                    "**Image Description:**"
+                ):
+                    image_description = (
+                        line.replace("**Image Description:**", "")
+                        .replace("Image Description:", "")
+                        .strip()
+                    )
 
             # Treat empty strings as missing
             if not theme or not theme.strip():
