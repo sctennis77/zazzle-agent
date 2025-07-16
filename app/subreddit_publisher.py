@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 from app.clients.reddit_client import RedditClient
 from app.db.database import SessionLocal
 from app.db.models import (
+    Donation,
     PipelineRun,
     PipelineRunUsage,
+    PipelineTask,
     ProductInfo,
     ProductSubredditPost,
     RedditPost,
@@ -167,6 +169,22 @@ class SubredditPublisher:
                 .first()
             )
 
+            # Get commission data to access the correct reddit_username
+            pipeline_task = None
+            donation = None
+            if pipeline_run:
+                pipeline_task = (
+                    self.session.query(PipelineTask)
+                    .filter(PipelineTask.pipeline_run_id == pipeline_run.id)
+                    .first()
+                )
+                if pipeline_task and pipeline_task.donation_id:
+                    donation = (
+                        self.session.query(Donation)
+                        .filter(Donation.id == pipeline_task.donation_id)
+                        .first()
+                    )
+
             # Convert to schemas
             product_schema = ProductInfoSchema.from_orm(product_info)
             reddit_post_schema = (
@@ -185,12 +203,40 @@ class SubredditPublisher:
                 usage=usage_schema,
             )
 
+            # Add commission data as attributes for use in title generation
+            generated_product.donation = donation
+            generated_product.pipeline_task = pipeline_task
+
             logger.info(f"Successfully fetched product {product_id} from database")
             return generated_product
 
         except Exception as e:
             logger.error(f"Error fetching product {product_id} from database: {e}")
             raise
+
+    def _get_commission_username(
+        self, generated_product: GeneratedProductSchema
+    ) -> str:
+        """
+        Get the correct username to use for commission attribution.
+
+        Args:
+            generated_product: The generated product containing commission data
+
+        Returns:
+            The username to use for commission attribution
+        """
+        # Check if we have commission data
+        if hasattr(generated_product, "donation") and generated_product.donation:
+            donation = generated_product.donation
+            # Check if donation is anonymous
+            if donation.is_anonymous:
+                return "Anonymous"
+            # Return the commission username
+            return donation.reddit_username or "Anonymous"
+
+        # Fallback to original post author if no commission data
+        return generated_product.reddit_post.author or "Anonymous"
 
     def _is_product_already_posted(self, product_id: str) -> bool:
         """
@@ -238,14 +284,17 @@ class SubredditPublisher:
             # Use the generated image title instead of theme, fallback to theme if no image_title
             post_title = product.image_title or product.theme
 
+            # Determine the commission username to use in title
+            commission_username = self._get_commission_username(generated_product)
+
             # Create title for the image post
-            title = f"🎨 {post_title} - commissioned by u/{reddit_post.author or 'Anonymous'}"
+            title = f"🎨 {post_title} - commissioned by u/{commission_username}"
 
             # Create content for the image post
             content = f"""
 **Commissioned Artwork: {product.theme}**
 
-This piece was commissioned by u/{reddit_post.author or 'Anonymous'} from r/{reddit_post.subreddit} and brought to life by Clouvel, the mythic golden retriever who illustrates Reddit stories! 🐕✨
+This piece was commissioned by u/{commission_username} from r/{reddit_post.subreddit} and brought to life by Clouvel, the mythic golden retriever who illustrates Reddit stories! 🐕✨
 
 **Original Post:** [{reddit_post.title}]({reddit_post.url})
 
@@ -257,7 +306,7 @@ Clouvel's summary of the comments:
 *Commissioned content - supporting the Reddit community through art! 🎨*
 
 
-[View in Clouvel Gallery](https://clouvel.com/gallery?product={product.id}) | [Commission a Post](https://clouvel.com)
+[View in Clouvel Gallery](https://couvel.ai/gallery?product={product.id}) | [Commission a Post](https://couvel.ai)
 
 ---
 *Posted by Clouvel 🐕❤️*

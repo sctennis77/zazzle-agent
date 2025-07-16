@@ -194,7 +194,9 @@ class AsyncImageGenerator:
                 elif product_idea and product_idea.get("affiliate_link"):
                     stamp_url = product_idea["affiliate_link"]
                 else:
-                    stamp_url = f"/redirect/{stamped_filename}"
+                    from app.config import BASE_URL
+
+                    stamp_url = f"{BASE_URL}/redirect/{stamped_filename}"
                 stamped_image = self.image_processor.stamp_image_with_logo(
                     image, stamp_url
                 )

@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFilter
 # --- CONFIG ---
 LOGO_BG_PATH = os.path.join(os.path.dirname(__file__), "logo_qr_background.png")
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "qr_logo_composite.png")
-QR_URL = "https://clouvel.com"  # Change as needed
+QR_URL = "https://couvel.ai"  # Change as needed
 QR_SIZE = 512  # px
 BORDER_MODULES = 2  # QR border in modules (matches qr border param)
 

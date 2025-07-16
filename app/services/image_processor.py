@@ -107,7 +107,9 @@ class ImageProcessor:
         logger.info("Stamping image with QR code (logo: %s, url: %s)", use_logo, url)
         try:
             if url is None:
-                url = "/redirect/test_image_20250625124000_1024x1024.png"
+                from app.config import BASE_URL
+
+                url = f"{BASE_URL}/redirect/test_image_20250625124000_1024x1024.png"
 
             # Generate the full-size QR code stamp based on mode
             if use_logo:
