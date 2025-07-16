@@ -207,7 +207,17 @@ class SubredditPublisher:
             .filter(ProductSubredditPost.product_info_id == product_id)
             .first()
         )
-        return existing_post is not None
+        
+        if existing_post:
+            # If we're in live mode and existing post was dry run, clean it up
+            if not self.dry_run and existing_post.dry_run:
+                self.session.delete(existing_post)
+                self.session.commit()
+                logger.info(f"Cleaned up dry run record for product {product_id}")
+                return False
+            return True
+        
+        return False
 
     def submit_image_post(
         self, generated_product: GeneratedProductSchema
