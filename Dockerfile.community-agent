@@ -1,0 +1,31 @@
+# Community Agent Service Dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy poetry files
+COPY pyproject.toml poetry.lock ./
+
+# Install poetry and dependencies
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-dev
+
+# Copy application code
+COPY app/ ./app/
+COPY run_community_agent.py ./
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8001/health')" || exit 1
+
+# Run the community agent
+CMD ["python", "run_community_agent.py", "--log-level", "INFO"]

@@ -150,6 +150,7 @@ docker-build-all:
 	@echo "🐳 Building all Docker images..."
 	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
 	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
+	@docker build -f Dockerfile.community-agent -t zazzle-agent/community-agent:latest .
 	@echo "✅ All Docker images built successfully"
 
 docker-run-local:
@@ -833,6 +834,76 @@ restart:
 
 export-requirements:
 	poetry run pip freeze > requirements.txt
+
+# =====================
+# Community Agent Management
+# =====================
+
+run-community-agent:
+	@echo "👑 Starting Clouvel Community Agent..."
+	@if [ -z "$(SUBREDDITS)" ]; then \
+		echo "Starting with default subreddit: clouvel"; \
+		$(POETRY) run python run_community_agent.py; \
+	else \
+		echo "Starting with subreddits: $(SUBREDDITS)"; \
+		$(POETRY) run python run_community_agent.py --subreddits $(SUBREDDITS); \
+	fi
+
+run-community-agent-dry:
+	@echo "👑 Starting Clouvel Community Agent (DRY RUN)..."
+	@if [ -z "$(SUBREDDITS)" ]; then \
+		echo "Starting with default subreddit: clouvel (DRY RUN)"; \
+		$(POETRY) run python run_community_agent.py --dry-run; \
+	else \
+		echo "Starting with subreddits: $(SUBREDDITS) (DRY RUN)"; \
+		$(POETRY) run python run_community_agent.py --subreddits $(SUBREDDITS) --dry-run; \
+	fi
+
+run-community-agent-docker:
+	@echo "👑 Starting Clouvel Community Agent in Docker..."
+	@docker-compose up community-agent
+
+run-community-agent-docker-dry:
+	@echo "👑 Starting Clouvel Community Agent in Docker (DRY RUN)..."
+	@docker-compose run --rm community-agent python run_community_agent.py --dry-run
+
+build-community-agent:
+	@echo "🐳 Building Community Agent Docker image..."
+	@docker build -f Dockerfile.community-agent -t zazzle-agent/community-agent:latest .
+
+logs-community-agent:
+	@echo "📋 Showing Community Agent logs..."
+	@docker-compose logs -f community-agent
+
+stop-community-agent:
+	@echo "🛑 Stopping Community Agent..."
+	@docker-compose stop community-agent
+
+# Development workflow with all services
+dev-up:
+	@echo "🚀 Starting all services for development..."
+	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+dev-up-logs:
+	@echo "🚀 Starting all services for development with logs..."
+	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+dev-down:
+	@echo "🛑 Stopping all development services..."
+	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+test-community-agent:
+	@echo "🧪 Testing Community Agent..."
+	$(POETRY) run pytest tests/test_clouvel_community_agent.py --no-cov -v
+
+community-agent-status:
+	@echo "📊 Community Agent Status..."
+	@if [ -f community_agent.log ]; then \
+		echo "Recent activity:"; \
+		tail -20 community_agent.log; \
+	else \
+		echo "No community agent log found. Agent may not be running."; \
+	fi
 
 # =====================
 # Subreddit Tier Management

@@ -107,6 +107,35 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Community Agent Service (Queen Clouvel)
+  community-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.community-agent
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USERNAME=${REDDIT_USERNAME}
+      - REDDIT_PASSWORD=${REDDIT_PASSWORD}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - OPENAI_IDEA_MODEL=${OPENAI_IDEA_MODEL:-gpt-4o-mini}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     image: nginx:1.25
     ports:
