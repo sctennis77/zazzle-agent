@@ -52,6 +52,7 @@ interface LeaderboardRow {
   subreddit: string;
   tiers: { [tier: string]: TierSummary };
   total: number;
+  totalDonations: number;
 }
 
 const TIER_ORDER = [
@@ -86,6 +87,7 @@ function summarizeLeaderboard(data: FundraisingData): LeaderboardRow[] {
     ];
     const tiers: { [tier: string]: TierSummary } = {};
     let total = 0;
+    const totalDonations = allDonations.length;
     allDonations.forEach(donation => {
       const tier = donation.tier_name.toLowerCase();
       if (!tiers[tier]) tiers[tier] = { count: 0, amount: 0 };
@@ -93,7 +95,7 @@ function summarizeLeaderboard(data: FundraisingData): LeaderboardRow[] {
       tiers[tier].amount += donation.donation_amount;
       total += donation.donation_amount;
     });
-    return { subreddit, tiers, total };
+    return { subreddit, tiers, total, totalDonations };
   }).sort((a, b) => b.total - a.total);
 }
 
@@ -103,86 +105,117 @@ interface Props {
 }
 
 const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress }) => {
-  const [mode, setMode] = useState<'count' | 'amount'>('amount');
   const rows = summarizeLeaderboard(data);
   // Find which tiers are present in the data
   const presentTiers = TIER_ORDER.filter(tier => rows.some(row => row.tiers[tier]));
 
-  // Compute max total for scaling bar widths
+  // Compute max total for scaling bar widths (always use amount mode)
   const maxTotal = Math.max(
-    ...rows.map(row =>
-      mode === 'amount'
-        ? row.total
-        : presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0)
-    ),
+    ...rows.map(row => row.total),
     1 // avoid division by zero
   );
-  const MAX_BAR_WIDTH = 192; // px (12rem, matches w-48)
+  const MAX_BAR_WIDTH = 384; // px (24rem, expanded to take more space)
   const BAR_HEIGHT = 16; // px
 
   return (
     <div className="overflow-x-auto bg-white rounded-xl shadow-lg p-6">
-      {/* Toggle */}
-      <div className="flex items-center mb-4">
-        <span className="mr-3 font-medium text-gray-700">Show:</span>
-        <button
-          className={`px-3 py-1 rounded-l border border-gray-300 font-semibold transition-colors ${mode === 'amount' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-          onClick={() => setMode('amount')}
-        >
-          $
-        </button>
-        <button
-          className={`px-3 py-1 rounded-r border-t border-b border-r border-gray-300 font-semibold transition-colors ${mode === 'count' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-          onClick={() => setMode('count')}
-        >
-          #
-        </button>
+      {/* Header with description */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Community Fundraising Leaderboard</h3>
+        <p className="text-sm text-gray-600">
+          Support your favorite subreddits to unlock custom banner art! When a community reaches its $1,000 goal, 
+          Claude will create beautiful, personalized banner artwork for that subreddit.
+        </p>
       </div>
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b">
-            <th className="text-left px-2 py-2 font-semibold text-gray-700">Subreddit</th>
-            <th className="text-left px-2 py-2 font-semibold text-gray-700">Donations</th>
-            {presentTiers.map(tier => (
-              <th key={tier} className="text-center px-2 py-2 font-semibold" style={{ color: TIER_COLORS[tier] }}>{TIER_NAMES[tier]}</th>
-            ))}
-            <th className="text-right px-2 py-2 font-semibold text-gray-700">{mode === 'amount' ? 'Total / Goal ($)' : 'Total (#)'}</th>
-            {mode === 'amount' && <th className="text-right px-2 py-2 font-semibold text-gray-700">Progress (%)</th>}
+            <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50">Subreddit</th>
+            <th className="text-center px-3 py-3 font-semibold text-gray-700 bg-gray-50">Total Donations</th>
+            <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50" style={{ width: '50%' }}>Fundraising Progress</th>
+            <th className="text-right px-3 py-3 font-semibold text-gray-700 bg-gray-50">Total ($)</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(row => {
-            // For the stacked bar: sum all donation counts or amounts per tier
-            const totalValue = mode === 'count'
-              ? presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0) || 1
-              : presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.amount || 0), 0) || 1;
-            const totalDisplay = mode === 'count'
-              ? presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.count || 0), 0)
-              : row.total;
+            // For the stacked bar: sum all donation amounts per tier
+            const totalValue = presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.amount || 0), 0) || 1;
+            const totalDisplay = row.total;
             // Calculate bar width
             const barWidth = Math.max(8, (totalDisplay / maxTotal) * MAX_BAR_WIDTH);
             return (
-              <tr key={row.subreddit} className="border-b hover:bg-gray-50">
-                <td className="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">r/{row.subreddit}</td>
-                <td className="px-2 py-2">
-                  <div
-                    className="relative rounded overflow-hidden border border-gray-200"
-                    style={{ width: `${MAX_BAR_WIDTH}px`, height: `${BAR_HEIGHT}px` }}
-                  >
-                    {/* Unfilled bar (track) */}
+              <tr key={row.subreddit} className="border-b hover:bg-gray-50 transition-colors">
+                <td className="px-3 py-4 font-medium text-gray-900 whitespace-nowrap">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="font-semibold">r/{row.subreddit}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-4 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold text-xl text-gray-900">{row.totalDonations}</span>
+                    <span className="text-xs text-gray-500 font-medium">donations</span>
+                  </div>
+                </td>
+                <td className="px-3 py-4">
+                  <div className="space-y-2">
+                    {/* Fundraising Progress Bar */}
+                    {(() => {
+                      const goal = fundraisingProgress?.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
+                      const goalAmount = Number(fundraisingProgress?.subreddit_goal_amount || 1000);
+                      const currentAmount = row.total;
+                      const progressPercentage = Math.min((currentAmount / goalAmount) * 100, 100);
+                      
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-600">Fundraising Goal</span>
+                            <span className={`font-medium ${
+                              goal?.status === 'completed' 
+                                ? 'text-green-600' 
+                                : progressPercentage >= 50 
+                                  ? 'text-blue-600'
+                                  : 'text-gray-700'
+                            }`}>
+                              {progressPercentage.toFixed(1)}%
+                              {goal?.status === 'completed' && ' ✓'}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-500 ${
+                                goal?.status === 'completed'
+                                  ? 'bg-green-500'
+                                  : progressPercentage >= 50
+                                    ? 'bg-blue-500'
+                                    : 'bg-gray-400'
+                              }`}
+                              style={{ width: `${progressPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    
+                    {/* Tier Distribution Bar */}
                     <div
-                      className="absolute left-0 top-0 h-full w-full bg-gray-200"
-                      style={{ zIndex: 0 }}
-                    />
-                    {/* Filled stacked bar */}
-                    <div
-                      className="absolute left-0 top-0 h-full flex"
-                      style={{ width: `${barWidth}px`, zIndex: 1, transition: 'width 0.3s' }}
+                      className="relative rounded overflow-hidden border border-gray-200"
+                      style={{ width: `${MAX_BAR_WIDTH}px`, height: `${BAR_HEIGHT}px` }}
                     >
+                      {/* Unfilled bar (track) */}
+                      <div
+                        className="absolute left-0 top-0 h-full w-full bg-gray-200"
+                        style={{ zIndex: 0 }}
+                      />
+                      {/* Filled stacked bar */}
+                      <div
+                        className="absolute left-0 top-0 h-full flex"
+                        style={{ width: `${barWidth}px`, zIndex: 1, transition: 'width 0.3s' }}
+                      >
                       {presentTiers.map(tier => {
                         const tierData = row.tiers[tier];
                         if (!tierData) return null;
-                        const value = mode === 'count' ? tierData.count : tierData.amount;
+                        const value = tierData.amount;
                         const width = (value / totalValue) * 100;
                         return (
                           <div
@@ -193,64 +226,39 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                               borderRight: '1px solid #fff',
                               transition: 'width 0.3s',
                             }}
-                            title={
-                              mode === 'count'
-                                ? `${TIER_NAMES[tier]}: ${tierData.count} donation${tierData.count > 1 ? 's' : ''}`
-                                : `${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)}`
-                            }
+                            title={`${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)} (${tierData.count} donation${tierData.count > 1 ? 's' : ''})`}
                           />
                         );
                       })}
+                      </div>
                     </div>
+                    
+                    {/* Reward Text */}
+                    {(() => {
+                      const goal = fundraisingProgress?.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
+                      const goalAmount = Number(fundraisingProgress?.subreddit_goal_amount || 1000);
+                      const currentAmount = row.total;
+                      
+                      if (goal?.status === 'completed') {
+                        return (
+                          <div className="text-xs text-green-600 font-medium">
+                            🎨 Goal reached! Banner art commissioned
+                          </div>
+                        );
+                      } else {
+                        const remaining = Math.max(0, goalAmount - currentAmount);
+                        return (
+                          <div className="text-xs text-gray-600">
+                            ${remaining.toFixed(0)} more for custom banner art by Claude
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </td>
-                {presentTiers.map(tier => {
-                  const tierData = row.tiers[tier];
-                  return (
-                    <td key={tier} className="text-center px-2 py-2 font-mono">
-                      {tierData
-                        ? mode === 'count'
-                          ? tierData.count
-                          : `$${tierData.amount.toFixed(2)}`
-                        : <span className="text-gray-300">–</span>}
-                    </td>
-                  );
-                })}
-                <td className="text-right px-2 py-2 font-bold text-gray-900">
-                  {mode === 'count' 
-                    ? totalDisplay 
-                    : fundraisingProgress 
-                      ? `$${totalDisplay.toFixed(2)} / $${Number(fundraisingProgress.subreddit_goal_amount).toFixed(0)}`
-                      : `$${totalDisplay.toFixed(2)}`
-                  }
+                <td className="text-right px-3 py-4 font-bold text-gray-900">
+                  ${totalDisplay.toFixed(2)}
                 </td>
-                {mode === 'amount' && fundraisingProgress && (
-                  <td className="text-right px-2 py-2">
-                    {(() => {
-                      const goal = fundraisingProgress.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
-                      const goalAmount = Number(fundraisingProgress.subreddit_goal_amount);
-                      const currentAmount = row.total;
-                      const progressPercentage = Math.min((currentAmount / goalAmount) * 100, 100);
-                      
-                      return (
-                        <div className="flex items-center justify-end space-x-1">
-                          <span className={`font-medium ${
-                            goal?.status === 'completed' 
-                              ? 'text-green-600' 
-                              : progressPercentage >= 50 
-                                ? 'text-blue-600'
-                                : 'text-gray-700'
-                          }`}>
-                            {progressPercentage.toFixed(1)}%
-                          </span>
-                          {goal?.status === 'completed' && (
-                            <span className="text-green-600 text-xs">✓</span>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                )}
               </tr>
             );
           })}
