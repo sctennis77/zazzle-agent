@@ -251,11 +251,17 @@ class PipelineTask(Base):
     pipeline_run_id = Column(
         Integer, ForeignKey("pipeline_runs.id"), nullable=True, index=True
     )  # Associated pipeline run
-    started_at = Column(DateTime, nullable=True, index=True)  # When task started processing
-    last_heartbeat = Column(DateTime, nullable=True, index=True)  # Last heartbeat timestamp
+    started_at = Column(
+        DateTime, nullable=True, index=True
+    )  # When task started processing
+    last_heartbeat = Column(
+        DateTime, nullable=True, index=True
+    )  # Last heartbeat timestamp
     retry_count = Column(Integer, default=0, nullable=False)  # Number of retry attempts
     max_retries = Column(Integer, default=2, nullable=False)  # Maximum retry attempts
-    timeout_seconds = Column(Integer, default=300, nullable=False)  # Task timeout in seconds (5 minutes)
+    timeout_seconds = Column(
+        Integer, default=300, nullable=False
+    )  # Task timeout in seconds (5 minutes)
 
     subreddit = relationship("Subreddit", back_populates="pipeline_tasks")
     donation = relationship("Donation", backref="tasks")
@@ -468,6 +474,58 @@ class SchedulerConfig(Base):
     created_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), index=True
     )
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
+class CommunityAgentAction(Base):
+    """Actions taken by the Clouvel community agent"""
+
+    __tablename__ = "community_agent_actions"
+    id = Column(Integer, primary_key=True)
+    action_type = Column(
+        String(32), nullable=False, index=True
+    )  # moderation, engagement, recognition
+    target_type = Column(String(32), nullable=True, index=True)  # post, comment, user
+    target_id = Column(String(64), nullable=True, index=True)
+    content = Column(Text, nullable=True)  # Generated responses
+    decision_reasoning = Column(Text, nullable=True)  # LLM reasoning
+    clouvel_mood = Column(
+        String(32), nullable=True
+    )  # happy, excited, thoughtful, creative
+    royal_decree_type = Column(
+        String(32), nullable=True
+    )  # welcome, celebration, recognition
+    success_status = Column(String(16), default="pending", nullable=False, index=True)
+    error_message = Column(Text, nullable=True)
+    subreddit_id = Column(
+        Integer, ForeignKey("subreddits.id"), nullable=True, index=True
+    )
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    dry_run = Column(
+        Boolean, default=True, nullable=False
+    )  # Whether this was a dry run
+
+    # Relationships
+    subreddit = relationship("Subreddit", backref="community_agent_actions")
+
+
+class CommunityAgentState(Base):
+    """State tracking for the community agent"""
+
+    __tablename__ = "community_agent_state"
+    id = Column(Integer, primary_key=True)
+    subreddit_name = Column(String(100), nullable=False, unique=True, index=True)
+    last_scan_time = Column(DateTime, nullable=True, index=True)
+    daily_action_count = Column(JSON, nullable=True)  # Track rate limits by date
+    community_knowledge = Column(JSON, nullable=True)  # Remember users, patterns
+    welcomed_users = Column(
+        JSON, nullable=True
+    )  # Track welcomed users to avoid duplicates
     updated_at = Column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
