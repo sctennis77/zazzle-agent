@@ -736,12 +736,12 @@ class RedditAgent:
             image_title = None
             image_description = None
             for line in lines:
-                if line.startswith("Theme:"):
-                    theme = line.replace("Theme:", "").strip().strip('"')
-                elif line.startswith("Image Title:"):
-                    image_title = line.replace("Image Title:", "").strip().strip('"')
-                elif line.startswith("Image Description:"):
-                    image_description = line.replace("Image Description:", "").strip()
+                if line.startswith("Theme:") or line.startswith("**Theme:**"):
+                    theme = line.replace("**Theme:**", "").replace("Theme:", "").strip().strip('"')
+                elif line.startswith("Image Title:") or line.startswith("**Image Title:**"):
+                    image_title = line.replace("**Image Title:**", "").replace("Image Title:", "").strip().strip('"')
+                elif line.startswith("Image Description:") or line.startswith("**Image Description:**"):
+                    image_description = line.replace("**Image Description:**", "").replace("Image Description:", "").strip()
 
             # Treat empty strings as missing
             if not theme or not theme.strip():
