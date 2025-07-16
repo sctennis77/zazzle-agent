@@ -25,7 +25,7 @@ RUN mkdir -p /app/logs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8001/health')" || exit 1
+    CMD python -c "import json; data=json.load(open('/tmp/community_agent_health.json')); exit(0 if data['status']=='healthy' else 1)" || exit 1
 
 # Run the community agent
 CMD ["python", "run_community_agent.py", "--log-level", "INFO"]

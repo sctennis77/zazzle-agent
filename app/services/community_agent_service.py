@@ -13,7 +13,6 @@ from typing import Dict, List, Optional
 
 import praw
 import redis
-from aiohttp import web
 from praw.models import Comment, Submission
 
 from app.agents.clouvel_community_agent import ClouvelCommunityAgent
@@ -303,23 +302,31 @@ class CommunityAgentService:
         
         return status
 
-    async def _health_handler(self, request):
-        """Health check endpoint for Docker health checks."""
+    def get_health_status(self) -> Dict:
+        """Get health status for Docker health checks."""
         status = self.get_service_status()
-        if status["running"]:
-            return web.json_response({"status": "healthy", "service": status})
-        else:
-            return web.json_response(
-                {"status": "unhealthy", "service": status}, status=503
-            )
+        return {
+            "status": "healthy" if status["running"] else "unhealthy",
+            "service": status
+        }
 
     async def start_health_server(self):
         """Start a simple health check server on port 8001."""
-        app = web.Application()
-        app.router.add_get("/health", self._health_handler)
+        # For Docker health checks, we'll write status to a file instead
+        # This is simpler than adding aiohttp dependency
+        import json
+        import asyncio
         
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", 8001)
-        await site.start()
-        logger.info("Health check server started on port 8001")
+        async def write_health_status():
+            while self.running:
+                try:
+                    health_status = self.get_health_status()
+                    with open("/tmp/community_agent_health.json", "w") as f:
+                        json.dump(health_status, f)
+                    await asyncio.sleep(30)  # Update every 30 seconds
+                except Exception as e:
+                    logger.error(f"Error writing health status: {e}")
+                    await asyncio.sleep(5)
+        
+        asyncio.create_task(write_health_status())
+        logger.info("Health status monitoring started (writing to /tmp/community_agent_health.json)")

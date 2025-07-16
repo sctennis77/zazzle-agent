@@ -894,7 +894,11 @@ dev-down:
 
 test-community-agent:
 	@echo "🧪 Testing Community Agent..."
-	$(POETRY) run pytest tests/test_clouvel_community_agent.py --no-cov -v
+	$(POETRY) run pytest tests/test_clouvel_community_agent.py tests/test_community_agent_service.py --no-cov -v
+
+test-community-agent-coverage:
+	@echo "🧪 Testing Community Agent with coverage..."
+	$(POETRY) run pytest tests/test_clouvel_community_agent.py tests/test_community_agent_service.py --cov=app.agents.clouvel_community_agent --cov=app.services.community_agent_service --cov-report=term-missing
 
 community-agent-status:
 	@echo "📊 Community Agent Status..."
