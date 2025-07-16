@@ -532,3 +532,21 @@ class CommunityAgentState(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         index=True,
     )
+
+
+class AgentScannedPost(Base):
+    """Tracks posts scanned by the Clouvel promoter agent"""
+
+    __tablename__ = "agent_scanned_posts"
+    id = Column(Integer, primary_key=True)
+    post_id = Column(String(32), nullable=False, unique=True, index=True)
+    subreddit = Column(String(100), nullable=False, index=True)
+    comment_id = Column(String(32), nullable=True, index=True)
+    promoted = Column(Boolean, nullable=False, default=False)
+    scanned_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
+    )
+    post_title = Column(Text, nullable=True)
+    post_score = Column(Integer, nullable=True)
+    promotion_message = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)

@@ -1200,3 +1200,33 @@ class FundraisingProgress(BaseModel):
     subreddit_goals: List[SubredditFundraisingGoalSchema]
     subreddit_goal_amount: Decimal
     subreddit_goal_reward: str
+
+
+class AgentScannedPostSchema(BaseModel):
+    """Schema for agent scanned posts."""
+
+    id: int
+    post_id: str
+    subreddit: str
+    comment_id: Optional[str] = None
+    promoted: bool
+    scanned_at: datetime
+    post_title: Optional[str] = None
+    post_score: Optional[int] = None
+    promotion_message: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AgentScannedPostCreateRequest(BaseModel):
+    """Request model for creating agent scanned post records."""
+
+    post_id: str = Field(..., max_length=32, description="Reddit post ID")
+    subreddit: str = Field(..., max_length=100, description="Subreddit name")
+    comment_id: Optional[str] = Field(None, max_length=32, description="Comment ID if promoted")
+    promoted: bool = Field(..., description="Whether the post was promoted")
+    post_title: Optional[str] = Field(None, description="Post title")
+    post_score: Optional[int] = Field(None, description="Post score at time of scan")
+    promotion_message: Optional[str] = Field(None, description="Message used for promotion")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejection")

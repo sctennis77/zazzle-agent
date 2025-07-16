@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, get_db, init_db
 from app.db.models import (
+    AgentScannedPost,
     Donation,
     PipelineRun,
     PipelineRunUsage,
@@ -39,6 +40,8 @@ from app.db.models import (
     SubredditFundraisingGoal,
 )
 from app.models import (
+    AgentScannedPostCreateRequest,
+    AgentScannedPostSchema,
     CheckoutSessionResponse,
     CommissionRequest,
     CommissionValidationRequest,
@@ -1167,32 +1170,50 @@ async def get_post_donations(post_id: str, db: Session = Depends(get_db)):
     Returns:
         List: Donations with related data for the post
     """
+    return get_donations_by_post_id(post_id, db)
+
+
+def get_donations_by_post_id(post_id: str, db: Session):
+    """
+    Get all successful donations for a specific post.
+    
+    Args:
+        post_id: Reddit post ID
+        db: Database session
+    
+    Returns:
+        List: Donations with related data for the post
+    """
     try:
         # Find donations for this post
         donations = (
             db.query(Donation)
             .filter_by(post_id=post_id, status=DonationStatus.SUCCEEDED.value)
+            .join(Subreddit, Donation.subreddit_id == Subreddit.id, isouter=True)
             .all()
         )
 
         return [
             {
                 "id": donation.id,
+                "post_id": donation.post_id,
                 "amount_usd": float(donation.amount_usd),
                 "customer_name": donation.customer_name,
                 "customer_email": donation.customer_email,
                 "message": donation.message,
-                "subreddit": (
-                    donation.subreddit.subreddit_name if donation.subreddit else None
-                ),
+                "commission_type": donation.commission_type,
+                "commission_message": donation.commission_message,
+                "created_at": donation.created_at.isoformat(),
+                "subreddit": {
+                    "subreddit_name": donation.subreddit.subreddit_name,
+                    "display_name": donation.subreddit.display_name,
+                    "description": donation.subreddit.description,
+                } if donation.subreddit else None,
                 "reddit_username": donation.reddit_username,
                 "is_anonymous": donation.is_anonymous,
                 "status": donation.status,
                 "tier": donation.tier,
                 "donation_type": donation.donation_type,
-                "commission_type": donation.commission_type,
-                "commission_message": donation.commission_message,
-                "created_at": donation.created_at.isoformat(),
             }
             for donation in donations
         ]
@@ -2318,6 +2339,132 @@ async def validate_and_create_subreddit(
         logger.error(f"Error validating subreddit {subreddit_name}: {e}")
         raise HTTPException(
             status_code=500, detail="Failed to validate subreddit. Please try again."
+        )
+
+
+# Agent Scanned Posts Endpoints
+
+
+@app.post("/api/agent-scanned-posts", response_model=AgentScannedPostSchema)
+async def create_agent_scanned_post(
+    request: AgentScannedPostCreateRequest, db: Session = Depends(get_db)
+):
+    """Create a new agent scanned post record."""
+    try:
+        # Check if post already exists
+        existing_post = (
+            db.query(AgentScannedPost)
+            .filter(AgentScannedPost.post_id == request.post_id)
+            .first()
+        )
+        
+        if existing_post:
+            raise HTTPException(
+                status_code=409, detail=f"Post {request.post_id} already scanned"
+            )
+
+        # Create new agent scanned post
+        scanned_post = AgentScannedPost(
+            post_id=request.post_id,
+            subreddit=request.subreddit,
+            comment_id=request.comment_id,
+            promoted=request.promoted,
+            post_title=request.post_title,
+            post_score=request.post_score,
+            promotion_message=request.promotion_message,
+            rejection_reason=request.rejection_reason,
+        )
+
+        db.add(scanned_post)
+        db.commit()
+        db.refresh(scanned_post)
+
+        return AgentScannedPostSchema.model_validate(scanned_post)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating agent scanned post: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to create agent scanned post"
+        )
+
+
+@app.get("/api/agent-scanned-posts", response_model=List[AgentScannedPostSchema])
+async def get_agent_scanned_posts(
+    promoted: Optional[bool] = Query(None, description="Filter by promoted status"),
+    subreddit: Optional[str] = Query(None, description="Filter by subreddit"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    db: Session = Depends(get_db),
+):
+    """Get agent scanned posts with optional filtering."""
+    try:
+        query = db.query(AgentScannedPost)
+
+        # Apply filters
+        if promoted is not None:
+            query = query.filter(AgentScannedPost.promoted == promoted)
+        if subreddit:
+            query = query.filter(AgentScannedPost.subreddit.ilike(f"%{subreddit}%"))
+
+        # Apply pagination and ordering
+        query = query.order_by(AgentScannedPost.scanned_at.desc())
+        query = query.offset(offset).limit(limit)
+
+        scanned_posts = query.all()
+        return [AgentScannedPostSchema.model_validate(post) for post in scanned_posts]
+
+    except Exception as e:
+        logger.error(f"Error fetching agent scanned posts: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch agent scanned posts"
+        )
+
+
+@app.get("/api/agent-scanned-posts/{post_id}", response_model=AgentScannedPostSchema)
+async def get_agent_scanned_post(post_id: str, db: Session = Depends(get_db)):
+    """Get a specific agent scanned post by post ID."""
+    try:
+        scanned_post = (
+            db.query(AgentScannedPost)
+            .filter(AgentScannedPost.post_id == post_id)
+            .first()
+        )
+
+        if not scanned_post:
+            raise HTTPException(
+                status_code=404, detail=f"Agent scanned post with ID {post_id} not found"
+            )
+
+        return AgentScannedPostSchema.model_validate(scanned_post)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching agent scanned post {post_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch agent scanned post"
+        )
+
+
+@app.get("/api/agent-scanned-posts/check/{post_id}")
+async def check_post_scanned(post_id: str, db: Session = Depends(get_db)):
+    """Check if a post has already been scanned by the agent."""
+    try:
+        exists = (
+            db.query(AgentScannedPost)
+            .filter(AgentScannedPost.post_id == post_id)
+            .first()
+            is not None
+        )
+
+        return {"post_id": post_id, "already_scanned": exists}
+
+    except Exception as e:
+        logger.error(f"Error checking if post {post_id} is scanned: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to check post scan status"
         )
 
 
