@@ -68,13 +68,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
       const autoPublishIfNeeded = async () => {
         try {
           // First try to get the published post
-          const publishedPost = await getPublishedPost(product.product_info.id.toString());
+          const existingPost = await getPublishedPost(product.product_info.id.toString());
           
-          // If no published post found (404), automatically publish the product
-          if (!publishedPost) {
-            console.log(`Product ${product.product_info.id} not published yet, auto-publishing...`);
+          // Check if we need to publish or republish
+          const isLiveMode = import.meta.env.VITE_REDDIT_MODE === 'live';
+          const needsPublish = !existingPost || (existingPost.dry_run && isLiveMode);
+          
+          if (needsPublish) {
+            console.log(`Product ${product.product_info.id} ${!existingPost ? 'not published yet' : 'needs live publish'}, auto-publishing...`);
             // Use the REDDIT_MODE from environment to determine dry_run
-            const isDryRun = import.meta.env.VITE_REDDIT_MODE !== 'live';
+            const isDryRun = !isLiveMode;
             await publishProduct(product.product_info.id.toString(), isDryRun);
           }
         } catch (error) {
