@@ -97,12 +97,32 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
       {/* Unified Compact Header */}
       <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-50 relative overflow-hidden transition-all duration-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="flex items-center justify-between h-auto py-3 gap-y-2 w-full">
-            {/* Left: Navigation */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Mobile-first responsive layout */}
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 py-3 w-full">
+            {/* Mobile: Logo and title first */}
+            <div className="flex flex-col items-center gap-1 order-1 sm:order-2 flex-1">
+              {/* Static Logo (clickable) */}
+              <img
+                src={logo}
+                alt="Clouvel Logo"
+                className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-white shadow-md object-cover cursor-pointer transition-opacity duration-700 ${showLogo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                onClick={handleLogoClick}
+                style={{ zIndex: 2 }}
+              />
+              {/* Animated Painting (shows on click) */}
+              <div className={`transition-opacity duration-700 ${showAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ position: 'absolute', top: 0 }}>
+                {showAnimated && <AnimatedPainting logo={logo} animationDuration={animationDuration} />}
+              </div>
+              {/* Hide title/subtitle during animation */}
+              <span className={`text-lg sm:text-xl font-bold text-gray-900 text-center transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>Clouvel</span>
+              <span className={`text-xs text-gray-500 font-medium text-center transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>An AI illustrator Inspired By Reddit</span>
+            </div>
+            
+            {/* Navigation - below logo on mobile, left on desktop */}
+            <div className="flex items-center gap-2 order-2 sm:order-1 sm:flex-1">
               <Link
                 to="/"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                   location.pathname === '/'
                     ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md'
                     : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50/80'
@@ -112,7 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
               </Link>
               <Link
                 to="/fundraising"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                   location.pathname === '/fundraising'
                     ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md'
                     : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50/80'
@@ -121,32 +141,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
                 Fundraising
               </Link>
             </div>
-            {/* Center: Interactive Logo/AnimatedPainting, Title, Subtitle */}
-            <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
-              {/* Static Logo (clickable) */}
-              <img
-                src={logo}
-                alt="Clouvel Logo"
-                className={`w-16 h-16 rounded-full border-2 border-white shadow-md object-cover mb-1 cursor-pointer transition-opacity duration-700 ${showLogo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                onClick={handleLogoClick}
-                style={{ zIndex: 2 }}
-              />
-              {/* Animated Painting (shows on click) */}
-              <div className={`transition-opacity duration-700 ${showAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ position: 'absolute', top: 0 }}>
-                {showAnimated && <AnimatedPainting logo={logo} animationDuration={animationDuration} />}
-              </div>
-              {/* Hide title/subtitle during animation */}
-              <span className={`text-xl font-bold text-gray-900 truncate transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>Clouvel</span>
-              <span className={`text-xs text-gray-500 font-medium truncate mb-2 transition-opacity duration-700 ${showAnimated ? 'opacity-0' : 'opacity-100'}`}>An AI illustrator Inspired By Reddit</span>
-            </div>
-            {/* Right: Show message during animation */}
-            <div className="flex-1 flex items-center justify-end">
+            
+            {/* Thank you message - hidden on mobile, shown on desktop */}
+            <div className="hidden sm:flex items-center justify-end order-3 flex-1">
               <div
-                className={`transition-all duration-700 text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-2xl px-8 py-4 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60
+                className={`transition-all duration-700 text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-2xl px-6 py-3 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60
                   ${showAnimated ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8 pointer-events-none'}`}
-                style={{ minWidth: '22rem', textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                style={{ minWidth: '20rem', textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif' }}
               >
-                <div className="text-2xl font-bold mb-1">
+                <div className="text-xl font-bold mb-1">
                   Thanks for supporting clouvel 🐶❤️
                 </div>
                 {localTimeRemaining !== null && localTimeRemaining > 0 && (
@@ -155,6 +158,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+          
+          {/* Mobile thank you message - shows full width below header */}
+          <div className="sm:hidden w-full">
+            <div
+              className={`transition-all duration-700 text-white bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 rounded-xl px-4 py-3 shadow-lg border border-emerald-300/70 ring-2 ring-emerald-200/60 mx-2 mb-2
+                ${showAnimated ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}`}
+              style={{ textAlign: 'center', letterSpacing: '0.05em', fontFamily: 'system-ui, -apple-system, sans-serif' }}
+            >
+              <div className="text-lg font-bold mb-1">
+                Thanks for supporting clouvel 🐶❤️
+              </div>
+              {localTimeRemaining !== null && localTimeRemaining > 0 && (
+                <div className="text-sm font-medium opacity-90">
+                  Clouvel will automatically commission a post in: {formatTime(localTimeRemaining)}
+                </div>
+              )}
             </div>
           </div>
         </div>

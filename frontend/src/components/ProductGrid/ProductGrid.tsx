@@ -530,9 +530,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       )}
       {/* Removed sticky header banner for active commissions - will try something different later */}
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
         {/* Product Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
           {/* In-progress commission cards */}
           {inProgressTasks.map((task) => (
             <InProgressProductCard
@@ -580,12 +580,12 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       <button
         onClick={onCommissionClick}
         disabled={import.meta.env.VITE_COMISSION_ART_ENABLED !== 'true'}
-        className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none flex items-center gap-2 ${
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 px-4 py-3 rounded-full sm:rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none flex items-center gap-2 min-h-[56px] touch-manipulation ${
           import.meta.env.VITE_COMISSION_ART_ENABLED === 'true'
-            ? 'bg-gradient-to-r from-purple-600 to-purple-400 text-white shadow-md hover:shadow-lg cursor-pointer'
-            : 'bg-gray-400 text-gray-200 shadow-md cursor-not-allowed'
+            ? 'bg-gradient-to-r from-purple-600 to-purple-400 text-white shadow-lg hover:shadow-xl cursor-pointer'
+            : 'bg-gray-400 text-gray-200 shadow-lg cursor-not-allowed'
         } ${
-          fabAnimation ? 'animate-bounce shadow-lg shadow-gray-400/50 ring-2 ring-gray-300' : ''
+          fabAnimation ? 'animate-bounce shadow-xl shadow-gray-400/50 ring-2 ring-gray-300' : ''
         }`}
         aria-label={import.meta.env.VITE_COMISSION_ART_ENABLED === 'true' ? "Commission Art" : "Commission Art (Temporarily Disabled)"}
         title={import.meta.env.VITE_COMISSION_ART_ENABLED === 'true' ? "Commission a custom piece of art" : "Commission Art is temporarily disabled while we improve the system"}

@@ -4,6 +4,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-first base styles */
+@layer base {
+  html {
+    /* Improve touch scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent zoom on form inputs */
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  body {
+    /* Improve touch scrolling momentum */
+    overflow-x: hidden;
+    /* Prevent body scroll when modal is open */
+    min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport height for mobile */
+  }
+  
+  /* Improve touch targets */
+  button, 
+  a, 
+  [role="button"] {
+    touch-action: manipulation;
+  }
+  
+  /* Ensure proper tap highlight color */
+  * {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+}
+
 @font-face {
   font-family: 'Rock Salt';
   src: url('/fonts/RockSalt-Regular.ttf') format('truetype');

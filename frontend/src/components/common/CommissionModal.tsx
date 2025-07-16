@@ -830,7 +830,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Commission Art">
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {error && (
           <p className="text-sm text-red-600 mb-2">{error}</p>
         )}
@@ -848,25 +848,25 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         {/* Commission Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Commission Type</label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.RANDOM)}
-              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.RANDOM ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors touch-manipulation ${commissionType === COMMISSION_TYPES.RANDOM ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Random">🎲</span> Random<br />Random subreddit & post
             </button>
             <button
               type="button"
               onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.SUBREDDIT)}
-              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors touch-manipulation ${commissionType === COMMISSION_TYPES.SUBREDDIT ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Random Post">🎲</span> Random Post<br />From selected subreddit
             </button>
             <button
               type="button"
               onClick={() => handleCommissionTypeChange(COMMISSION_TYPES.SPECIFIC)}
-              className={`p-3 border rounded-lg text-sm font-medium transition-colors ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              className={`p-3 border rounded-lg text-sm font-medium transition-colors touch-manipulation ${commissionType === COMMISSION_TYPES.SPECIFIC ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               <span role="img" aria-label="Specific Post">🎯</span> Specific Post<br />Choose exact post
             </button>
@@ -904,7 +904,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                 <button
                   type="button"
                   onClick={() => handleSubredditSelect('custom')}
-                  className={`w-full px-3 py-2 text-left border-b border-gray-100 text-purple-600 font-medium ${
+                  className={`w-full px-3 py-3 text-left border-b border-gray-100 text-purple-600 font-medium touch-manipulation ${
                     highlightedIndex === 0 ? 'bg-purple-50' : 'hover:bg-purple-50'
                   }`}
                 >
@@ -919,7 +919,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                       key={sub.id}
                       type="button"
                       onClick={() => handleSubredditSelect(sub.subreddit_name)}
-                      className={`w-full px-3 py-2 text-left ${
+                      className={`w-full px-3 py-3 text-left touch-manipulation ${
                         highlightedIndex === index + 1 ? 'bg-gray-100' : 'hover:bg-gray-50'
                       }`}
                     >
@@ -927,7 +927,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                     </button>
                   ))
                 ) : subredditSearchTerm && (
-                  <div className="px-3 py-2 text-gray-500 text-sm">
+                  <div className="px-3 py-3 text-gray-500 text-sm">
                     No matching subreddits found. Try adding a new one above.
                   </div>
                 )}
@@ -1053,8 +1053,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
 
         {/* Preset Amount Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Choose Amount</label>
-          <div className="grid grid-cols-3 gap-2 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-3">Choose Amount</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {allowedTiers && allowedTiers.length > 0 ? allowedTiers.map((tier) => {
               const tDisplay = getTierDisplay(tier.name);
               const TIcon = iconMap[tDisplay.icon as keyof typeof iconMap] || FaHeart;
@@ -1067,117 +1067,130 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                     setCustomAmount('');
                     if (paymentIntentId) updatePaymentIntent();
                   }}
-                  className={`flex items-center gap-1 px-2 py-1 border rounded-lg text-xs font-medium transition-colors h-9 ${amount === tier.min_amount.toString() ? tDisplay.bgColor + ' ' + tDisplay.color + ' border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                  className={`flex flex-col items-center gap-2 px-3 py-3 border rounded-lg text-sm font-medium transition-colors min-h-[72px] touch-manipulation ${amount === tier.min_amount.toString() ? tDisplay.bgColor + ' ' + tDisplay.color + ' border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                 >
-                  <TIcon size={14} className={tDisplay.color} />
-                  {tier.display_name}
-                  {(tier.name === 'sapphire' || tier.name === 'diamond') && (
-                    <span className="ml-1 px-1 py-0.5 bg-blue-100 text-blue-600 text-xs font-bold rounded uppercase">HD</span>
-                  )}
-                  <span className="ml-1 text-gray-400">${tier.min_amount}</span>
+                  <div className="flex items-center gap-2">
+                    <TIcon size={16} className={tDisplay.color} />
+                    <span className="font-semibold">{tier.display_name}</span>
+                    {(tier.name === 'sapphire' || tier.name === 'diamond') && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs font-bold rounded uppercase">HD</span>
+                    )}
+                  </div>
+                  <span className="text-lg font-bold text-gray-900">${tier.min_amount}</span>
                 </button>
               );
             }) : (
-              <div className="col-span-3 text-center text-gray-500 text-sm py-4">
+              <div className="col-span-2 sm:col-span-3 text-center text-gray-500 text-sm py-4">
                 Loading tiers...
               </div>
             )}
             {/* Custom Amount as last grid cell */}
-            <div className="relative flex items-center h-9">
-              <span className="absolute left-2 text-gray-500 text-xs">$</span>
-              <input
-                type="number"
-                min={allowedTiers && allowedTiers.length > 0 ? allowedTiers[0]?.min_amount || 1 : 1}
-                step="0.01"
-                value={customAmount}
-                onChange={e => {
-                  setCustomAmount(e.target.value);
-                  setAmount(e.target.value);
-                  if (paymentIntentId) updatePaymentIntent();
-                }}
-                className="w-full border border-gray-300 rounded-lg pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent h-9"
-                placeholder="Custom"
-              />
+            <div className="flex flex-col items-center gap-2 px-3 py-3 border border-gray-300 rounded-lg min-h-[72px]">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">💰</span>
+                <span className="font-semibold text-gray-700">Custom</span>
+              </div>
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  min={allowedTiers && allowedTiers.length > 0 ? allowedTiers[0]?.min_amount || 1 : 1}
+                  step="0.01"
+                  value={customAmount}
+                  onChange={e => {
+                    setCustomAmount(e.target.value);
+                    setAmount(e.target.value);
+                    if (paymentIntentId) updatePaymentIntent();
+                  }}
+                  className="w-20 border border-gray-300 rounded-lg pl-6 pr-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent text-center"
+                  placeholder="10"
+                />
+              </div>
             </div>
           </div>
           {isBelowMin && (
-            <div className="text-xs text-red-500 mt-1">Minimum for {currentTier?.display_name} is ${minAmount.toFixed(2)}</div>
+            <div className="text-sm text-red-500 bg-red-50 p-3 rounded-lg border border-red-200 mb-3">
+              Minimum for {currentTier?.display_name} is ${minAmount.toFixed(2)}
+            </div>
           )}
-          <div className="text-xs text-gray-500 mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-1 mb-1">
+          <div className="text-sm text-gray-600 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-2 mb-2">
               <span className="text-blue-600 font-semibold">✨ Premium Quality:</span>
             </div>
-            <span>Sapphire ($25) and Diamond ($100) commissions include high-definition AI image generation for enhanced detail and quality.</span>
+            <p>Sapphire ($25) and Diamond ($100) commissions include high-definition AI image generation for enhanced detail and quality.</p>
           </div>
         </div>
         {/* Reddit Username and Anonymous Toggle */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">
               Reddit Username
               {!isAnonymous && <span className="text-red-500 ml-1">*</span>}
             </label>
-            <div className="flex items-center">
-              <span className="px-2 py-2 bg-gray-100 border border-gray-300 rounded-l text-gray-500 select-none">u/</span>
-              <input
-                type="text"
-                value={redditUsername}
-                onChange={e => {
-                  // Remove any leading u/, spaces, and enforce max length
-                  let val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
-                  if (val.length > 20) {
-                    setUsernameError('Reddit username must be at most 20 characters.');
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Anonymous</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const newAnonymousState = !isAnonymous;
+                  setIsAnonymous(newAnonymousState);
+                  if (newAnonymousState) {
+                    setPreviousRedditUsername(redditUsername);
+                    setRedditUsername('');
                   } else {
-                    setUsernameError(null);
+                    setRedditUsername(previousRedditUsername);
                   }
-                  setRedditUsername(val.slice(0, 20));
                 }}
-                className={`flex-1 px-3 py-2 border-t border-b border-r border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                placeholder="yourusername"
-                disabled={isAnonymous}
-                required={!isAnonymous}
-                maxLength={20}
-                autoComplete="off"
-              />
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none touch-manipulation ${isAnonymous ? 'bg-purple-500' : 'bg-gray-300'}`}
+                aria-pressed={isAnonymous}
+                aria-label="Toggle anonymous commission"
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
+                />
+              </button>
             </div>
-            <div className="text-xs text-gray-500 mb-1">Do not include <span className="font-mono">u/</span>—just your username.</div>
-            {!isAnonymous && !redditUsername.trim() && (
-              <p className="text-xs text-red-500 mt-1">Reddit username is required unless you select Anonymous.</p>
-            )}
-            {usernameError && <div className="text-xs text-red-600 mb-1">{usernameError}</div>}
           </div>
-          <div className="flex flex-col items-center justify-end h-full">
-            <label className="text-xs text-gray-600 mb-1">Anonymous</label>
-            <button
-              type="button"
-              onClick={() => {
-                const newAnonymousState = !isAnonymous;
-                setIsAnonymous(newAnonymousState);
-                if (newAnonymousState) {
-                  setPreviousRedditUsername(redditUsername);
-                  setRedditUsername('');
+          <div className="flex items-center">
+            <span className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-l text-gray-500 select-none">u/</span>
+            <input
+              type="text"
+              value={redditUsername}
+              onChange={e => {
+                // Remove any leading u/, spaces, and enforce max length
+                let val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
+                if (val.length > 20) {
+                  setUsernameError('Reddit username must be at most 20 characters.');
                 } else {
-                  setRedditUsername(previousRedditUsername);
+                  setUsernameError(null);
                 }
+                setRedditUsername(val.slice(0, 20));
               }}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isAnonymous ? 'bg-purple-500' : 'bg-gray-300'}`}
-              aria-pressed={isAnonymous}
-              aria-label="Toggle anonymous commission"
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-1'}`}
-              />
-            </button>
+              className={`flex-1 px-3 py-2 border-t border-b border-r border-gray-300 rounded-r focus:outline-none focus:ring-2 focus:ring-purple-500 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+              placeholder="yourusername"
+              disabled={isAnonymous}
+              required={!isAnonymous}
+              maxLength={20}
+              autoComplete="off"
+            />
           </div>
+          <div className="text-xs text-gray-500">Do not include <span className="font-mono">u/</span>—just your username.</div>
+          {!isAnonymous && !redditUsername.trim() && (
+            <p className="text-xs text-red-500 bg-red-50 p-2 rounded border border-red-200">Reddit username is required unless you select Anonymous.</p>
+          )}
+          {usernameError && <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">{usernameError}</div>}
         </div>
         {/* Commission Message */}
-        <div className="mb-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Commission Message <span className="text-gray-400 font-normal">(optional)</span></label>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Commission Message <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
           <textarea
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
             placeholder="Describe your commission (max 100 characters)"
             value={commissionMessage}
             maxLength={100}
+            rows={3}
             onChange={e => {
               if (e.target.value.length <= 100) {
                 setCommissionMessage(e.target.value);
@@ -1185,26 +1198,26 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
               }
             }}
           />
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
+          <div className="flex justify-between text-xs text-gray-500">
             <span>{commissionMessage.length}/100</span>
             {messageError && <span className="text-red-600">{messageError}</span>}
           </div>
         </div>
         {/* Customer Information */}
-        <div className="space-y-4 mt-4">
+        <div className="space-y-4 mt-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
             <input
               type="email"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
               placeholder="your@email.com"
               pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
               title="Please enter a valid email address"
             />
             {customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) && (
-              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+              <p className="text-xs text-red-500 bg-red-50 p-2 rounded border border-red-200 mt-2">Please enter a valid email address</p>
             )}
           </div>
           <div>
@@ -1213,10 +1226,10 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
               placeholder="Your Name"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded border border-gray-200 mt-2">
               Required for card payments, optional for Apple Pay/Google Pay/PayPal
             </p>
           </div>

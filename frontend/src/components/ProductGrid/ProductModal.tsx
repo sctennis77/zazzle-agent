@@ -125,10 +125,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 </div>
               </div>
               {/* Action Buttons - Support and Buy Print only */}
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setShowDonation(true)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-3 rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-3 rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md min-h-[48px] touch-manipulation"
                   title="Support"
                 >
                   <FaHeart size={16} />
@@ -138,7 +138,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   href={product.product_info.affiliate_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold shadow-sm hover:shadow-md min-h-[48px] touch-manipulation"
                   title="Buy Print"
                 >
                   <FaExternalLinkAlt size={16} />
@@ -151,22 +151,22 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
               {/* Original Post Card - Compact Version */}
               <div className="bg-orange-50 rounded-xl p-3 border border-orange-200">
                 {/* Header: Reddit icon, post title */}
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-start gap-3 mb-2">
                   <a
                     href={product.reddit_post.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-full bg-orange-100 border border-orange-300 hover:bg-orange-200 transition-colors cursor-pointer"
+                    className="p-2 rounded-full bg-orange-100 border border-orange-300 hover:bg-orange-200 transition-colors cursor-pointer flex-shrink-0"
                     title="View on Reddit"
                   >
                     <FaReddit size={20} className="text-orange-500" />
                   </a>
                   {product.reddit_post.title && (
-                    <span className="font-bold text-gray-900 text-base break-words leading-snug">{product.reddit_post.title}</span>
+                    <span className="font-bold text-gray-900 text-sm sm:text-base break-words leading-snug">{product.reddit_post.title}</span>
                   )}
                 </div>
                 {/* Subheader: author • subreddit */}
-                <div className="ml-12 flex items-center justify-between">
+                <div className="ml-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <div className="text-sm text-gray-700 flex items-center gap-2 flex-wrap">
                     <span className="flex items-center gap-1 font-medium">
                       <FaUser size={12} className="text-gray-400" />
@@ -177,7 +177,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                   </div>
                   {/* Timestamp moved to the right */}
                   {product.pipeline_run && product.pipeline_run.start_time && (
-                    <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-gray-500 ml-0 sm:ml-2">
                       {new Date(product.pipeline_run.start_time).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',

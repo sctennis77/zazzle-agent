@@ -175,7 +175,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               href={product.reddit_post.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute bottom-3 left-3 bg-gradient-to-r from-[#FF4500] to-[#FF6B35] text-white text-xs px-3 py-1.5 rounded-full hover:from-[#FF6B35] hover:to-[#FF4500] transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+              className="absolute bottom-3 left-3 bg-gradient-to-r from-[#FF4500] to-[#FF6B35] text-white text-xs px-3 py-1.5 rounded-full hover:from-[#FF6B35] hover:to-[#FF4500] transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 touch-manipulation"
             >
               r/{product.reddit_post.subreddit}
             </a>
@@ -186,7 +186,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
                 e.stopPropagation();
                 setShowModal(true);
               }}
-              className="absolute bottom-3 right-3 text-gray-700 hover:text-gray-900 transition-all duration-300 bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-2 shadow-lg hover:shadow-xl transform hover:scale-110 z-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              className="absolute bottom-3 right-3 text-gray-700 hover:text-gray-900 transition-all duration-300 bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-3 shadow-lg hover:shadow-xl transform hover:scale-110 z-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 touch-manipulation"
               title="View details"
             >
               <FaExpand size={14} />
@@ -228,7 +228,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
             {(totalDonationAmount > 0 || product.product_info.donation_info?.source === 'manual') && (
               <div className="text-center pt-2">
                 <button 
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md transform hover:scale-105 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md transform hover:scale-105 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 touch-manipulation min-h-[40px]"
                   onClick={handleDonationClick}
                 >
                   {product.product_info.donation_info?.source === 'manual' ? (
