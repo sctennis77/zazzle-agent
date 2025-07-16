@@ -118,7 +118,7 @@ else:
 reddit_mode = os.getenv("REDDIT_MODE", "not set")
 logger.info(f"REDDIT_MODE: {reddit_mode}")
 
-# Log OpenAI model configuration  
+# Log OpenAI model configuration
 openai_model = os.getenv("OPENAI_IDEA_MODEL", "not set")
 logger.info(f"OPENAI_IDEA_MODEL: {openai_model}")
 
@@ -1796,7 +1796,7 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
 async def publish_product_to_subreddit(
     product_id: str,
     dry_run: bool = Query(
-        True, description="Whether to run in dry run mode (defaults to True for safety)"
+        os.getenv("REDDIT_MODE", "dryrun") == "dryrun", description="Whether to run in dry run mode (defaults based on REDDIT_MODE env var)"
     ),
     db: Session = Depends(get_db),
 ):
