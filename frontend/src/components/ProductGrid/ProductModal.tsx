@@ -73,7 +73,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
           // If no published post found (404), automatically publish the product
           if (!publishedPost) {
             console.log(`Product ${product.product_info.id} not published yet, auto-publishing...`);
-            await publishProduct(product.product_info.id.toString());
+            // Use the REDDIT_MODE from environment to determine dry_run
+            const isDryRun = import.meta.env.VITE_REDDIT_MODE !== 'live';
+            await publishProduct(product.product_info.id.toString(), isDryRun);
           }
         } catch (error) {
           console.error('Error in auto-publish logic:', error);
