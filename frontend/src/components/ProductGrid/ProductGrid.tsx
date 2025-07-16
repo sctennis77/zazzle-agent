@@ -582,7 +582,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         disabled={import.meta.env.VITE_COMISSION_ART_ENABLED !== 'true'}
         className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none flex items-center gap-2 ${
           import.meta.env.VITE_COMISSION_ART_ENABLED === 'true'
-            ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl cursor-pointer'
+            ? 'bg-gradient-to-r from-purple-600 to-purple-400 text-white shadow-md hover:shadow-lg cursor-pointer'
             : 'bg-gray-400 text-gray-200 shadow-md cursor-not-allowed'
         } ${
           fabAnimation ? 'animate-bounce shadow-lg shadow-gray-400/50 ring-2 ring-gray-300' : ''
