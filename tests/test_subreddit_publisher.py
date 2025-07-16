@@ -138,6 +138,8 @@ class TestSubredditPublisher:
             mock_reddit_post,  # RedditPost query
             mock_pipeline_run,  # PipelineRun query
             mock_usage,  # PipelineRunUsage query
+            None,  # PipelineTask query (no commission data)
+            None,  # Donation query (no commission data)
         ]
 
         mock_session_local.return_value = mock_session
@@ -165,12 +167,13 @@ class TestSubredditPublisher:
             patch.object(PipelineRunUsageSchema, "from_orm", return_value=None),
         ):
 
-            result = publisher.get_product_from_db("1")
+            result, donation = publisher.get_product_from_db("1")
 
             assert result is not None
             assert isinstance(result, GeneratedProductSchema)
             assert result.product_info.id == 1
             assert result.reddit_post.subreddit == "golf"
+            assert donation is None  # No commission data in this test
 
     @patch("app.subreddit_publisher.RedditClient")
     @patch("app.subreddit_publisher.SessionLocal")
@@ -184,9 +187,10 @@ class TestSubredditPublisher:
 
         publisher = SubredditPublisher(dry_run=True, session=mock_session)
 
-        result = publisher.get_product_from_db("999")
+        result, donation = publisher.get_product_from_db("999")
 
         assert result is None
+        assert donation is None
 
     def test_submit_image_post(self, sample_generated_product):
         """Test image post submission."""
@@ -272,6 +276,8 @@ class TestSubredditPublisher:
             mock_reddit_post,  # RedditPost query (get_product_from_db)
             mock_pipeline_run,  # PipelineRun query (get_product_from_db)
             mock_usage,  # PipelineRunUsage query (get_product_from_db)
+            None,  # PipelineTask query (get_product_from_db)
+            None,  # Donation query (get_product_from_db)
             None,  # ProductSubredditPost query (_is_product_already_posted) - no existing post
         ]
 
@@ -355,6 +361,8 @@ class TestSubredditPublisher:
             mock_reddit_post,  # RedditPost query (get_product_from_db)
             mock_pipeline_run,  # PipelineRun query (get_product_from_db)
             mock_usage,  # PipelineRunUsage query (get_product_from_db)
+            None,  # PipelineTask query (get_product_from_db)
+            None,  # Donation query (get_product_from_db)
             mock_existing_post,  # ProductSubredditPost query (_is_product_already_posted) - existing post found
         ]
 

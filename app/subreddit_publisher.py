@@ -91,7 +91,7 @@ class SubredditPublisher:
             logger.info(f"Starting product publication for product_id: {product_id}")
 
             # Fetch and validate product
-            generated_product = self.get_product_from_db(product_id)
+            generated_product, donation = self.get_product_from_db(product_id)
             if not generated_product:
                 raise ValueError(f"Product with ID {product_id} not found in database")
 
@@ -100,7 +100,7 @@ class SubredditPublisher:
                 raise ValueError(f"Product {product_id} has already been posted")
 
             # Submit the image post directly
-            submitted_post = self.submit_image_post(generated_product)
+            submitted_post = self.submit_image_post(generated_product, donation)
 
             # Save the submitted post to database
             saved_post = self.save_submitted_post_to_db(product_id, submitted_post)
@@ -128,7 +128,7 @@ class SubredditPublisher:
                 "dry_run": self.dry_run,
             }
 
-    def get_product_from_db(self, product_id: str) -> Optional[GeneratedProductSchema]:
+    def get_product_from_db(self, product_id: str) -> tuple[Optional[GeneratedProductSchema], Optional[object]]:
         """
         Fetch a product from the database by product_id.
 
@@ -148,7 +148,7 @@ class SubredditPublisher:
 
             if not product_info:
                 logger.warning(f"Product with ID {product_id} not found in database")
-                return None
+                return None, None
 
             # Get related data
             reddit_post = (
@@ -203,32 +203,28 @@ class SubredditPublisher:
                 usage=usage_schema,
             )
 
-            # Add commission data as attributes for use in title generation
-            generated_product.donation = donation
-            generated_product.pipeline_task = pipeline_task
-
             logger.info(f"Successfully fetched product {product_id} from database")
-            return generated_product
+            return generated_product, donation
 
         except Exception as e:
             logger.error(f"Error fetching product {product_id} from database: {e}")
             raise
 
     def _get_commission_username(
-        self, generated_product: GeneratedProductSchema
+        self, generated_product: GeneratedProductSchema, donation=None
     ) -> str:
         """
         Get the correct username to use for commission attribution.
 
         Args:
             generated_product: The generated product containing commission data
+            donation: The donation object if available
 
         Returns:
             The username to use for commission attribution
         """
         # Check if we have commission data
-        if hasattr(generated_product, "donation") and generated_product.donation:
-            donation = generated_product.donation
+        if donation:
             # Check if donation is anonymous
             if donation.is_anonymous:
                 return "Anonymous"
@@ -266,7 +262,7 @@ class SubredditPublisher:
         return False
 
     def submit_image_post(
-        self, generated_product: GeneratedProductSchema
+        self, generated_product: GeneratedProductSchema, donation=None
     ) -> Dict[str, Any]:
         """
         Submit an image post to Reddit for a generated product.
@@ -285,7 +281,7 @@ class SubredditPublisher:
             post_title = product.image_title or product.theme
 
             # Determine the commission username to use in title
-            commission_username = self._get_commission_username(generated_product)
+            commission_username = self._get_commission_username(generated_product, donation)
 
             # Create title for the image post
             title = f"🎨 {post_title} - commissioned by u/{commission_username}"
