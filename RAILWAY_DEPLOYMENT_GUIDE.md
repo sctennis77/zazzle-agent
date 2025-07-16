@@ -115,11 +115,67 @@ Target: [Railway-provided URL]
 - Railway automatically provisions SSL certificates
 - Takes 5-10 minutes to activate
 
+## Scheduler Configuration Management
+
+### Setting Up Admin Access
+The scheduler requires an admin secret for configuration management:
+
+1. **Add ADMIN_SECRET Environment Variable**
+   - Go to Railway dashboard → Your API service → Variables tab
+   - Add: `ADMIN_SECRET=your-secure-secret-here`
+   - **Note**: Keep this secret secure - it's found in Railway backend-api Variables UI
+
+2. **Available Scheduler API Endpoints**
+   ```bash
+   # Check current scheduler status
+   curl -H "X-Admin-Secret: [ADMIN_SECRET]" \
+        https://your-api-url.railway.app/api/admin/scheduler/status
+   
+   # Update scheduler configuration
+   curl -X POST \
+        -H "X-Admin-Secret: [ADMIN_SECRET]" \
+        "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=true&interval_hours=1"
+   ```
+
+### Default Scheduler Configuration
+- **Default interval**: 1 hour (creates commission every hour)
+- **Default state**: Disabled (must be manually enabled)
+- **Commission type**: Bronze tier random subreddit commissions
+
+### Managing Scheduler Settings
+```bash
+# Enable hourly commissions
+curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=true&interval_hours=1"
+
+# Change to daily commissions  
+curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=true&interval_hours=24"
+
+# Disable scheduler
+curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=false&interval_hours=1"
+```
+
+### Scheduler Status Response
+```json
+{
+  "scheduler": {
+    "enabled": true,
+    "interval_hours": 1,
+    "last_run_at": "2025-07-15T20:30:00.000Z",
+    "next_run_at": "2025-07-15T21:30:00.000Z"
+  },
+  "redis_healthy": true
+}
+```
+
 ## Monitoring & Health Checks
 
 ### Health Endpoints
 - API: `https://your-api-url.railway.app/health`
 - Frontend: `https://clouvel.ai/`
+- Scheduler Status: `https://your-api-url.railway.app/api/admin/scheduler/status`
 
 ### Railway Dashboard
 - Real-time logs
@@ -205,6 +261,8 @@ cat .env | grep -v "^#" > .env.production
 - [ ] SSL certificate active
 - [ ] Database migrations run
 - [ ] Environment variables set
+- [ ] **ADMIN_SECRET environment variable configured**
+- [ ] **Scheduler configuration verified and enabled**
 - [ ] Commission workflow tested
 - [ ] Stripe webhooks configured
 - [ ] Monitoring alerts set up

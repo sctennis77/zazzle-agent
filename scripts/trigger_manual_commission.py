@@ -11,10 +11,11 @@ This script:
 Usage: python scripts/trigger_manual_commission.py
 """
 
-import os
-import requests
 import json
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
+import requests
 
 
 def get_admin_secret() -> str:
@@ -29,19 +30,16 @@ def get_base_url() -> str:
 
 def make_admin_request(method: str, endpoint: str, **kwargs) -> requests.Response:
     """Make an authenticated admin request."""
-    headers = {
-        "Content-Type": "application/json",
-        "X-Admin-Secret": get_admin_secret()
-    }
-    
+    headers = {"Content-Type": "application/json", "X-Admin-Secret": get_admin_secret()}
+
     if "headers" in kwargs:
         kwargs["headers"].update(headers)
     else:
         kwargs["headers"] = headers
-    
+
     url = f"{get_base_url()}{endpoint}"
     response = requests.request(method, url, **kwargs)
-    
+
     return response
 
 
@@ -49,7 +47,7 @@ def print_response(title: str, response: requests.Response) -> None:
     """Print formatted response."""
     print(f"\n=== {title} ===")
     print(f"Status: {response.status_code}")
-    
+
     try:
         data = response.json()
         print(f"Response: {json.dumps(data, indent=2)}")
@@ -62,7 +60,7 @@ def check_scheduler_status() -> Dict[str, Any]:
     print("Checking scheduler status...")
     response = make_admin_request("GET", "/api/admin/scheduler/status")
     print_response("Scheduler Status", response)
-    
+
     if response.status_code == 200:
         return response.json()
     else:
@@ -73,11 +71,10 @@ def enable_scheduler() -> None:
     """Enable the scheduler with 24-hour interval."""
     print("Enabling scheduler...")
     response = make_admin_request(
-        "POST", 
-        "/api/admin/scheduler/config?enabled=true&interval_hours=24"
+        "POST", "/api/admin/scheduler/config?enabled=true&interval_hours=24"
     )
     print_response("Enable Scheduler", response)
-    
+
     if response.status_code != 200:
         raise Exception(f"Failed to enable scheduler: {response.text}")
 
@@ -87,7 +84,7 @@ def trigger_manual_run() -> Dict[str, Any]:
     print("Triggering manual commission run...")
     response = make_admin_request("POST", "/api/admin/scheduler/run-now")
     print_response("Manual Commission Run", response)
-    
+
     if response.status_code == 200:
         return response.json()
     else:
@@ -105,29 +102,31 @@ def main():
         print("🚀 Testing Manual Commission Trigger")
         print(f"API Base URL: {get_base_url()}")
         print(f"Admin Secret: {get_admin_secret()}")
-        
+
         # Step 1: Check scheduler status
         status_data = check_scheduler_status()
         scheduler_enabled = status_data.get("scheduler", {}).get("enabled", False)
-        
+
         # Step 2: Enable scheduler if disabled
         if not scheduler_enabled:
             print("\n⚠️  Scheduler is disabled, enabling it...")
             enable_scheduler()
         else:
             print("\n✅ Scheduler is already enabled")
-        
+
         # Step 3: Trigger manual run
         print("\n🎯 Triggering manual commission run...")
         result = trigger_manual_run()
-        
+
         # Step 4: Analyze results
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         if "error" in result:
             print("❌ Manual commission failed:")
             print(f"   Error: {result['error']}")
-            if "validation failed" in result['error'].lower():
-                print("\n💡 This is normal - means no suitable trending posts were found")
+            if "validation failed" in result["error"].lower():
+                print(
+                    "\n💡 This is normal - means no suitable trending posts were found"
+                )
                 print("   in the randomly selected subreddit. Try running again for a")
                 print("   different random subreddit.")
         elif result.get("status") == "scheduled commission created":
@@ -143,11 +142,11 @@ def main():
         else:
             print("🤔 Unexpected response:")
             print(f"   {json.dumps(result, indent=2)}")
-            
+
     except Exception as e:
         print(f"\n❌ Script failed: {e}")
         return 1
-    
+
     return 0
 
 
