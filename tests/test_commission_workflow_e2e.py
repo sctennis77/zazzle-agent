@@ -64,10 +64,10 @@ class TestCommissionWorkflowE2E:
         self, db_session, mock_stripe_service, mock_payment_intent, test_subreddit
     ):
         """Test that successful payment creates a commission task."""
-        
+
         # Store subreddit id to avoid session issues
         subreddit_id = test_subreddit.id
-        
+
         # Mock the Stripe service to create a realistic donation
         def mock_save_donation(db, payment_data, request_data):
             donation = Donation(
@@ -97,17 +97,19 @@ class TestCommissionWorkflowE2E:
         # Mock task manager to capture task creation
         with patch("app.api.task_manager") as mock_task_manager:
             mock_task_manager.create_commission_task = MagicMock()
-            
+
             # Simulate the webhook handler
             with patch("app.api.stripe_service", mock_stripe_service):
                 with patch("app.api.SessionLocal", return_value=db_session):
                     result = await handle_payment_intent_succeeded(mock_payment_intent)
 
             # Verify donation was created
-            donation = db_session.query(Donation).filter_by(
-                stripe_payment_intent_id="pi_test_commission_123"
-            ).first()
-            
+            donation = (
+                db_session.query(Donation)
+                .filter_by(stripe_payment_intent_id="pi_test_commission_123")
+                .first()
+            )
+
             assert donation is not None
             assert donation.amount_usd == 25.00
             assert donation.commission_type == "random_subreddit"
@@ -118,7 +120,7 @@ class TestCommissionWorkflowE2E:
 
     def test_commission_task_processing(self, db_session, test_subreddit):
         """Test commission task processing creates pipeline task."""
-        
+
         # Create a test donation
         donation = Donation(
             stripe_payment_intent_id="pi_test_processing_123",
@@ -143,7 +145,7 @@ class TestCommissionWorkflowE2E:
 
         # Mock TaskManager
         task_manager = TaskManager()
-        
+
         # Create task data like the API does
         task_data = {
             "subreddit_name": "hiking",
@@ -158,8 +160,8 @@ class TestCommissionWorkflowE2E:
             "post_id": donation.post_id,
             "image_quality": "high",
         }
-        
-        with patch.object(task_manager, '_create_pipeline_task') as mock_create_task:
+
+        with patch.object(task_manager, "_create_pipeline_task") as mock_create_task:
             # Mock return value - just return a task ID
             mock_create_task.return_value = "task_123"
 
@@ -177,7 +179,7 @@ class TestCommissionWorkflowE2E:
         self, db_session, mock_stripe_service, test_subreddit
     ):
         """Test the complete commission workflow with mocked external services."""
-        
+
         # Step 1: Create donation from payment
         donation = Donation(
             stripe_payment_intent_id="pi_full_workflow_123",
@@ -208,7 +210,7 @@ class TestCommissionWorkflowE2E:
             metrics={},
             duration=0,
             retry_count=0,
-            version="1.0.0"
+            version="1.0.0",
         )
         db_session.add(pipeline_run)
         db_session.commit()
@@ -222,8 +224,8 @@ class TestCommissionWorkflowE2E:
             donation_id=donation.id,
             context_data={
                 "message": "Create a hiking-themed product",
-                "commission_type": "random_subreddit"
-            }
+                "commission_type": "random_subreddit",
+            },
         )
         db_session.add(task)
         db_session.commit()
@@ -231,17 +233,18 @@ class TestCommissionWorkflowE2E:
 
         # Step 3: Test CommissionWorker initialization
         from app.commission_worker import CommissionWorker
+
         task_data = {
             "subreddit_name": "hiking",
             "commission_type": "random_subreddit",
-            "commission_message": "Create a hiking-themed product"
+            "commission_message": "Create a hiking-themed product",
         }
         worker = CommissionWorker(donation.id, task_data)
-        
+
         # Verify worker initialization
         assert worker.donation_id == donation.id
         assert worker.task_data == task_data
-        
+
         # Verify task and donation are properly linked
         assert task.donation_id == donation.id
         assert task.subreddit_id == test_subreddit.id
@@ -249,8 +252,9 @@ class TestCommissionWorkflowE2E:
     @pytest.mark.asyncio
     async def test_commission_validation_workflow(self, db_session, test_subreddit):
         """Test commission validation before processing."""
+        from unittest.mock import AsyncMock, Mock, patch
         from app.services.commission_validator import CommissionValidator
-        
+
         # Create valid commission
         valid_donation = Donation(
             stripe_payment_intent_id="pi_valid_123",
@@ -269,33 +273,39 @@ class TestCommissionWorkflowE2E:
             commission_type="random_subreddit",
             commission_message="Create something awesome",
         )
-        
+
         validator = CommissionValidator()
         
-        # Test validation passes
-        result = await validator.validate_commission(valid_donation)
-        assert result.valid is True
-        assert result.error is None
-
-        # Test invalid commission (no subreddit)
-        invalid_donation = Donation(
-            stripe_payment_intent_id="pi_invalid_123",
-            amount_cents=1000,  # Too low
-            amount_usd=10.00,
-            currency="usd",
-            status=DonationStatus.SUCCEEDED.value,
-            tier=DonationTier.BRONZE.value,  # Wrong tier
-            customer_email="invalid@test.com",
-            customer_name="Invalid User",
-            message="Invalid commission",
-            subreddit_id=None,  # Missing subreddit
-            reddit_username="invalid_user",
-            is_anonymous=False,
-            donation_type="commission",
-            commission_type="random_subreddit",
-            commission_message="",  # Empty message
-        )
+        # Mock Reddit API responses
+        mock_submission = Mock()
+        mock_submission.id = "test123"
+        mock_submission.title = "Test hiking post"
+        mock_submission.selftext = "Great hiking spot found"
+        mock_submission.url = "https://reddit.com/r/hiking/comments/test123/test_hiking_post/"
         
-        result = await validator.validate_commission(invalid_donation)
+        # Mock validator methods
+        validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(
+            return_value=mock_submission
+        )
+
+        # Test validation passes
+        with (
+            patch.object(validator, "_validate_subreddit_exists", return_value=True),
+            patch.object(validator, "_get_subreddit_id", return_value=test_subreddit.id),
+            patch.object(validator.reddit_client, "get_post", return_value=mock_submission),
+            patch.object(validator.reddit_client, "get_subreddit", return_value=Mock()),
+        ):
+            result = await validator.validate_commission(
+                commission_type=valid_donation.commission_type,
+                subreddit=test_subreddit.subreddit_name,
+            )
+            assert result.valid is True
+            assert result.error is None
+
+        # Test invalid commission (missing subreddit)
+        result = await validator.validate_commission(
+            commission_type="random_subreddit",
+            subreddit=None,
+        )
         assert result.valid is False
         assert result.error is not None

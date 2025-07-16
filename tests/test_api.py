@@ -15,6 +15,7 @@ from app.db.models import Donation, SourceType
 
 def test_get_generated_products_successful(client, monkeypatch):
     """Test successful retrieval of generated products."""
+
     def mock_fetch_successful_pipeline_runs(db):
         return [
             {
@@ -66,6 +67,7 @@ def test_get_generated_products_successful(client, monkeypatch):
 
 def test_get_generated_products_empty(client, monkeypatch):
     """Test endpoint returns empty list when no products exist."""
+
     def mock_fetch_successful_pipeline_runs(db):
         return []
 
@@ -80,6 +82,7 @@ def test_get_generated_products_empty(client, monkeypatch):
 
 def test_get_generated_products_error_handling(client, monkeypatch):
     """Test error handling when database operation fails."""
+
     def mock_fetch_successful_pipeline_runs(db):
         raise Exception("Database error")
 
@@ -113,7 +116,7 @@ def test_cors_allows_allowed_origins(client):
                 "Origin": origin,
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "Content-Type",
-            }
+            },
         )
         assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == origin
@@ -122,14 +125,14 @@ def test_cors_allows_allowed_origins(client):
 def test_cors_blocks_disallowed_origins(client):
     """Test CORS blocks non-configured origins - security check."""
     disallowed_origin = "https://malicious-site.com"
-    
+
     response = client.options(
         "/api/generated_products",
         headers={
             "Origin": disallowed_origin,
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Headers": "Content-Type",
-        }
+        },
     )
     # CORS should not include the origin in the response for disallowed origins
     assert response.headers.get("access-control-allow-origin") != disallowed_origin
@@ -140,7 +143,7 @@ def test_stripe_webhook_missing_signature(client):
     response = client.post(
         "/api/donations/webhook",
         data="test payload",
-        headers={"Content-Type": "application/json"}
+        headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 400
 
@@ -152,8 +155,8 @@ def test_stripe_webhook_invalid_signature(client):
         data="test payload",
         headers={
             "Content-Type": "application/json",
-            "Stripe-Signature": "invalid_signature"
-        }
+            "Stripe-Signature": "invalid_signature",
+        },
     )
     assert response.status_code == 400
 
@@ -161,21 +164,19 @@ def test_stripe_webhook_invalid_signature(client):
 def test_subreddits_endpoint(client, db_session, sample_subreddit_data):
     """Test subreddits endpoint returns configured subreddits."""
     from app.db.models import Subreddit
-    
+
     # Create test subreddit
     subreddit = Subreddit(**sample_subreddit_data)
     db_session.add(subreddit)
     db_session.commit()
-    
+
     response = client.get("/api/subreddits")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
-    
+
     # Check our test subreddit is included
-    test_subreddit = next(
-        (s for s in data if s["subreddit_name"] == "test"), None
-    )
+    test_subreddit = next((s for s in data if s["subreddit_name"] == "test"), None)
     assert test_subreddit is not None
     assert test_subreddit["display_name"] == "Test Subreddit"
 
@@ -191,7 +192,7 @@ def test_manual_create_commission_success(client, mock_stripe_service):
         "reddit_username": "test_user",
         "is_anonymous": False,
     }
-    
+
     # Mock successful Stripe PaymentIntent creation
     mock_payment_intent = {
         "id": "pi_test_123",
@@ -199,16 +200,16 @@ def test_manual_create_commission_success(client, mock_stripe_service):
         "currency": "usd",
         "status": "succeeded",
         "receipt_email": "test@example.com",
-        "metadata": commission_data
+        "metadata": commission_data,
     }
     mock_stripe_service.create_payment_intent.return_value = mock_payment_intent
-    
+
     response = client.post(
         "/api/commissions/manual-create",
         json=commission_data,
-        headers={"X-Admin-Secret": "testsecret123"}
+        headers={"X-Admin-Secret": "testsecret123"},
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "manual commission created"
@@ -227,12 +228,9 @@ def test_manual_create_commission_unauthorized(client):
         "reddit_username": "test_user",
         "is_anonymous": False,
     }
-    
-    response = client.post(
-        "/api/commissions/manual-create",
-        json=commission_data
-    )
-    
+
+    response = client.post("/api/commissions/manual-create", json=commission_data)
+
     assert response.status_code == 403
 
 
@@ -247,13 +245,13 @@ def test_manual_create_commission_wrong_secret(client):
         "reddit_username": "test_user",
         "is_anonymous": False,
     }
-    
+
     response = client.post(
         "/api/commissions/manual-create",
         json=commission_data,
-        headers={"X-Admin-Secret": "wrong_secret"}
+        headers={"X-Admin-Secret": "wrong_secret"},
     )
-    
+
     assert response.status_code == 403
 
 
@@ -268,9 +266,10 @@ def test_health_check(client):
 
 def test_get_next_scheduled_run_enabled(client, db_session):
     """Test getting next scheduled run when scheduler is enabled."""
+    from datetime import datetime, timedelta, timezone
+
     from app.db.models import SchedulerConfig
-    from datetime import datetime, timezone, timedelta
-    
+
     # Create scheduler config
     now = datetime.now(timezone.utc)
     next_run = now + timedelta(hours=12)
@@ -278,15 +277,15 @@ def test_get_next_scheduled_run_enabled(client, db_session):
         enabled=True,
         interval_hours=24,
         last_run_at=now - timedelta(hours=12),
-        next_run_at=next_run
+        next_run_at=next_run,
     )
     db_session.add(config)
     db_session.commit()
-    
+
     response = client.get("/api/scheduler/next-run")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["enabled"] is True
     assert data["interval_hours"] == 24
     assert data["next_run_at"] is not None
@@ -299,24 +298,25 @@ def test_get_next_scheduled_run_enabled(client, db_session):
 
 def test_get_next_scheduled_run_disabled(client, db_session):
     """Test getting next scheduled run when scheduler is disabled."""
+    from datetime import datetime, timedelta, timezone
+
     from app.db.models import SchedulerConfig
-    from datetime import datetime, timezone, timedelta
-    
+
     # Create disabled scheduler config
     now = datetime.now(timezone.utc)
     config = SchedulerConfig(
         enabled=False,
         interval_hours=24,
         last_run_at=now - timedelta(hours=12),
-        next_run_at=now + timedelta(hours=12)
+        next_run_at=now + timedelta(hours=12),
     )
     db_session.add(config)
     db_session.commit()
-    
+
     response = client.get("/api/scheduler/next-run")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["enabled"] is False
     assert data["interval_hours"] == 24
     assert data["next_run_at"] is not None
@@ -327,24 +327,25 @@ def test_get_next_scheduled_run_disabled(client, db_session):
 
 def test_get_next_scheduled_run_overdue(client, db_session):
     """Test getting next scheduled run when it's overdue."""
+    from datetime import datetime, timedelta, timezone
+
     from app.db.models import SchedulerConfig
-    from datetime import datetime, timezone, timedelta
-    
+
     # Create scheduler config with overdue next run
     now = datetime.now(timezone.utc)
     config = SchedulerConfig(
         enabled=True,
         interval_hours=24,
         last_run_at=now - timedelta(hours=25),
-        next_run_at=now - timedelta(hours=1)  # Overdue
+        next_run_at=now - timedelta(hours=1),  # Overdue
     )
     db_session.add(config)
     db_session.commit()
-    
+
     response = client.get("/api/scheduler/next-run")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["enabled"] is True
     assert data["time_remaining_seconds"] == 0
     assert data["time_remaining_human"] == "Overdue"
@@ -355,9 +356,9 @@ def test_get_next_scheduled_run_no_config(client):
     response = client.get("/api/scheduler/next-run")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["enabled"] is False
     assert data["next_run_at"] is None
-    assert data["interval_hours"] == 1  # Default from service
+    assert data["interval_hours"] == 24  # Default from service
     assert "time_remaining_seconds" not in data
     assert "time_remaining_human" not in data
