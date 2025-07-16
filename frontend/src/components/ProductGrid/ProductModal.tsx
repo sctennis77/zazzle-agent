@@ -57,28 +57,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         }
       };
 
-      const fetchPublishedPost = async () => {
-        try {
-          await getPublishedPost(product.product_info.id.toString());
-        } catch (error) {
-          console.error('Error fetching published post:', error);
-        }
-      };
-
       const autoPublishIfNeeded = async () => {
         try {
-          // First try to get the published post
+          // First check if a post exists
           const existingPost = await getPublishedPost(product.product_info.id.toString());
           
-          // Check if we need to publish or republish
-          const isLiveMode = import.meta.env.VITE_REDDIT_MODE === 'live';
-          const needsPublish = !existingPost || (existingPost.dry_run && isLiveMode);
-          
-          if (needsPublish) {
-            console.log(`Product ${product.product_info.id} ${!existingPost ? 'not published yet' : 'needs live publish'}, auto-publishing...`);
-            // Use the REDDIT_MODE from environment to determine dry_run
-            const isDryRun = !isLiveMode;
+          if (!existingPost) {
+            // No post exists, so publish
+            const isDryRun = import.meta.env.VITE_REDDIT_MODE !== 'live';
+            console.log(`Product ${product.product_info.id} not published yet, auto-publishing (dry_run: ${isDryRun})...`);
             await publishProduct(product.product_info.id.toString(), isDryRun);
+          } else {
+            // Post exists - but if it's a dry run and we're in live mode, try to publish anyway
+            // The backend will handle deleting the dry run and creating a live post
+            const isLiveMode = import.meta.env.VITE_REDDIT_MODE === 'live';
+            if (existingPost.dry_run && isLiveMode) {
+              console.log(`Product ${product.product_info.id} has dry run post, publishing live version...`);
+              await publishProduct(product.product_info.id.toString(), false);
+            }
           }
         } catch (error) {
           console.error('Error in auto-publish logic:', error);
