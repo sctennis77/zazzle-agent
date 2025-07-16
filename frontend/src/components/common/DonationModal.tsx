@@ -147,12 +147,12 @@ const DonationForm: React.FC<{
 
       {/* Always-visible Pay button for card payments */}
       <button
-        className="w-full mt-2 py-2 px-4 bg-pink-600 text-white rounded disabled:opacity-50"
+        className="w-full mt-2 py-3 px-4 bg-pink-600 text-white rounded-lg disabled:opacity-50 font-medium touch-manipulation"
         onClick={handleConfirm}
         disabled={!stripe || !elements || isProcessing}
         type="button"
       >
-        {isProcessing ? "Processing..." : "Pay"}
+        {isProcessing ? "Processing..." : "Pay with Card"}
       </button>
       
       {isProcessing && (
@@ -688,7 +688,7 @@ const DonationModal: React.FC<DonationModalProps> = ({
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 touch-manipulation"
           >
             Cancel
           </button>
