@@ -30,4 +30,4 @@ WEBSOCKET_TASK_UPDATES_CHANNEL = "task_updates"
 WEBSOCKET_GENERAL_UPDATES_CHANNEL = "general_updates"
 
 # Base URL Configuration
-BASE_URL = os.getenv("BASE_URL", "https://couvel.ai")
+BASE_URL = os.getenv("BASE_URL", "https://clouvel.ai")

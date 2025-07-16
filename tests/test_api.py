@@ -105,8 +105,8 @@ def test_cors_allows_allowed_origins(client):
         "http://localhost:5175",
         "http://localhost:5176",
         "https://frontend-production-f4ae.up.railway.app",
-        "https://couvel.ai",
-        "https://www.couvel.ai",
+        "https://clouvel.ai",
+        "https://www.clouvel.ai",
     ]
 
     for origin in allowed_origins:

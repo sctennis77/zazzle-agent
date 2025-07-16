@@ -306,7 +306,7 @@ Clouvel's summary of the comments:
 *Commissioned content - supporting the Reddit community through art! 🎨*
 
 
-[View in Clouvel Gallery](https://couvel.ai/gallery?product={product.id}) | [Commission a Post](https://couvel.ai)
+[View in Clouvel Gallery](https://clouvel.ai/gallery?product={product.id}) | [Commission a Post](https://clouvel.ai)
 
 ---
 *Posted by Clouvel 🐕❤️*

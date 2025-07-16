@@ -133,8 +133,8 @@ app.add_middleware(
         "http://localhost:5176",
         # Production origins
         "https://frontend-production-f4ae.up.railway.app",
-        "https://couvel.ai",
-        "https://www.couvel.ai",
+        "https://clouvel.ai",
+        "https://www.clouvel.ai",
     ],
     allow_credentials=True,
     allow_methods=["*"],
