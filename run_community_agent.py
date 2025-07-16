@@ -60,6 +60,11 @@ async def main():
         default=100,
         help="Number of items to buffer before processing",
     )
+    parser.add_argument(
+        "--no-multi-stream",
+        action="store_true",
+        help="Disable optimized multi-subreddit streaming (use separate streams)",
+    )
 
     args = parser.parse_args()
 
@@ -87,6 +92,7 @@ async def main():
         subreddit_names=args.subreddits,
         dry_run=args.dry_run,
         stream_chunk_size=args.stream_chunk_size,
+        use_multi_stream=not args.no_multi_stream,
     )
 
     # Setup signal handlers for graceful shutdown

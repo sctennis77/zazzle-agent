@@ -29,6 +29,7 @@ class CommunityAgentService:
         subreddit_names: List[str] = None,
         dry_run: bool = True,
         stream_chunk_size: int = 100,
+        use_multi_stream: bool = True,
     ):
         """
         Initialize the Community Agent Service.
@@ -37,10 +38,12 @@ class CommunityAgentService:
             subreddit_names: List of subreddits to monitor (default: ["clouvel"])
             dry_run: Whether to run in dry-run mode (no actual Reddit actions)
             stream_chunk_size: Number of items to buffer before processing
+            use_multi_stream: Use PRAW's optimized multi-subreddit streaming (default: True)
         """
         self.subreddit_names = subreddit_names or ["clouvel"]
         self.dry_run = dry_run
         self.stream_chunk_size = stream_chunk_size
+        self.use_multi_stream = use_multi_stream
         self.running = False
         
         # Initialize Reddit client for streaming
@@ -161,6 +164,44 @@ class CommunityAgentService:
         except Exception as e:
             logger.error(f"Error processing {item_type} {item.id}: {e}")
 
+    async def _stream_multi_subreddits(self):
+        """Stream multiple subreddits efficiently using PRAW's multi-subreddit feature."""
+        try:
+            # Join subreddits with '+' for PRAW multi-subreddit streaming
+            multi_subreddit_name = "+".join(self.subreddit_names)
+            subreddit = self.reddit.subreddit(multi_subreddit_name)
+            logger.info(f"Starting optimized multi-stream for r/{multi_subreddit_name}")
+            
+            # Create combined stream of submissions and comments
+            stream = praw.models.util.stream_generator(
+                lambda **kwargs: [
+                    *subreddit.new(limit=50),  # Higher limit for multi-subreddit
+                    *subreddit.comments(limit=100)
+                ],
+                max_wait=60,
+                skip_existing=True,
+            )
+            
+            async for item in self._async_wrapper(stream):
+                if not self.running:
+                    break
+                    
+                # Determine which subreddit this item belongs to
+                item_subreddit = item.subreddit.display_name.lower()
+                
+                # Only process if it's from one of our monitored subreddits
+                if item_subreddit in [s.lower() for s in self.subreddit_names]:
+                    if isinstance(item, Submission):
+                        await self._process_stream_item(item, "submission", item_subreddit)
+                    elif isinstance(item, Comment):
+                        await self._process_stream_item(item, "comment", item_subreddit)
+                    
+        except Exception as e:
+            logger.error(f"Error streaming multi-subreddits: {e}")
+            if self.running:
+                await asyncio.sleep(30)
+                await self._stream_multi_subreddits()
+
     async def _stream_subreddit(self, subreddit_name: str):
         """Stream a single subreddit for new posts and comments."""
         try:
@@ -232,15 +273,22 @@ class CommunityAgentService:
             }
             self._publish_agent_update(subreddit_name, startup_update)
         
-        # Start streaming tasks for each subreddit
-        tasks = []
-        for subreddit_name in self.subreddit_names:
-            task = asyncio.create_task(self._stream_subreddit(subreddit_name))
-            tasks.append(task)
-        
+        # Choose streaming approach based on configuration
         try:
-            # Wait for all streaming tasks
-            await asyncio.gather(*tasks)
+            if self.use_multi_stream and len(self.subreddit_names) > 1:
+                # Use optimized multi-subreddit streaming
+                logger.info(f"Using optimized multi-stream for {len(self.subreddit_names)} subreddits")
+                await self._stream_multi_subreddits()
+            else:
+                # Use separate tasks for each subreddit
+                logger.info(f"Using separate streams for {len(self.subreddit_names)} subreddit(s)")
+                tasks = []
+                for subreddit_name in self.subreddit_names:
+                    task = asyncio.create_task(self._stream_subreddit(subreddit_name))
+                    tasks.append(task)
+                
+                # Wait for all streaming tasks
+                await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             logger.info("Service cancelled")
         except Exception as e:
