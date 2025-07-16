@@ -152,9 +152,24 @@ curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
 curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
      "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=true&interval_hours=24"
 
-# Disable scheduler
+# Disable scheduler (e.g., for overnight)
 curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
      "https://your-api-url.railway.app/api/admin/scheduler/config?enabled=false&interval_hours=1"
+```
+
+### Quick Disable/Enable for Overnight
+```bash
+# To disable scheduler overnight (preserving current interval)
+curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://backend-api-production-a9e0.up.railway.app/api/admin/scheduler/config?enabled=false&interval_hours=1"
+
+# To re-enable in the morning
+curl -X POST -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://backend-api-production-a9e0.up.railway.app/api/admin/scheduler/config?enabled=true&interval_hours=1"
+
+# Check current status
+curl -H "X-Admin-Secret: [ADMIN_SECRET]" \
+     "https://backend-api-production-a9e0.up.railway.app/api/admin/scheduler/status"
 ```
 
 ### Scheduler Status Response
