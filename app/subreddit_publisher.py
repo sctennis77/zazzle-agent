@@ -251,12 +251,13 @@ class SubredditPublisher:
         )
 
         if existing_post:
-            # If we're in live mode and existing post was dry run, clean it up
-            if not self.dry_run and existing_post.dry_run:
-                self.session.delete(existing_post)
-                self.session.commit()
-                logger.info(f"Cleaned up dry run record for product {product_id}")
-                return False
+            # NOTE: We can uncomment this logic if we need to force publish dry run posts again in prod
+            # This was used when we launched in dry run mode and then wanted to actually publish
+            # if not self.dry_run and existing_post.dry_run:
+            #     self.session.delete(existing_post)
+            #     self.session.commit()
+            #     logger.info(f"Cleaned up dry run record for product {product_id}")
+            #     return False
             return True
 
         return False

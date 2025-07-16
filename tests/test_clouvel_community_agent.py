@@ -469,13 +469,22 @@ class TestClouvelCommunityAgent:
         mock_subreddit.created_utc = 1609459200  # 2021-01-01
         mock_subreddit.public_description = "A creative community"
         clouvel_agent.reddit.subreddit.return_value = mock_subreddit
+        
+        # Mock database session
+        with patch.object(clouvel_agent, "_get_db_session") as mock_session:
+            mock_db_session = MagicMock()
+            mock_session.return_value.__enter__.return_value = mock_db_session
+            
+            mock_state = MagicMock()
+            mock_state.welcomed_users = ["user1", "user2"]
+            clouvel_agent._get_or_create_state = MagicMock(return_value=mock_state)
 
-        stats = clouvel_agent.get_community_stats()
+            stats = clouvel_agent.get_community_stats()
 
-        assert stats["subscribers"] == 1500
-        assert stats["active_users"] == 50
-        assert stats["created_utc"] == 1609459200
-        assert stats["description"] == "A creative community"
+            assert stats["subscribers"] == 1500
+            assert stats["active_users"] == 50
+            assert stats["created_utc"] == 1609459200
+            assert stats["description"] == "A creative community"
 
     def test_get_community_stats_error(self, clouvel_agent):
         """Test error handling when getting community stats"""

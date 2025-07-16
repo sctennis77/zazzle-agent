@@ -7,6 +7,15 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from app.db.models import (
+    Donation,
+    PipelineRun,
+    PipelineRunUsage,
+    PipelineTask,
+    ProductInfo,
+    ProductSubredditPost,
+    RedditPost,
+)
 from app.models import (
     GeneratedProductSchema,
     PipelineRunSchema,
@@ -355,16 +364,44 @@ class TestSubredditPublisher:
         mock_reddit_post.id = 1
         mock_pipeline_run.id = 1
 
-        # Mock the queries: ProductInfo exists, but ProductSubredditPost also exists
-        mock_session.query.return_value.filter.return_value.first.side_effect = [
-            mock_product_info,  # ProductInfo query (get_product_from_db)
-            mock_reddit_post,  # RedditPost query (get_product_from_db)
-            mock_pipeline_run,  # PipelineRun query (get_product_from_db)
-            mock_usage,  # PipelineRunUsage query (get_product_from_db)
-            None,  # PipelineTask query (get_product_from_db)
-            None,  # Donation query (get_product_from_db)
-            mock_existing_post,  # ProductSubredditPost query (_is_product_already_posted) - existing post found
-        ]
+        # Create separate mock query chains for different tables
+        mock_product_info_query = Mock()
+        mock_reddit_post_query = Mock()
+        mock_pipeline_run_query = Mock()
+        mock_pipeline_usage_query = Mock()
+        mock_pipeline_task_query = Mock()
+        mock_donation_query = Mock()
+        mock_product_subreddit_post_query = Mock()
+        
+        # Setup the query chains to return the expected values
+        mock_product_info_query.filter.return_value.first.return_value = mock_product_info
+        mock_reddit_post_query.filter.return_value.first.return_value = mock_reddit_post
+        mock_pipeline_run_query.filter.return_value.first.return_value = mock_pipeline_run
+        mock_pipeline_usage_query.filter.return_value.first.return_value = mock_usage
+        mock_pipeline_task_query.filter.return_value.first.return_value = None
+        mock_donation_query.filter.return_value.first.return_value = None
+        mock_product_subreddit_post_query.filter.return_value.first.return_value = mock_existing_post
+        
+        # Mock the query method to return the appropriate query based on the table
+        def query_side_effect(table):
+            if table == ProductInfo:
+                return mock_product_info_query
+            elif table == RedditPost:
+                return mock_reddit_post_query
+            elif table == PipelineRun:
+                return mock_pipeline_run_query
+            elif table == PipelineRunUsage:
+                return mock_pipeline_usage_query
+            elif table == PipelineTask:
+                return mock_pipeline_task_query
+            elif table == Donation:
+                return mock_donation_query
+            elif table == ProductSubredditPost:
+                return mock_product_subreddit_post_query
+            else:
+                return Mock()
+        
+        mock_session.query.side_effect = query_side_effect
 
         mock_session_local.return_value = mock_session
         mock_reddit_client_class.return_value = Mock()
@@ -443,7 +480,7 @@ class TestSubredditPublisher:
         mock_session.close.assert_called_once()
 
     def test_dry_run_cleanup_when_going_live(self, mock_session):
-        """Test that dry run posts are cleaned up when publishing in live mode."""
+        """Test that dry run posts now block republishing even in live mode (cleanup logic is commented out)."""
         # Mock existing dry run ProductSubredditPost
         mock_existing_post = Mock()
         mock_existing_post.dry_run = True
@@ -456,12 +493,13 @@ class TestSubredditPublisher:
         # Create publisher in LIVE mode (dry_run=False)
         publisher = SubredditPublisher(dry_run=False, session=mock_session)
 
-        # Should return False (not already posted) after deleting dry run post
+        # Should return True (already posted) since cleanup logic is commented out
         result = publisher._is_product_already_posted("1")
 
-        assert result is False
-        mock_session.delete.assert_called_once_with(mock_existing_post)
-        mock_session.commit.assert_called_once()
+        assert result is True
+        # Cleanup logic is commented out, so no delete/commit should happen
+        mock_session.delete.assert_not_called()
+        mock_session.commit.assert_not_called()
 
     def test_live_post_blocks_republishing(self, mock_session):
         """Test that existing live posts still block republishing."""

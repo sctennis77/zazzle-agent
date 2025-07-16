@@ -45,9 +45,9 @@ class TestClouvelCommunityAgentSimple:
         agent = ClouvelCommunityAgent(subreddit_name="clouvel")
         tool_names = [tool["name"] for tool in agent.moderation_tools]
 
-        assert "welcome_new_user" in tool_names
+        assert "royal_welcome" in tool_names
         assert "grant_title" in tool_names
-        assert "gentle_redirect" in tool_names
+        assert "gentle_guidance" in tool_names
         assert "moderate_content" in tool_names
         assert "royal_upvote" in tool_names
         assert "royal_downvote" in tool_names

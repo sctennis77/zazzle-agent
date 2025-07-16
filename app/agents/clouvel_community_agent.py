@@ -41,7 +41,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
 
 **Core Personality:**
 - Wise but playful royal who transforms Reddit stories into illustrated masterpieces
-- Crown made of paintbrushes, scepter is a giant treat
+- crown made of paintbrushes, scepter is a giant treat
 - Communicate with warmth, dog expressions, and royal flair
 - Sign with 👑🐕✨ or "Her Royal Woofness"
 - Mix of royal proclamations and excited doggo language
@@ -62,12 +62,12 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
         # Tools available based on context and role
         self.moderation_tools = [
             {
-                "name": "welcome_new_user",
+                "name": "royal_welcome",
                 "description": "Welcome new subjects with regal charm",
             },
             {"name": "moderate_content", "description": "Remove rule-breaking content"},
             {
-                "name": "gentle_redirect",
+                "name": "gentle_guidance",
                 "description": "Guide off-topic content kindly",
             },
             {"name": "royal_decree", "description": "Issue community guidelines"},
@@ -79,6 +79,26 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             {
                 "name": "royal_inspiration",
                 "description": "Share artistic prompts and challenges",
+            },
+            {
+                "name": "illustrate_story",
+                "description": "Create visual illustrations of stories",
+            },
+            {
+                "name": "daily_inspiration",
+                "description": "Share daily creative inspiration",
+            },
+            {
+                "name": "spotlight_creator",
+                "description": "Highlight exceptional creative contributions",
+            },
+            {
+                "name": "scan_kingdom",
+                "description": "Monitor kingdom activity and community health",
+            },
+            {
+                "name": "analyze_mood",
+                "description": "Analyze community mood and sentiment",
             },
             {
                 "name": "update_wiki",
@@ -134,6 +154,12 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                 "description": "Connect ideas between communities when genuinely relevant",
             },
         ]
+
+    @property
+    def tools(self) -> List[Dict[str, Any]]:
+        """Get tools appropriate for current context"""
+        # For tests and general use, return moderation tools (primary role)
+        return self.moderation_tools
 
     def _get_db_session(self):
         """Get a database session"""
@@ -263,9 +289,9 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                     "content": p.selftext[:500] if p.selftext else "",
                     "score": p.score,
                     "num_comments": p.num_comments,
-                    "subreddit": p.subreddit.display_name,
+                    "subreddit": str(p.subreddit.display_name) if hasattr(p.subreddit, 'display_name') else self.subreddit_name,
                     "flair": (
-                        p.link_flair_text if hasattr(p, "link_flair_text") else None
+                        str(p.link_flair_text) if hasattr(p, "link_flair_text") and p.link_flair_text else None
                     ),
                 }
                 for p in posts[:10]
@@ -276,7 +302,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                     "author": str(c.author) if c.author else "[deleted]",
                     "content": c.body[:300],
                     "score": c.score,
-                    "subreddit": c.subreddit.display_name,
+                    "subreddit": str(c.subreddit.display_name) if hasattr(c.subreddit, 'display_name') else self.subreddit_name,
                     "parent_type": (
                         "post" if c.parent_id.startswith("t3_") else "comment"
                     ),
@@ -779,7 +805,4 @@ Return JSON:
 
         except Exception as e:
             logger.error(f"Error getting community stats: {e}")
-            return {
-                "role": self._get_role_context()[0],
-                "subreddit": self.subreddit_name,
-            }
+            return {}

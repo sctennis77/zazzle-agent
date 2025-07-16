@@ -579,12 +579,16 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       {/* Floating Action Button for Commission Art */}
       <button
         onClick={onCommissionClick}
-        disabled={true}
-        className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-gray-400 text-gray-200 shadow-md cursor-not-allowed focus:outline-none flex items-center gap-2 ${
+        disabled={import.meta.env.VITE_COMISSION_ART_ENABLED !== 'true'}
+        className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none flex items-center gap-2 ${
+          import.meta.env.VITE_COMISSION_ART_ENABLED === 'true'
+            ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl cursor-pointer'
+            : 'bg-gray-400 text-gray-200 shadow-md cursor-not-allowed'
+        } ${
           fabAnimation ? 'animate-bounce shadow-lg shadow-gray-400/50 ring-2 ring-gray-300' : ''
         }`}
-        aria-label="Commission Art (Temporarily Disabled)"
-        title="Commission Art is temporarily disabled while we improve the system"
+        aria-label={import.meta.env.VITE_COMISSION_ART_ENABLED === 'true' ? "Commission Art" : "Commission Art (Temporarily Disabled)"}
+        title={import.meta.env.VITE_COMISSION_ART_ENABLED === 'true' ? "Commission a custom piece of art" : "Commission Art is temporarily disabled while we improve the system"}
       >
         <span className="text-lg">🎨</span>
         <span className="hidden sm:inline">Commission Art</span>
