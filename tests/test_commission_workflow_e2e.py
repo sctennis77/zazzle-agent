@@ -253,6 +253,7 @@ class TestCommissionWorkflowE2E:
     async def test_commission_validation_workflow(self, db_session, test_subreddit):
         """Test commission validation before processing."""
         from unittest.mock import AsyncMock, Mock, patch
+
         from app.services.commission_validator import CommissionValidator
 
         # Create valid commission
@@ -275,14 +276,16 @@ class TestCommissionWorkflowE2E:
         )
 
         validator = CommissionValidator()
-        
+
         # Mock Reddit API responses
         mock_submission = Mock()
         mock_submission.id = "test123"
         mock_submission.title = "Test hiking post"
         mock_submission.selftext = "Great hiking spot found"
-        mock_submission.url = "https://reddit.com/r/hiking/comments/test123/test_hiking_post/"
-        
+        mock_submission.url = (
+            "https://reddit.com/r/hiking/comments/test123/test_hiking_post/"
+        )
+
         # Mock validator methods
         validator.reddit_agent.find_top_post_from_subreddit = AsyncMock(
             return_value=mock_submission
@@ -291,8 +294,12 @@ class TestCommissionWorkflowE2E:
         # Test validation passes
         with (
             patch.object(validator, "_validate_subreddit_exists", return_value=True),
-            patch.object(validator, "_get_subreddit_id", return_value=test_subreddit.id),
-            patch.object(validator.reddit_client, "get_post", return_value=mock_submission),
+            patch.object(
+                validator, "_get_subreddit_id", return_value=test_subreddit.id
+            ),
+            patch.object(
+                validator.reddit_client, "get_post", return_value=mock_submission
+            ),
             patch.object(validator.reddit_client, "get_subreddit", return_value=Mock()),
         ):
             result = await validator.validate_commission(
