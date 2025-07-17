@@ -71,6 +71,10 @@ The application uses a task-based commission system:
 - Environment controls OpenAI model selection via `OPENAI_IDEA_MODEL`
 - Minimize API costs by avoiding full pipeline runs during development
 
+### Production Environment
+- **Backend URL**: https://backend-api-production-a9e0.up.railway.app
+- **Admin Secret**: [Ask user for admin secret when needed]
+
 ### Code Style
 - Python 3.12 with Poetry dependency management
 - FastAPI for API endpoints with Pydantic validation
