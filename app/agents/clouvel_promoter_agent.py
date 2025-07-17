@@ -335,14 +335,14 @@ PROMOTE if:
 Remember: We're being very permissive here. The bar for rejection is extremely high - only reject if the content is truly incomprehensible, spam, or completely unsuitable for visual representation.
 
 ADDITIONAL ANALYSIS: Please also provide these ratings:
-- Mood: A single emoji that best captures the overall mood/feeling of the post and comments
+- Mood: 1-3 emojis that best capture the overall mood/feeling of the post and comments
 - Topic: 1-3 emojis that best describe the topic or subject matter of the post
 - Illustration Potential: A score from 1-100 where 1 is the lowest artistic potential (no point even trying) and 100 is the highest (could belong in a museum)
 
 Respond with JSON: {{
     "promote": true/false, 
     "reason": "brief explanation - focus on whether you can understand the content, not artistic merit",
-    "mood": "😊",
+    "mood": ["😊", "🤔"],
     "topic": ["✈️", "🌍"],
     "illustration_potential": 75
 }}"""
@@ -385,7 +385,7 @@ Respond with JSON: {{
             
             # Extract agent ratings
             agent_ratings = {
-                "mood": result.get("mood", "😐"),
+                "mood": result.get("mood", ["😐"]),
                 "topic": result.get("topic", ["❓"]),
                 "illustration_potential": result.get("illustration_potential", 50)
             }
@@ -407,7 +407,7 @@ Respond with JSON: {{
             if agent_ratings:
                 ratings_context = f"""
 AGENT ANALYSIS:
-Mood: {agent_ratings.get('mood', '😐')}
+Mood: {' '.join(agent_ratings.get('mood', ['😐']))}
 Topic: {' '.join(agent_ratings.get('topic', ['❓']))}
 Illustration Potential: {agent_ratings.get('illustration_potential', 50)}/100
 
