@@ -2456,7 +2456,8 @@ async def get_agent_scanned_posts(
                     promotion_message=scanned_post.promotion_message,
                     rejection_reason=scanned_post.rejection_reason,
                     is_commissioned=result.donation_id is not None,
-                    donation_info=donation_info
+                    donation_info=donation_info,
+                    agent_ratings=scanned_post.agent_ratings
                 )
                 formatted_results.append(post_with_commission)
 
