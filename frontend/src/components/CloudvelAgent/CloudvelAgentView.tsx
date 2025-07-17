@@ -78,9 +78,11 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
     return `https://reddit.com/r/popular/comments/${postId}/_/${commentId}`;
   };
 
-  const handleCommissionClick = (postId: string) => {
+  const handleCommissionClick = (postId: string, subreddit: string) => {
     if (onCommissionClick) {
-      onCommissionClick(postId);
+      // Create a full Reddit URL so the commission modal can extract both post ID and subreddit
+      const redditUrl = `https://reddit.com/r/${subreddit}/comments/${postId}`;
+      onCommissionClick(redditUrl);
     }
   };
 
@@ -300,7 +302,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                       </a>
                     ) : (
                       <button
-                        onClick={() => handleCommissionClick(post.post_id)}
+                        onClick={() => handleCommissionClick(post.post_id, post.subreddit)}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-medium rounded-md hover:from-purple-700 hover:to-purple-600 transition-all duration-200 shadow-sm hover:shadow-md"
                         title="Commission Art"
                       >

@@ -103,8 +103,11 @@ const validateSubreddit = async (subredditName: string): Promise<SubredditValida
 };
 
 // Helper to extract subreddit from a Reddit URL
-function extractSubredditFromUrl(url: string): string | null {
+function extractSubredditFromUrl(url: string | any): string | null {
   try {
+    if (typeof url !== 'string') {
+      return null;
+    }
     const match = url.match(/reddit\.com\/r\/([^/]+)/);
     return match ? match[1] : null;
   } catch {
@@ -113,8 +116,11 @@ function extractSubredditFromUrl(url: string): string | null {
 }
 
 // Helper to extract post ID from a Reddit URL
-function extractPostIdFromUrl(url: string): string | null {
+function extractPostIdFromUrl(url: string | any): string | null {
   try {
+    if (typeof url !== 'string') {
+      return null;
+    }
     // Match /comments/<postid>/
     const match = url.match(/comments\/([a-zA-Z0-9_]+)/);
     return match ? match[1] : null;
@@ -390,9 +396,19 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setSubreddit(''); // Unselected subreddit
       
       // Handle initial post ID from Clouvel Agent
-      if (initialPostId) {
+      if (initialPostId && typeof initialPostId === 'string' && initialPostId.trim() !== '') {
         setPostId(initialPostId);
         setCommissionType(COMMISSION_TYPES.SPECIFIC);
+        
+        // If it's a Reddit URL, extract subreddit and auto-validate
+        const subredditFromUrl = extractSubredditFromUrl(initialPostId);
+        if (subredditFromUrl) {
+          setSubreddit(subredditFromUrl);
+          // Trigger validation after a short delay to ensure state is set
+          setTimeout(() => {
+            validateCommission(COMMISSION_TYPES.SPECIFIC, subredditFromUrl, initialPostId);
+          }, 100);
+        }
       } else {
         setPostId('');
         setCommissionType(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
@@ -578,7 +594,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         post_id: type === COMMISSION_TYPES.SPECIFIC ? 
                 (() => {
                   const extracted = extractPostIdFromUrl(post);
-                  return extracted || (post && !post.includes('reddit.com') ? post : undefined);
+                  return extracted || (post && typeof post === 'string' && !post.includes('reddit.com') ? post : undefined);
                 })() : undefined,
       };
       const response = await fetch(`${API_BASE}/api/commissions/validate`, {
@@ -1017,7 +1033,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
             {/* Extracted post ID and subreddit display */}
             {(() => {
               const postIdFromUrl = extractPostIdFromUrl(postId);
-              const displayPostId = postIdFromUrl || (postId && !postId.includes('reddit.com') ? postId : '');
+              const displayPostId = postIdFromUrl || (postId && typeof postId === 'string' && !postId.includes('reddit.com') ? postId : '');
               return (
                 <>
                   {displayPostId && (

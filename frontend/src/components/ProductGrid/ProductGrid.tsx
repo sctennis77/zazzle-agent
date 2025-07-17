@@ -623,7 +623,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
       {/* Floating Action Button for Commission Art */}
       <button
-        onClick={onCommissionClick}
+        onClick={(e) => {
+          e.preventDefault();
+          onCommissionClick && onCommissionClick();
+        }}
         disabled={import.meta.env.VITE_COMISSION_ART_ENABLED !== 'true'}
         className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 px-4 py-3 rounded-full sm:rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none flex items-center gap-2 min-h-[56px] touch-manipulation ${
           import.meta.env.VITE_COMISSION_ART_ENABLED === 'true'

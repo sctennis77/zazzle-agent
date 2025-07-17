@@ -20,7 +20,9 @@ function App() {
   }, []);
 
   const handleCommissionClick = (postId?: string) => {
-    setInitialPostId(postId);
+    // Ensure postId is actually a string or undefined, not an event object
+    const validPostId = typeof postId === 'string' ? postId : undefined;
+    setInitialPostId(validPostId);
     setIsCommissionModalOpen(true);
   };
 
