@@ -51,12 +51,20 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
       setLoading(true);
       const response = await fetch('/api/agent-scanned-posts?promoted=true&limit=50&include_commission_status=true');
       if (!response.ok) {
-        throw new Error('Failed to fetch scanned posts');
+        // Check if it's a 404 or other expected error
+        if (response.status === 404) {
+          setScannedPosts([]);
+          return;
+        }
+        throw new Error(`Failed to fetch scanned posts: ${response.status}`);
       }
       const data = await response.json();
       setScannedPosts(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching scanned posts:', err);
+      // Set empty array instead of error to gracefully handle no data
+      setScannedPosts([]);
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -66,12 +74,16 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
     try {
       const response = await fetch('/api/agent-scanned-posts/stats');
       if (!response.ok) {
-        throw new Error('Failed to fetch stats');
+        // If stats endpoint fails, set default stats
+        setStats({ total_scanned: 0, total_promoted: 0 });
+        return;
       }
       const data = await response.json();
       setStats(data);
     } catch (err) {
       console.error('Error fetching stats:', err);
+      // Set default stats on error
+      setStats({ total_scanned: 0, total_promoted: 0 });
     }
   };
 
@@ -337,11 +349,11 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
           </div>
         </div>
         
-        {scannedPosts.length === 0 && (
+        {scannedPosts.length === 0 && !loading && (
           <div className="text-center py-12">
             <div className="text-gray-400 text-lg mb-2">👑</div>
-            <p className="text-gray-500">No promoted posts found</p>
-            <p className="text-gray-400 text-sm mt-1">Queen Clouvel is working hard to find great content!</p>
+            <p className="text-gray-500">No promoted posts yet</p>
+            <p className="text-gray-400 text-sm mt-1">Queen Clouvel will start promoting posts once the agent is activated!</p>
           </div>
         )}
       </div>
