@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, MessageSquare, Calendar, TrendingUp, ChevronUp, ChevronDown } from 'lucide-react';
+import { API_BASE } from '../../utils/apiBase';
 
 interface ScannedPost {
   id: number;
@@ -49,7 +50,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
   const fetchScannedPosts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/agent-scanned-posts?promoted=true&limit=50&include_commission_status=true');
+      const response = await fetch(`${API_BASE}/api/agent-scanned-posts?promoted=true&limit=50&include_commission_status=true`);
       if (!response.ok) {
         // Check if it's a 404 or other expected error
         if (response.status === 404) {
@@ -72,7 +73,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/agent-scanned-posts/stats');
+      const response = await fetch(`${API_BASE}/api/agent-scanned-posts/stats`);
       if (!response.ok) {
         // If stats endpoint fails, set default stats
         setStats({ total_scanned: 0, total_promoted: 0 });
