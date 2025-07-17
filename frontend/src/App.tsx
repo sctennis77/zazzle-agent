@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { ProductGrid } from './components/ProductGrid/ProductGrid';
 import CommissionModal from './components/common/CommissionModal';
@@ -11,6 +11,11 @@ import FundraisingPage from './components/Fundraising/FundraisingPage';
 function App() {
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
   const [isCommissionInProgress, setIsCommissionInProgress] = useState(false);
+
+  // Set document title to override Vite's default
+  useEffect(() => {
+    document.title = 'Clouvel';
+  }, []);
 
   const handleCommissionClick = () => {
     setIsCommissionModalOpen(true);
