@@ -64,8 +64,10 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
 
         # Rate limiting settings
         self.max_posts_per_hour = 10  # Maximum posts to process per hour
-        self.min_score_threshold = 0  # Minimum score for posts to consider (0 = no filtering)
-        
+        self.min_score_threshold = (
+            0  # Minimum score for posts to consider (0 = no filtering)
+        )
+
         # Tools for promotion activities
         self.promotion_tools = [
             {
@@ -118,9 +120,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
     def _get_or_create_subreddit(self, session, subreddit_name: str) -> Subreddit:
         """Get or create the subreddit record"""
         subreddit = (
-            session.query(Subreddit)
-            .filter_by(subreddit_name=subreddit_name)
-            .first()
+            session.query(Subreddit).filter_by(subreddit_name=subreddit_name).first()
         )
 
         if not subreddit:
@@ -145,11 +145,13 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             # Get API base URL from environment or default to localhost
             api_base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
             response = requests.get(f"{api_base_url}/api/posts/{post_id}/donations")
-            
+
             if response.status_code == 200:
                 return response.json()
             else:
-                logger.warning(f"API request failed with status {response.status_code}: {response.text}")
+                logger.warning(
+                    f"API request failed with status {response.status_code}: {response.text}"
+                )
                 return []
         except Exception as e:
             logger.error(f"Error getting donations for post {post_id}: {e}")
@@ -181,6 +183,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             post_id=post_id,
             subreddit=subreddit_name,
             promoted=promoted,
+            dry_run=self.dry_run,
             post_title=post_title,
             post_score=post_score,
             comment_id=comment_id,
@@ -196,26 +199,32 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
         try:
             with self._get_db_session() as session:
                 subreddit = self.reddit.subreddit("popular")
-                
+
                 # Get hot posts from popular
                 for post in subreddit.hot(limit=50):
                     # Skip if already scanned
                     if self._check_post_already_scanned(session, post.id):
                         continue
-                    
+
                     # Skip if already commissioned
                     if self._check_post_already_commissioned(post.id):
-                        logger.info(f"Skipping commissioned post: {post.id} - {post.title[:50]}...")
+                        logger.info(
+                            f"Skipping commissioned post: {post.id} - {post.title[:50]}..."
+                        )
                         continue
-                    
+
                     # Skip if score is too low (avoid low-quality content)
                     if post.score < self.min_score_threshold:
-                        logger.debug(f"Skipping low-score post: {post.id} (score: {post.score})")
+                        logger.debug(
+                            f"Skipping low-score post: {post.id} (score: {post.score})"
+                        )
                         continue
-                    
-                    logger.info(f"Found novel post: {post.id} - {post.title[:50]}... (score: {post.score})")
+
+                    logger.info(
+                        f"Found novel post: {post.id} - {post.title[:50]}... (score: {post.score})"
+                    )
                     return post
-                
+
                 logger.info("No novel posts found in current batch")
                 return None
 
@@ -236,7 +245,10 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                 "num_comments": post.num_comments,
                 "author": str(post.author) if post.author else "[deleted]",
                 "is_video": post.is_video,
-                "is_image": any(post.url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']),
+                "is_image": any(
+                    post.url.lower().endswith(ext)
+                    for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+                ),
                 "domain": post.domain,
             }
 
@@ -244,23 +256,31 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             post.comments.replace_more(limit=0)  # Remove "more comments" objects
             top_comments = []
             for comment in post.comments[:5]:  # Get top 5 comments
-                if hasattr(comment, 'body') and comment.body:
-                    top_comments.append({
-                        "body": comment.body[:200],  # Truncate long comments
-                        "score": comment.score,
-                        "author": str(comment.author) if comment.author else "[deleted]",
-                    })
+                if hasattr(comment, "body") and comment.body:
+                    top_comments.append(
+                        {
+                            "body": comment.body[:200],  # Truncate long comments
+                            "score": comment.score,
+                            "author": (
+                                str(comment.author) if comment.author else "[deleted]"
+                            ),
+                        }
+                    )
 
             content["top_comments"] = top_comments
-            
-            logger.info(f"Analyzed post {post.id}: {len(top_comments)} comments, score {post.score}")
+
+            logger.info(
+                f"Analyzed post {post.id}: {len(top_comments)} comments, score {post.score}"
+            )
             return content
 
         except Exception as e:
             logger.error(f"Error analyzing post content: {e}")
             return {"error": str(e)}
 
-    def decide_promotion_worthiness(self, post_content: Dict[str, Any]) -> Tuple[bool, str]:
+    def decide_promotion_worthiness(
+        self, post_content: Dict[str, Any]
+    ) -> Tuple[bool, str]:
         """Use LLM to decide if post is worth promoting"""
         try:
             # Prepare context for LLM
@@ -314,11 +334,11 @@ Respond with JSON: {{"promote": true/false, "reason": "brief explanation - focus
 
             response_content = response.choices[0].message.content
             logger.debug(f"LLM response content: {response_content}")
-            
-            if not response_content or response_content.strip() == "": 
+
+            if not response_content or response_content.strip() == "":
                 logger.error("Empty response from LLM")
                 return False, "Empty response from LLM"
-            
+
             # Clean up response content (remove markdown code blocks if present)
             response_content = response_content.strip()
             if response_content.startswith("```json"):
@@ -328,17 +348,19 @@ Respond with JSON: {{"promote": true/false, "reason": "brief explanation - focus
             if response_content.endswith("```"):
                 response_content = response_content[:-3]  # Remove trailing ```
             response_content = response_content.strip()
-            
+
             try:
                 result = json.loads(response_content)
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error: {e}. Response: {response_content}")
                 return False, f"JSON decode error: {e}"
-            
+
             should_promote = result.get("promote", False)
             reason = result.get("reason", "No reason provided")
 
-            logger.info(f"Promotion decision: {should_promote}, reason: {reason[:100]}...")
+            logger.info(
+                f"Promotion decision: {should_promote}, reason: {reason[:100]}..."
+            )
             return should_promote, reason
 
         except Exception as e:
@@ -399,13 +421,13 @@ Create a comment that would make people smile, feel heard, and naturally conside
         except Exception as e:
             logger.error(f"Error generating comment: {e}")
             # Return a more contextual fallback comment
-            post_title = post_content.get('title', 'this story')[:50]
-            return f"Woof! What a captivating tale - \"{post_title}\" really caught my royal attention! 🎨 Stories like this would make such beautiful illustrations! If anyone's interested in bringing tales to life through art, r/clouvel is always ready to help commission amazing artwork! 👑🐕✨"
+            post_title = post_content.get("title", "this story")[:50]
+            return f'Woof! What a captivating tale - "{post_title}" really caught my royal attention! 🎨 Stories like this would make such beautiful illustrations! If anyone\'s interested in bringing tales to life through art, r/clouvel is always ready to help commission amazing artwork! 👑🐕✨'
 
     def process_single_post(self) -> Dict[str, Any]:
         """Process a single post through the complete workflow"""
         status = {"processed": False, "action": None, "post_id": None, "error": None}
-        
+
         try:
             with self._get_db_session() as session:
                 # Step 1: Find novel post
@@ -441,7 +463,9 @@ Create a comment that would make people smile, feel heard, and naturally conside
                             # Post the comment
                             comment = post.reply(comment_text)
                             comment_id = comment.id
-                            logger.info(f"Posted comment {comment_id} on post {post.id}")
+                            logger.info(
+                                f"Posted comment {comment_id} on post {post.id}"
+                            )
 
                         except Exception as e:
                             logger.error(f"Error executing promotion actions: {e}")
@@ -488,7 +512,9 @@ Create a comment that would make people smile, feel heard, and naturally conside
 
                     status["processed"] = True
                     status["action"] = "rejected"
-                    logger.info(f"Successfully rejected post {post.id}: {reason[:50]}...")
+                    logger.info(
+                        f"Successfully rejected post {post.id}: {reason[:50]}..."
+                    )
 
         except Exception as e:
             logger.error(f"Error processing post: {e}")
@@ -502,12 +528,16 @@ Create a comment that would make people smile, feel heard, and naturally conside
             with self._get_db_session() as session:
                 # Get basic stats
                 total_scanned = session.query(AgentScannedPost).count()
-                total_promoted = session.query(AgentScannedPost).filter(
-                    AgentScannedPost.promoted == True
-                ).count()
-                total_rejected = session.query(AgentScannedPost).filter(
-                    AgentScannedPost.promoted == False
-                ).count()
+                total_promoted = (
+                    session.query(AgentScannedPost)
+                    .filter(AgentScannedPost.promoted == True)
+                    .count()
+                )
+                total_rejected = (
+                    session.query(AgentScannedPost)
+                    .filter(AgentScannedPost.promoted == False)
+                    .count()
+                )
 
                 # Get recent activity
                 recent_posts = (
@@ -523,14 +553,20 @@ Create a comment that would make people smile, feel heard, and naturally conside
                     "total_scanned": total_scanned,
                     "total_promoted": total_promoted,
                     "total_rejected": total_rejected,
-                    "promotion_rate": (total_promoted / total_scanned * 100) if total_scanned > 0 else 0,
+                    "promotion_rate": (
+                        (total_promoted / total_scanned * 100)
+                        if total_scanned > 0
+                        else 0
+                    ),
                     "recent_activity": [
                         {
                             "post_id": post.post_id,
                             "subreddit": post.subreddit,
                             "promoted": post.promoted,
                             "scanned_at": post.scanned_at.isoformat(),
-                            "post_title": post.post_title[:50] if post.post_title else None,
+                            "post_title": (
+                                post.post_title[:50] if post.post_title else None
+                            ),
                         }
                         for post in recent_posts
                     ],
@@ -543,11 +579,13 @@ Create a comment that would make people smile, feel heard, and naturally conside
     def run_single_cycle(self) -> Dict[str, Any]:
         """Run a single cycle of the promotion agent"""
         logger.info("Starting ClouvelPromoterAgent cycle...")
-        
+
         status = self.get_status()
-        logger.info(f"Current status: {status.get('total_scanned', 0)} scanned, {status.get('total_promoted', 0)} promoted")
-        
+        logger.info(
+            f"Current status: {status.get('total_scanned', 0)} scanned, {status.get('total_promoted', 0)} promoted"
+        )
+
         result = self.process_single_post()
         logger.info(f"Cycle complete: {result}")
-        
+
         return result

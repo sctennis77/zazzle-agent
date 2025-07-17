@@ -148,9 +148,10 @@ docker-run:
 
 docker-build-all:
 	@echo "🐳 Building all Docker images..."
-	@docker build -f Dockerfile.api -t zazzle-agent/api:latest .
+	@docker build -f Dockerfile -t zazzle-agent/api:latest .
 	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
 	@docker build -f Dockerfile.community-agent -t zazzle-agent/community-agent:latest .
+	@docker build -f Dockerfile.promoter-agent -t zazzle-agent/promoter-agent:latest .
 	@echo "✅ All Docker images built successfully"
 
 docker-run-local:
@@ -848,6 +849,72 @@ run-community-agent:
 		echo "Starting with subreddits: $(SUBREDDITS)"; \
 		$(POETRY) run python run_community_agent.py --subreddits $(SUBREDDITS); \
 	fi
+
+# =====================
+# Promoter Agent Management
+# =====================
+
+run-promoter-agent:
+	@echo "👑 Starting Clouvel Promoter Agent..."
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Starting with default subreddit: popular"; \
+		$(POETRY) run python run_promoter_agent.py; \
+	else \
+		echo "Starting with subreddit: $(SUBREDDIT)"; \
+		$(POETRY) run python run_promoter_agent.py --subreddit $(SUBREDDIT); \
+	fi
+
+run-promoter-agent-dry:
+	@echo "👑 Starting Clouvel Promoter Agent (DRY RUN)..."
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Starting with default subreddit: popular (DRY RUN)"; \
+		$(POETRY) run python run_promoter_agent.py --dry-run; \
+	else \
+		echo "Starting with subreddit: $(SUBREDDIT) (DRY RUN)"; \
+		$(POETRY) run python run_promoter_agent.py --subreddit $(SUBREDDIT) --dry-run; \
+	fi
+
+run-promoter-agent-single:
+	@echo "👑 Running single Promoter Agent cycle (DRY RUN)..."
+	@if [ -z "$(SUBREDDIT)" ]; then \
+		echo "Running single cycle on default subreddit: popular"; \
+		$(POETRY) run python run_promoter_agent.py --dry-run --single-cycle; \
+	else \
+		echo "Running single cycle on subreddit: $(SUBREDDIT)"; \
+		$(POETRY) run python run_promoter_agent.py --subreddit $(SUBREDDIT) --dry-run --single-cycle; \
+	fi
+
+promoter-agent-status:
+	@echo "📊 Promoter Agent Status..."
+	$(POETRY) run python run_promoter_agent.py --status-only
+
+test-promoter-agent:
+	@echo "🧪 Testing Promoter Agent..."
+	$(POETRY) run pytest tests/test_clouvel_promoter_agent.py --no-cov -v
+
+test-promoter-agent-coverage:
+	@echo "🧪 Testing Promoter Agent with coverage..."
+	$(POETRY) run pytest tests/test_clouvel_promoter_agent.py --cov=app.agents.clouvel_promoter_agent --cov-report=term-missing
+
+run-promoter-agent-docker:
+	@echo "👑 Starting Clouvel Promoter Agent in Docker..."
+	@docker-compose up promoter-agent
+
+run-promoter-agent-docker-dry:
+	@echo "👑 Starting Clouvel Promoter Agent in Docker (DRY RUN)..."
+	@docker-compose run --rm promoter-agent python run_promoter_agent.py --dry-run --single-cycle
+
+build-promoter-agent:
+	@echo "🐳 Building Promoter Agent Docker image..."
+	@docker build -f Dockerfile.promoter-agent -t zazzle-agent/promoter-agent:latest .
+
+logs-promoter-agent:
+	@echo "📋 Showing Promoter Agent logs..."
+	@docker-compose logs -f promoter-agent
+
+stop-promoter-agent:
+	@echo "🛑 Stopping Promoter Agent..."
+	@docker-compose stop promoter-agent
 
 run-community-agent-dry:
 	@echo "👑 Starting Clouvel Community Agent (DRY RUN)..."

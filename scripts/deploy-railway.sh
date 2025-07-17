@@ -44,6 +44,10 @@ cd frontend
 railway up --service frontend
 cd ..
 
+# Deploy promoter agent service
+echo "👑 Deploying promoter agent service..."
+railway up --service promoter-agent
+
 # Get deployment URLs
 echo "🔗 Getting deployment URLs..."
 API_URL=$(railway status --service api --json | jq -r '.url')

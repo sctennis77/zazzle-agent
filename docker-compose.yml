@@ -48,7 +48,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -128,6 +128,38 @@ services:
       database:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Promoter Agent Service (Queen Clouvel's Promoter)
+  promoter-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.promoter-agent
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/zazzle_pipeline.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USERNAME=${REDDIT_USERNAME}
+      - REDDIT_PASSWORD=${REDDIT_PASSWORD}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - OPENAI_COMMUNITY_AGENT_MODEL=${OPENAI_COMMUNITY_AGENT_MODEL:-gpt-4o-mini}
+      - API_BASE_URL=${API_BASE_URL:-http://api:8000}
+      - PROMOTER_DRY_RUN=${PROMOTER_DRY_RUN:-true}
+      - PROMOTER_DELAY_MINUTES=${PROMOTER_DELAY_MINUTES:-15}
+      - PROMOTER_SUBREDDIT=${PROMOTER_SUBREDDIT:-popular}
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
         condition: service_healthy
     restart: unless-stopped
     logging:

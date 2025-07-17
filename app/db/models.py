@@ -543,6 +543,9 @@ class AgentScannedPost(Base):
     subreddit = Column(String(100), nullable=False, index=True)
     comment_id = Column(String(32), nullable=True, index=True)
     promoted = Column(Boolean, nullable=False, default=False)
+    dry_run = Column(
+        Boolean, default=True, nullable=False
+    )  # Whether this was a dry run
     scanned_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )
