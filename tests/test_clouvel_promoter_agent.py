@@ -223,7 +223,7 @@ class TestClouvelPromoterAgentAnalysis:
             "top_comments": []
         }
         
-        should_promote, reason = agent.decide_promotion_worthiness(post_content)
+        should_promote, reason, agent_ratings = agent.decide_promotion_worthiness(post_content)
         
         assert should_promote is True
         assert reason == "Great story potential"

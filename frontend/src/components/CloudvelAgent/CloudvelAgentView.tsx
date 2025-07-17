@@ -207,7 +207,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                 <SortableHeader field="score">Score</SortableHeader>
                 <SortableHeader field="potential">Potential</SortableHeader>
                 <SortableHeader field="date">Date</SortableHeader>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm w-28">Actions</th>
+                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm w-28">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

@@ -337,14 +337,20 @@ Remember: We're being very permissive here. The bar for rejection is extremely h
 ADDITIONAL ANALYSIS: Please also provide these ratings:
 - Mood: 1-3 emojis that best capture the overall mood/feeling of the post and comments
 - Topic: 1-3 emojis that best describe the topic or subject matter of the post
-- Illustration Potential: A score from 1-100 where 1 is the lowest artistic potential (no point even trying) and 100 is the highest (could belong in a museum)
+- Artistic Potential Score: Assign a score from 1-10 to this Reddit content
+  using:
+  - 9-10 for highly visual or emotional content with clear narrative potential
+  - 7-8 for good visual/emotional appeal or interesting details
+  - 5-6 for average artistic interest or moderate visual potential
+  - 3-4 for limited visual or emotional engagement
+  - 1-2 for content with minimal artistic or visual merit
 
 Respond with JSON: {{
     "promote": true/false, 
     "reason": "brief explanation - focus on whether you can understand the content, not artistic merit",
     "mood": ["😊", "🤔"],
     "topic": ["✈️", "🌍"],
-    "illustration_potential": 75
+    "illustration_potential": 7
 }}"""
 
             response = self.openai.chat.completions.create(
@@ -387,7 +393,9 @@ Respond with JSON: {{
             agent_ratings = {
                 "mood": result.get("mood", ["😐"]),
                 "topic": result.get("topic", ["❓"]),
-                "illustration_potential": result.get("illustration_potential", 50)
+                "illustration_potential": result.get(
+                    "illustration_potential", 5
+                )
             }
 
             logger.info(
