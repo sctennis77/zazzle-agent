@@ -79,8 +79,13 @@ class OpenAIUsageTracker:
         "dall-e-2": {"requests": 50, "tokens": 0},
     }
 
-    def __init__(self):
-        """Initialize the usage tracker."""
+    def __init__(self, test_mode: bool = False):
+        """Initialize the usage tracker.
+        
+        Args:
+            test_mode: If True, disables detailed logging and session summaries for faster tests
+        """
+        self.test_mode = test_mode
         self.usage_history: List[APIUsage] = []
         self.current_usage: Dict[str, Dict[str, int]] = {}
         self.rate_limit_info: Dict[str, RateLimitInfo] = {}
@@ -188,6 +193,10 @@ class OpenAIUsageTracker:
 
     def _log_usage_summary(self, usage: APIUsage) -> None:
         """Log a comprehensive usage summary."""
+        # Skip detailed logging in test mode
+        if self.test_mode:
+            return
+            
         # Get current usage for this model
         current = self.current_usage.get(usage.model, {})
         rate_limits = self.RATE_LIMITS.get(usage.model, {})
@@ -344,6 +353,10 @@ class OpenAIUsageTracker:
 
     def log_session_summary(self) -> None:
         """Log a comprehensive session summary."""
+        # Skip session summary in test mode
+        if self.test_mode:
+            return
+            
         summary = self.get_session_summary()
         logger.info("=" * 80)
         logger.info("OPENAI API USAGE SESSION SUMMARY")
@@ -353,7 +366,10 @@ class OpenAIUsageTracker:
 
 
 # Global tracker instance
-_usage_tracker = OpenAIUsageTracker()
+# Check if we're in test mode based on environment or pytest
+import sys
+_test_mode = "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST") is not None
+_usage_tracker = OpenAIUsageTracker(test_mode=_test_mode)
 
 
 def get_usage_tracker() -> OpenAIUsageTracker:
@@ -406,35 +422,37 @@ def track_openai_call(model: str, operation: str = "chat"):
             except Exception as e:
                 error_message = str(e)
 
-                # Check for specific error types and log appropriate warnings
-                if "429" in error_message or "rate limit" in error_message.lower():
-                    logger.warning(f"🚨 Rate limit exceeded for {model} - {operation}")
-                elif "quota" in error_message.lower():
-                    logger.error(f"💳 API quota exceeded for {model} - {operation}")
-                elif "insufficient_quota" in error_message.lower():
-                    logger.error(f"💳 Insufficient quota for {model} - {operation}")
-                elif "invalid_api_key" in error_message.lower():
-                    logger.error(f"🔑 Invalid API key for {model} - {operation}")
-                else:
-                    logger.error(
-                        f"❌ API call failed for {model} - {operation}: {error_message}"
-                    )
+                # Check for specific error types and log appropriate warnings (skip in test mode)
+                if not _test_mode:
+                    if "429" in error_message or "rate limit" in error_message.lower():
+                        logger.warning(f"🚨 Rate limit exceeded for {model} - {operation}")
+                    elif "quota" in error_message.lower():
+                        logger.error(f"💳 API quota exceeded for {model} - {operation}")
+                    elif "insufficient_quota" in error_message.lower():
+                        logger.error(f"💳 Insufficient quota for {model} - {operation}")
+                    elif "invalid_api_key" in error_message.lower():
+                        logger.error(f"🔑 Invalid API key for {model} - {operation}")
+                    else:
+                        logger.error(
+                            f"❌ API call failed for {model} - {operation}: {error_message}"
+                        )
 
                 raise
             finally:
                 response_time_ms = (time.time() - start_time) * 1000
 
-                # Always log the API call attempt, even if it failed
-                _usage_tracker.log_api_call(
-                    model=model,
-                    operation=operation,
-                    tokens_used=tokens_used,
-                    response_time_ms=response_time_ms,
-                    success=success,
-                    error_message=error_message,
-                    rate_limit_remaining=rate_limit_remaining,
-                    rate_limit_reset=rate_limit_reset,
-                )
+                # Always log the API call attempt, even if it failed (but skip in test mode for performance)
+                if not _test_mode:
+                    _usage_tracker.log_api_call(
+                        model=model,
+                        operation=operation,
+                        tokens_used=tokens_used,
+                        response_time_ms=response_time_ms,
+                        success=success,
+                        error_message=error_message,
+                        rate_limit_remaining=rate_limit_remaining,
+                        rate_limit_reset=rate_limit_reset,
+                    )
 
         return wrapper
 
@@ -443,4 +461,6 @@ def track_openai_call(model: str, operation: str = "chat"):
 
 def log_session_summary():
     """Log the current session's API usage summary."""
-    _usage_tracker.log_session_summary()
+    # Skip session summary in test mode
+    if not _test_mode:
+        _usage_tracker.log_session_summary()
