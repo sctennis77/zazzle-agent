@@ -74,8 +74,8 @@ Examples:
     parser.add_argument(
         "--delay-minutes",
         type=int,
-        default=int(os.getenv("PROMOTER_DELAY_MINUTES", "10")),
-        help="Minutes to wait between cycles in continuous mode (default: 10)"
+        default=int(os.getenv("PROMOTER_DELAY_MINUTES", "30")),
+        help="Minutes to wait between cycles in continuous mode (default: 30)"
     )
 
     parser.add_argument(
