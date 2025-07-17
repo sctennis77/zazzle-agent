@@ -13,7 +13,6 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 interface CommissionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (paymentIntentId?: string) => void;
   initialPostId?: string;
 }
 
@@ -129,6 +128,46 @@ function extractPostIdFromUrl(url: string | any): string | null {
   }
 }
 
+// Wrapper component to handle Elements readiness
+const CommissionFormWrapper: React.FC<{
+  amount: string;
+  commissionMessage: string;
+  customerEmail: string;
+  customerName: string;
+  redditUsername: string;
+  isAnonymous: boolean;
+  subreddit: string;
+  postId?: string;
+  onSuccess: (paymentIntentId?: string) => void;
+  onError: (error: string) => void;
+  onElementsReady: () => void;
+}> = (props) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [hasNotifiedReady, setHasNotifiedReady] = useState(false);
+
+  // Monitor when Elements are ready and notify parent
+  useEffect(() => {
+    if (stripe && elements && !hasNotifiedReady) {
+      console.log('Stripe Elements ready:', { stripe: !!stripe, elements: !!elements });
+      props.onElementsReady();
+      setHasNotifiedReady(true);
+    }
+  }, [stripe, elements, hasNotifiedReady, props]);
+
+  // Don't render form until Elements are ready
+  if (!stripe || !elements) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[200px] text-gray-500">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-4"></div>
+        <span>Loading payment form...</span>
+      </div>
+    );
+  }
+
+  return <CommissionForm {...props} />;
+};
+
 // Component that uses the Express Checkout Element
 const CommissionForm: React.FC<{
   amount: string;
@@ -156,14 +195,6 @@ const CommissionForm: React.FC<{
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
-  // Monitor when Elements are ready
-  useEffect(() => {
-    if (stripe && elements) {
-      console.log('Stripe Elements ready:', { stripe: !!stripe, elements: !!elements });
-    } else {
-      console.log('Stripe Elements not ready:', { stripe: !!stripe, elements: !!elements });
-    }
-  }, [stripe, elements]);
 
   const handleConfirm = async () => {
     if (!stripe || !elements) {
@@ -323,8 +354,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const [success, setSuccess] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [showMessage, setShowMessage] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [stripeElementsReady, setStripeElementsReady] = useState(false);
   
   // Validation state
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
@@ -416,13 +447,13 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       
       setError('');
       setSuccess(false);
-      setShowMessage(false);
       setValidationResult(null);
       setValidationError('');
       setClientSecret(null);
       setPaymentIntentId(null);
       setUsernameError(null);
       setMessageError(null);
+      setStripeElementsReady(false);
       
       // Reset subreddit management state
       setCustomSubreddit('');
@@ -809,33 +840,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
     setError(errorMessage);
   };
 
-  const validate = () => {
-    let valid = true;
-    // Reddit username validation
-    if (redditUsername.length > 20) {
-      setUsernameError('Reddit username must be at most 20 characters.');
-      valid = false;
-    } else if (/^u\//i.test(redditUsername)) {
-      setUsernameError("Do not include 'u/'—just your username.");
-      valid = false;
-    } else {
-      setUsernameError(null);
-    }
-    // Commission message validation
-    if (commissionMessage.length > 100) {
-      setMessageError('Commission message must be at most 100 characters.');
-      valid = false;
-    } else {
-      setMessageError(null);
-    }
-    return valid;
-  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-    // ... existing submit logic ...
-  };
 
   if (success) {
     return (
@@ -1183,7 +1188,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
               value={redditUsername}
               onChange={e => {
                 // Remove any leading u/, spaces, and enforce max length
-                let val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
+                const val = e.target.value.replace(/^u\//i, '').replace(/\s/g, '');
                 if (val.length > 20) {
                   setUsernameError('Reddit username must be at most 20 characters.');
                 } else {
@@ -1262,7 +1267,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         {/* Payment Area UX */}
         <div className="border-t pt-6 min-h-[340px] relative">
           {validationResult && validationResult.valid && clientSecret ? (
-            <div className="transition-opacity duration-500 opacity-100" style={{ opacity: clientSecret ? 1 : 0 }}>
+            <div className={`transition-opacity duration-300 ${stripeElementsReady ? 'opacity-100' : 'opacity-0'}`}>
               <Elements 
                 stripe={stripePromise}
                 options={{
@@ -1276,9 +1281,8 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                   },
                   loader: 'auto',
                 }}
-                key={clientSecret}
               >
-                <CommissionForm
+                <CommissionFormWrapper
                   amount={amount}
                   commissionMessage={commissionMessage}
                   customerEmail={customerEmail}
@@ -1289,6 +1293,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
                   postId={validationResult?.post_id || postId}
                   onSuccess={handleSuccess}
                   onError={handleError}
+                  onElementsReady={() => setStripeElementsReady(true)}
                 />
               </Elements>
             </div>
