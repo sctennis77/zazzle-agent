@@ -189,6 +189,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
         comment_id: str = None,
         promotion_message: str = None,
         rejection_reason: str = None,
+        agent_ratings: Dict[str, Any] = None,
     ):
         """Record a scanned post in the database"""
         scanned_post = AgentScannedPost(
@@ -201,6 +202,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
             comment_id=comment_id,
             promotion_message=promotion_message,
             rejection_reason=rejection_reason,
+            agent_ratings=agent_ratings,
         )
         session.add(scanned_post)
         session.commit()
@@ -292,7 +294,7 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
 
     def decide_promotion_worthiness(
         self, post_content: Dict[str, Any]
-    ) -> Tuple[bool, str]:
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """Use LLM to decide if post is worth promoting"""
         try:
             # Prepare context for LLM
@@ -332,7 +334,18 @@ PROMOTE if:
 
 Remember: We're being very permissive here. The bar for rejection is extremely high - only reject if the content is truly incomprehensible, spam, or completely unsuitable for visual representation.
 
-Respond with JSON: {{"promote": true/false, "reason": "brief explanation - focus on whether you can understand the content, not artistic merit"}}"""
+ADDITIONAL ANALYSIS: Please also provide these ratings:
+- Mood: A single emoji that best captures the overall mood/feeling of the post and comments
+- Topic: 1-3 emojis that best describe the topic or subject matter of the post
+- Illustration Potential: A score from 1-100 where 1 is the lowest artistic potential (no point even trying) and 100 is the highest (could belong in a museum)
+
+Respond with JSON: {{
+    "promote": true/false, 
+    "reason": "brief explanation - focus on whether you can understand the content, not artistic merit",
+    "mood": "😊",
+    "topic": ["✈️", "🌍"],
+    "illustration_potential": 75
+}}"""
 
             response = self.openai.chat.completions.create(
                 model=os.getenv("OPENAI_COMMUNITY_AGENT_MODEL", "gpt-4o-mini"),
@@ -369,25 +382,44 @@ Respond with JSON: {{"promote": true/false, "reason": "brief explanation - focus
 
             should_promote = result.get("promote", False)
             reason = result.get("reason", "No reason provided")
+            
+            # Extract agent ratings
+            agent_ratings = {
+                "mood": result.get("mood", "😐"),
+                "topic": result.get("topic", ["❓"]),
+                "illustration_potential": result.get("illustration_potential", 50)
+            }
 
             logger.info(
-                f"Promotion decision: {should_promote}, reason: {reason[:100]}..."
+                f"Promotion decision: {should_promote}, reason: {reason[:100]}..., ratings: {agent_ratings}"
             )
-            return should_promote, reason
+            return should_promote, reason, agent_ratings
 
         except Exception as e:
             logger.error(f"Error in promotion decision: {e}")
-            return False, f"Error in analysis: {str(e)}"
+            return False, f"Error in analysis: {str(e)}", None
 
-    def generate_witty_comment(self, post_content: Dict[str, Any]) -> str:
+    def generate_witty_comment(self, post_content: Dict[str, Any], agent_ratings: Dict[str, Any] = None) -> str:
         """Generate a witty comment that naturally suggests Clouvel illustration"""
         try:
+            # Include agent ratings in the prompt if available
+            ratings_context = ""
+            if agent_ratings:
+                ratings_context = f"""
+AGENT ANALYSIS:
+Mood: {agent_ratings.get('mood', '😐')}
+Topic: {' '.join(agent_ratings.get('topic', ['❓']))}
+Illustration Potential: {agent_ratings.get('illustration_potential', 50)}/100
+
+Use this analysis to inform your comment style and emphasis."""
+
             comment_prompt = f"""You are Queen Clouvel, creating a witty comment for this Reddit post that naturally suggests commissioning an illustration.
 
 POST DETAILS:
 Title: {post_content.get('title', 'N/A')}
 Subreddit: r/{post_content.get('subreddit', 'N/A')}
 Content: {post_content.get('selftext', 'N/A')[:300]}
+{ratings_context}
 
 COMMENT REQUIREMENTS:
 1. Start with genuine reaction/engagement to the post content
@@ -464,11 +496,11 @@ Remember to use the EXACT format [clouvel.ai](https://clouvel.ai) for the websit
                     return status
 
                 # Step 3: Decide promotion worthiness
-                should_promote, reason = self.decide_promotion_worthiness(post_content)
+                should_promote, reason, agent_ratings = self.decide_promotion_worthiness(post_content)
 
                 if should_promote:
                     # Step 4: Generate witty comment
-                    comment_text = self.generate_witty_comment(post_content)
+                    comment_text = self.generate_witty_comment(post_content, agent_ratings)
 
                     # Step 5: Execute promotion actions
                     comment_id = None
@@ -499,6 +531,7 @@ Remember to use the EXACT format [clouvel.ai](https://clouvel.ai) for the websit
                         post_score=post.score,
                         comment_id=comment_id,
                         promotion_message=comment_text,
+                        agent_ratings=agent_ratings,
                     )
 
                     status["processed"] = True
@@ -526,6 +559,7 @@ Remember to use the EXACT format [clouvel.ai](https://clouvel.ai) for the websit
                         post_title=post.title,
                         post_score=post.score,
                         rejection_reason=reason,
+                        agent_ratings=agent_ratings,
                     )
 
                     status["processed"] = True

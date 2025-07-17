@@ -1215,6 +1215,7 @@ class AgentScannedPostSchema(BaseModel):
     post_score: Optional[int] = None
     promotion_message: Optional[str] = None
     rejection_reason: Optional[str] = None
+    agent_ratings: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1243,6 +1244,7 @@ class AgentScannedPostWithCommissionSchema(BaseModel):
     rejection_reason: Optional[str] = None
     is_commissioned: bool
     donation_info: Optional[ScannedPostDonationInfoSchema] = None
+    agent_ratings: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1258,3 +1260,4 @@ class AgentScannedPostCreateRequest(BaseModel):
     post_score: Optional[int] = Field(None, description="Post score at time of scan")
     promotion_message: Optional[str] = Field(None, description="Message used for promotion")
     rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
+    agent_ratings: Optional[Dict[str, Any]] = Field(None, description="Agent ratings (mood, topic, illustration_potential)")

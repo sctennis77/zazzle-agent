@@ -2375,6 +2375,7 @@ async def create_agent_scanned_post(
             post_score=request.post_score,
             promotion_message=request.promotion_message,
             rejection_reason=request.rejection_reason,
+            agent_ratings=request.agent_ratings,
         )
 
         db.add(scanned_post)
