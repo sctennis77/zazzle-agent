@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ExternalLink, MessageSquare, Calendar, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ExternalLink, MessageSquare, Calendar, TrendingUp, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface ScannedPost {
   id: number;
@@ -21,6 +21,9 @@ interface ScannedPost {
   } | null;
 }
 
+type SortField = 'score' | 'date' | 'subreddit';
+type SortDirection = 'asc' | 'desc';
+
 interface CloudvelAgentViewProps {
   onCommissionClick?: (postId?: string) => void;
 }
@@ -29,6 +32,8 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
   const [scannedPosts, setScannedPosts] = useState<ScannedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
     fetchScannedPosts();
@@ -72,6 +77,65 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
     if (onCommissionClick) {
       onCommissionClick(postId);
     }
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedPosts = useMemo(() => {
+    return [...scannedPosts].sort((a, b) => {
+      let aValue: string | number;
+      let bValue: string | number;
+
+      switch (sortField) {
+        case 'score':
+          aValue = a.post_score || 0;
+          bValue = b.post_score || 0;
+          break;
+        case 'date':
+          aValue = new Date(a.scanned_at).getTime();
+          bValue = new Date(b.scanned_at).getTime();
+          break;
+        case 'subreddit':
+          aValue = a.subreddit.toLowerCase();
+          bValue = b.subreddit.toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+  }, [scannedPosts, sortField, sortDirection]);
+
+  const SortableHeader: React.FC<{ field: SortField; children: React.ReactNode }> = ({ field, children }) => {
+    const isActive = sortField === field;
+    const isDesc = isActive && sortDirection === 'desc';
+    
+    return (
+      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">
+        <button
+          onClick={() => handleSort(field)}
+          className="flex items-center gap-2 hover:text-gray-900 transition-colors"
+        >
+          {children}
+          <div className="flex flex-col">
+            <ChevronUp className={`w-3 h-3 ${isActive && !isDesc ? 'text-indigo-600' : 'text-gray-400'}`} />
+            <ChevronDown className={`w-3 h-3 -mt-1 ${isActive && isDesc ? 'text-indigo-600' : 'text-gray-400'}`} />
+          </div>
+        </button>
+      </th>
+    );
   };
 
   if (loading) {
@@ -130,15 +194,15 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
             <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               <tr>
                 <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Title</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Subreddit</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Score</th>
+                <SortableHeader field="subreddit">Subreddit</SortableHeader>
+                <SortableHeader field="score">Score</SortableHeader>
                 <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Comment</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Date</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm w-32">Actions</th>
+                <SortableHeader field="date">Date</SortableHeader>
+                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {scannedPosts.map((post, index) => (
+              {sortedPosts.map((post, index) => (
                 <tr key={post.id} className={`group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                   <td className="py-5 px-6">
                     <div className="flex items-center gap-3">
@@ -201,7 +265,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                     ) : (
                       <button
                         onClick={() => handleCommissionClick(post.post_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-sm font-semibold rounded-lg hover:from-purple-700 hover:to-purple-600 transition-all duration-200 shadow-sm hover:shadow-md"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-medium rounded-md hover:from-purple-700 hover:to-purple-600 transition-all duration-200 shadow-sm hover:shadow-md"
                         title="Commission Art"
                       >
                         🎨
