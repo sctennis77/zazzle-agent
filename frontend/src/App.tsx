@@ -6,7 +6,7 @@ import CommissionModal from './components/common/CommissionModal';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationSuccessPage from './components/common/DonationSuccessPage';
-import FundraisingPage from './components/Fundraising/FundraisingPage';
+import EnhancedFundraisingPage from './components/Fundraising/EnhancedFundraisingPage';
 
 function App() {
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
@@ -33,19 +33,37 @@ function App() {
 
   return (
     <Router>
-      <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
-        <Routes>
-          <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
-          <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
-          <Route path="/fundraising" element={<FundraisingPage />} />
-          <Route path="/donation/success" element={<DonationSuccessPage />} />
-        </Routes>
-        <CommissionModal 
-          isOpen={isCommissionModalOpen} 
-          onClose={handleCommissionClose}
-          onSuccess={handleCommissionSuccess}
-        />
-      </Layout>
+      <Routes>
+        {/* Routes with Layout */}
+        <Route path="/" element={
+          <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
+            <ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />
+            <CommissionModal 
+              isOpen={isCommissionModalOpen} 
+              onClose={handleCommissionClose}
+              onSuccess={handleCommissionSuccess}
+            />
+          </Layout>
+        } />
+        <Route path="/tasks" element={
+          <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
+            <ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />
+            <CommissionModal 
+              isOpen={isCommissionModalOpen} 
+              onClose={handleCommissionClose}
+              onSuccess={handleCommissionSuccess}
+            />
+          </Layout>
+        } />
+        <Route path="/donation/success" element={
+          <Layout onCommissionClick={handleCommissionClick} isCommissionInProgress={isCommissionInProgress}>
+            <DonationSuccessPage />
+          </Layout>
+        } />
+        
+        {/* Routes without Layout */}
+        <Route path="/fundraising" element={<EnhancedFundraisingPage />} />
+      </Routes>
       <ToastContainer position="top-center" autoClose={2000} hideProgressBar newestOnTop closeOnClick pauseOnFocusLoss={false} draggable pauseOnHover theme="colored" />
     </Router>
   );
