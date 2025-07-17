@@ -140,7 +140,7 @@ services:
   promoter-agent:
     build:
       context: .
-      dockerfile: Dockerfile.promoter-agent
+      dockerfile: promoter_agent/Dockerfile
     volumes:
       - ./data:/app/data
     environment:

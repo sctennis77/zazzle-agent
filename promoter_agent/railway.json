@@ -1,8 +1,7 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile.promoter-agent"
+    "builder": "DOCKERFILE"
   },
   "deploy": {
     "startCommand": "python run_promoter_agent.py --continuous --log-level INFO",

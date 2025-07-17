@@ -8,17 +8,17 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy poetry files
-COPY pyproject.toml poetry.lock ./
+# Copy poetry files from parent directory
+COPY ../pyproject.toml ../poetry.lock ./
 
 # Install poetry and dependencies
 RUN pip install poetry && \
     poetry config virtualenvs.create false && \
     poetry install --only=main --no-root
 
-# Copy application code
-COPY app/ ./app/
-COPY run_promoter_agent.py ./
+# Copy application code from parent directory
+COPY ../app/ ./app/
+COPY ../run_promoter_agent.py ./
 
 # Create logs directory
 RUN mkdir -p /app/logs

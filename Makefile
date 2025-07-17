@@ -151,7 +151,7 @@ docker-build-all:
 	@docker build -f Dockerfile -t zazzle-agent/api:latest .
 	@docker build -f Dockerfile.frontend -t zazzle-agent/frontend:latest .
 	@docker build -f Dockerfile.community-agent -t zazzle-agent/community-agent:latest .
-	@docker build -f Dockerfile.promoter-agent -t zazzle-agent/promoter-agent:latest .
+	@docker build -f promoter_agent/Dockerfile -t zazzle-agent/promoter-agent:latest .
 	@echo "✅ All Docker images built successfully"
 
 docker-run-local:
@@ -906,7 +906,7 @@ run-promoter-agent-docker-dry:
 
 build-promoter-agent:
 	@echo "🐳 Building Promoter Agent Docker image..."
-	@docker build -f Dockerfile.promoter-agent -t zazzle-agent/promoter-agent:latest .
+	@docker build -f promoter_agent/Dockerfile -t zazzle-agent/promoter-agent:latest .
 
 logs-promoter-agent:
 	@echo "📋 Showing Promoter Agent logs..."
