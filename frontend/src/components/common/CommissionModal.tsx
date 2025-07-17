@@ -13,6 +13,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 interface CommissionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess: () => void;
   initialPostId?: string;
 }
 
@@ -218,7 +219,7 @@ const CommissionForm: React.FC<{
         onError(error.message || 'Payment failed');
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         // Payment succeeded, call onSuccess directly
-        onSuccess(paymentIntent.id);
+        onSuccess();
       } else {
         // Payment is processing or requires additional action
         onError('Payment is being processed. Please check your email for confirmation.');
