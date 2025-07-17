@@ -214,7 +214,11 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
             </thead>
             <tbody className="divide-y divide-gray-100">
               {sortedPosts.map((post, index) => (
-                <tr key={post.id} className={`group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                <tr key={post.id} className={`group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 ${
+                  post.is_commissioned 
+                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100'
+                    : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                }`}>
                   <td className="py-5 px-6">
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
@@ -294,7 +298,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                   <td className="py-5 px-6">
                     {post.is_commissioned ? (
                       <a
-                        href={`/?filter=reddit_post_id:${post.post_id}`}
+                        href={`/?product=${post.post_id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-200 shadow-sm hover:shadow-md"
                       >
                         <span>🎨</span>
