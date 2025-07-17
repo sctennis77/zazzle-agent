@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, MessageSquare, DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { ExternalLink, MessageSquare, Calendar, TrendingUp } from 'lucide-react';
 
 interface ScannedPost {
   id: number;
@@ -133,7 +133,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Score</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Comment</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900 w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -141,20 +141,21 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                 <tr key={post.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <a
-                        href={getRedditPostUrl(post.post_id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gray-900 hover:text-indigo-600 font-medium line-clamp-2 flex-1"
-                      >
+                      <div className="text-gray-700 text-sm line-clamp-2 flex-1">
                         {post.post_title || post.post_id}
-                      </a>
+                      </div>
                       {post.is_commissioned && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           🎨 Commissioned
                         </span>
                       )}
-                      <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <button
+                        onClick={() => window.open(getRedditPostUrl(post.post_id), '_blank')}
+                        className="flex-shrink-0 p-1 hover:bg-gray-100 rounded transition-colors"
+                        title="Open Reddit post"
+                      >
+                        <ExternalLink className="w-4 h-4 text-gray-400 hover:text-indigo-600" />
+                      </button>
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -195,9 +196,10 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                     ) : (
                       <button
                         onClick={() => handleCommissionClick(post.post_id)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded hover:bg-purple-700 transition-colors"
+                        title="Commission Art"
                       >
-                        <DollarSign className="w-4 h-4" />
+                        🎨
                         Commission
                       </button>
                     )}
