@@ -14,6 +14,7 @@ interface CommissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (paymentIntentId?: string) => void;
+  initialPostId?: string;
 }
 
 interface CommissionRequest {
@@ -290,7 +291,7 @@ const COMMISSION_MINIMUMS = {
   [COMMISSION_TYPES.RANDOM]: 'bronze',   // $1
 };
 
-const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSuccess, initialPostId }) => {
   const [amount, setAmount] = useState('');
   const [commissionMessage, setCommissionMessage] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -387,8 +388,16 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setPreviousRedditUsername('');
       setIsAnonymous(false);
       setSubreddit(''); // Unselected subreddit
-      setPostId('');
-      setCommissionType(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
+      
+      // Handle initial post ID from Clouvel Agent
+      if (initialPostId) {
+        setPostId(initialPostId);
+        setCommissionType(COMMISSION_TYPES.SPECIFIC);
+      } else {
+        setPostId('');
+        setCommissionType(COMMISSION_TYPES.SUBREDDIT); // Default to random_subreddit
+      }
+      
       setError('');
       setSuccess(false);
       setShowMessage(false);
@@ -408,7 +417,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
       setShowSubredditDropdown(false);
       setHighlightedIndex(-1);
     }
-  }, [isOpen]);
+  }, [isOpen, initialPostId]);
 
   // Handle commission type changes
   const handleCommissionTypeChange = (type: string) => {

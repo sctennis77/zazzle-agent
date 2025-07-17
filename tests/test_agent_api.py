@@ -6,6 +6,7 @@ Tests the agent_scanned_posts CRUD endpoints and get_donations_by_post_id functi
 
 import pytest
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import patch
 
 from app.db.models import AgentScannedPost, Donation, Subreddit, SourceType
@@ -295,6 +296,109 @@ class TestAgentScannedPostsAPI:
         data = response.json()
         assert data["post_id"] == "unscanned_post"
         assert data["already_scanned"] is False
+
+    def test_get_agent_scanned_posts_with_commission_status(self, client, db_session):
+        """Test getting agent scanned posts with commission status information."""
+        # Create test scanned post
+        scanned_post = AgentScannedPost(
+            post_id="commission_test_post",
+            subreddit="popular",
+            promoted=True,
+            post_title="Commission Test Post",
+            post_score=150,
+            comment_id="comment_123",
+            promotion_message="Great content! 👑🐕✨",
+        )
+        db_session.add(scanned_post)
+        
+        # Create test subreddit
+        subreddit = Subreddit(
+            subreddit_name="popular",
+            display_name="Popular",
+            subscribers=1000000,
+            over18=False,
+        )
+        db_session.add(subreddit)
+        db_session.commit()
+        
+        # Create test donation for commission
+        donation = Donation(
+            stripe_payment_intent_id="pi_test_commission",
+            amount_cents=1000,
+            amount_usd=Decimal("10.00"),
+            tier="gold",
+            status="succeeded",
+            post_id="commission_test_post",
+            reddit_username="test_user",
+            donation_type="commission",
+            commission_type="specific_post",
+            subreddit_id=subreddit.id,
+            source=SourceType.STRIPE,
+        )
+        db_session.add(donation)
+        db_session.commit()
+        
+        # Test without commission status (original format)
+        response = client.get("/api/agent-scanned-posts?limit=10")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Find our test post
+        test_post = None
+        for post in data:
+            if post["post_id"] == "commission_test_post":
+                test_post = post
+                break
+        
+        assert test_post is not None
+        assert "is_commissioned" not in test_post
+        assert "donation_info" not in test_post
+        
+        # Test with commission status (enhanced format)
+        response = client.get("/api/agent-scanned-posts?include_commission_status=true&limit=10")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Find our test post
+        test_post = None
+        for post in data:
+            if post["post_id"] == "commission_test_post":
+                test_post = post
+                break
+        
+        assert test_post is not None
+        assert test_post["is_commissioned"] is True
+        assert test_post["donation_info"] is not None
+        assert test_post["donation_info"]["donation_id"] == donation.id
+        assert test_post["donation_info"]["amount_usd"] == 10.0
+        assert test_post["donation_info"]["tier"] == "gold"
+        assert test_post["donation_info"]["donor_username"] == "test_user"
+        
+        # Test non-commissioned post
+        non_commissioned_post = AgentScannedPost(
+            post_id="no_commission_post",
+            subreddit="popular",
+            promoted=True,
+            post_title="No Commission Post",
+            post_score=100,
+        )
+        db_session.add(non_commissioned_post)
+        db_session.commit()
+        
+        response = client.get("/api/agent-scanned-posts?include_commission_status=true&limit=10")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Find the non-commissioned post
+        non_commissioned = None
+        for post in data:
+            if post["post_id"] == "no_commission_post":
+                non_commissioned = post
+                break
+        
+        assert non_commissioned is not None
+        assert non_commissioned["is_commissioned"] is False
+        assert non_commissioned["donation_info"] is None
 
 
 class TestGetDonationsByPostIdAPI:

@@ -6,7 +6,7 @@ import traceback
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import stripe
 import uvicorn
@@ -42,6 +42,8 @@ from app.db.models import (
 from app.models import (
     AgentScannedPostCreateRequest,
     AgentScannedPostSchema,
+    AgentScannedPostWithCommissionSchema,
+    ScannedPostDonationInfoSchema,
     CheckoutSessionResponse,
     CommissionRequest,
     CommissionValidationRequest,
@@ -2390,36 +2392,98 @@ async def create_agent_scanned_post(
         )
 
 
-@app.get("/api/agent-scanned-posts", response_model=List[AgentScannedPostSchema])
+@app.get("/api/agent-scanned-posts", response_model=Union[List[AgentScannedPostSchema], List[AgentScannedPostWithCommissionSchema]])
 async def get_agent_scanned_posts(
     promoted: Optional[bool] = Query(None, description="Filter by promoted status"),
     subreddit: Optional[str] = Query(None, description="Filter by subreddit"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
+    include_commission_status: bool = Query(False, description="Include commission status information"),
     db: Session = Depends(get_db),
 ):
-    """Get agent scanned posts with optional filtering."""
+    """Get agent scanned posts with optional filtering and commission status."""
     try:
-        query = db.query(AgentScannedPost)
+        if include_commission_status:
+            # Enhanced query with commission status
+            query = db.query(
+                AgentScannedPost,
+                Donation.id.label("donation_id"),
+                Donation.amount_usd.label("donation_amount"),
+                Donation.tier.label("donation_tier"),
+                Donation.reddit_username.label("donor_username")
+            ).outerjoin(
+                Donation, AgentScannedPost.post_id == Donation.post_id
+            )
 
-        # Apply filters
-        if promoted is not None:
-            query = query.filter(AgentScannedPost.promoted == promoted)
-        if subreddit:
-            query = query.filter(AgentScannedPost.subreddit.ilike(f"%{subreddit}%"))
+            # Apply filters
+            if promoted is not None:
+                query = query.filter(AgentScannedPost.promoted == promoted)
+            if subreddit:
+                query = query.filter(AgentScannedPost.subreddit.ilike(f"%{subreddit}%"))
 
-        # Apply pagination and ordering
-        query = query.order_by(AgentScannedPost.scanned_at.desc())
-        query = query.offset(offset).limit(limit)
+            # Apply pagination and ordering
+            query = query.order_by(AgentScannedPost.scanned_at.desc())
+            query = query.offset(offset).limit(limit)
 
-        scanned_posts = query.all()
-        return [AgentScannedPostSchema.model_validate(post) for post in scanned_posts]
+            results = query.all()
+            
+            # Format enhanced response using schema
+            formatted_results = []
+            for result in results:
+                scanned_post = result.AgentScannedPost
+                
+                # Create donation info if exists
+                donation_info = None
+                if result.donation_id:
+                    donation_info = ScannedPostDonationInfoSchema(
+                        donation_id=result.donation_id,
+                        amount_usd=float(result.donation_amount),
+                        tier=result.donation_tier,
+                        donor_username=result.donor_username
+                    )
+                
+                # Create enhanced post schema
+                post_with_commission = AgentScannedPostWithCommissionSchema(
+                    id=scanned_post.id,
+                    post_id=scanned_post.post_id,
+                    subreddit=scanned_post.subreddit,
+                    comment_id=scanned_post.comment_id,
+                    promoted=scanned_post.promoted,
+                    scanned_at=scanned_post.scanned_at,
+                    post_title=scanned_post.post_title,
+                    post_score=scanned_post.post_score,
+                    promotion_message=scanned_post.promotion_message,
+                    rejection_reason=scanned_post.rejection_reason,
+                    is_commissioned=result.donation_id is not None,
+                    donation_info=donation_info
+                )
+                formatted_results.append(post_with_commission)
+
+            return formatted_results
+        else:
+            # Original query for backward compatibility
+            query = db.query(AgentScannedPost)
+
+            # Apply filters
+            if promoted is not None:
+                query = query.filter(AgentScannedPost.promoted == promoted)
+            if subreddit:
+                query = query.filter(AgentScannedPost.subreddit.ilike(f"%{subreddit}%"))
+
+            # Apply pagination and ordering
+            query = query.order_by(AgentScannedPost.scanned_at.desc())
+            query = query.offset(offset).limit(limit)
+
+            scanned_posts = query.all()
+            return [AgentScannedPostSchema.model_validate(post) for post in scanned_posts]
 
     except Exception as e:
         logger.error(f"Error fetching agent scanned posts: {e}")
         raise HTTPException(
             status_code=500, detail="Failed to fetch agent scanned posts"
         )
+
+
 
 
 @app.get("/api/agent-scanned-posts/{post_id}", response_model=AgentScannedPostSchema)

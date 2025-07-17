@@ -1219,6 +1219,34 @@ class AgentScannedPostSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ScannedPostDonationInfoSchema(BaseModel):
+    """Schema for donation information in agent scanned posts."""
+    
+    donation_id: int
+    amount_usd: float
+    tier: str
+    donor_username: Optional[str] = None
+
+
+class AgentScannedPostWithCommissionSchema(BaseModel):
+    """Schema for agent scanned posts with commission status information."""
+
+    id: int
+    post_id: str
+    subreddit: str
+    comment_id: Optional[str] = None
+    promoted: bool
+    scanned_at: datetime
+    post_title: Optional[str] = None
+    post_score: Optional[int] = None
+    promotion_message: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    is_commissioned: bool
+    donation_info: Optional[ScannedPostDonationInfoSchema] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AgentScannedPostCreateRequest(BaseModel):
     """Request model for creating agent scanned post records."""
 
