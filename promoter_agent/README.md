@@ -14,14 +14,21 @@ This service scans r/popular/hot for trending content and promotes Clouvel commi
 Required environment variables for Railway deployment:
 
 ```
+# Promoter Agent Settings
 PROMOTER_DRY_RUN=false                    # Set to 'true' for testing, 'false' for live
+
+# Reddit Credentials (u/clouvel account)
+PROMOTER_AGENT_CLIENT_ID=...              # Reddit app client ID for u/clouvel
+PROMOTER_AGENT_CLIENT_SECRET=...          # Reddit app client secret
+PROMOTER_AGENT_USERNAME=clouvel           # Reddit username
+PROMOTER_AGENT_PASSWORD=...               # Reddit password
+PROMOTER_AGENT_USER_AGENT=...             # User agent string (e.g., "clouvel by u/clouvel")
+
+# OpenAI Settings
 OPENAI_API_KEY=sk-...                     # OpenAI API key
 OPENAI_COMMUNITY_AGENT_MODEL=gpt-4o-mini  # Cost-optimized model
-REDDIT_CLIENT_ID=...                      # Reddit API credentials
-REDDIT_CLIENT_SECRET=...
-REDDIT_USERNAME=...
-REDDIT_PASSWORD=...
-REDDIT_USER_AGENT=...
+
+# API Integration
 API_BASE_URL=https://backend-api-production-a9e0.up.railway.app
 LOG_LEVEL=INFO
 ```

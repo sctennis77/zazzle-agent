@@ -13,6 +13,10 @@ import sys
 import time
 from typing import Optional
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.agents.clouvel_promoter_agent import ClouvelPromoterAgent
 from app.utils.logging_config import setup_logging
 

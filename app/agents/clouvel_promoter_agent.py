@@ -25,14 +25,26 @@ class ClouvelPromoterAgent:
     def __init__(self, subreddit_name: str = "popular", dry_run: bool = True):
         self.subreddit_name = subreddit_name
         self.dry_run = dry_run
+        
+        # Validate required credentials
+        required_vars = [
+            "PROMOTER_AGENT_CLIENT_ID",
+            "PROMOTER_AGENT_CLIENT_SECRET",
+            "PROMOTER_AGENT_USERNAME",
+            "PROMOTER_AGENT_PASSWORD",
+            "PROMOTER_AGENT_USER_AGENT"
+        ]
+        
+        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        if missing_vars:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+        
         self.reddit = praw.Reddit(
-            client_id=os.getenv("REDDIT_CLIENT_ID"),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-            username=os.getenv("REDDIT_USERNAME"),
-            password=os.getenv("REDDIT_PASSWORD"),
-            user_agent=os.getenv(
-                "REDDIT_USER_AGENT", "clouvel-agent by u/queen_clouvel"
-            ),
+            client_id=os.getenv("PROMOTER_AGENT_CLIENT_ID"),
+            client_secret=os.getenv("PROMOTER_AGENT_CLIENT_SECRET"),
+            username=os.getenv("PROMOTER_AGENT_USERNAME"),
+            password=os.getenv("PROMOTER_AGENT_PASSWORD"),
+            user_agent=os.getenv("PROMOTER_AGENT_USER_AGENT"),
         )
         self.openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
