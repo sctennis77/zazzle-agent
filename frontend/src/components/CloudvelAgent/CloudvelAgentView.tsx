@@ -39,9 +39,11 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [stats, setStats] = useState<{ total_scanned: number; total_promoted: number } | null>(null);
 
   useEffect(() => {
     fetchScannedPosts();
+    fetchStats();
   }, []);
 
   const fetchScannedPosts = async () => {
@@ -57,6 +59,19 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('/api/agent-scanned-posts/stats');
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats');
+      }
+      const data = await response.json();
+      setStats(data);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
     }
   };
 
@@ -180,7 +195,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
             <span className="text-white font-bold text-lg">👑</span>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clouvel Agent Activity</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Clouvel's Activity</h1>
             <p className="text-gray-600">Posts scanned and promoted by Queen Clouvel</p>
           </div>
         </div>
@@ -188,7 +203,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
         <div className="flex items-center gap-6 text-sm text-gray-600">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
-            <span>{scannedPosts.length} promoted posts</span>
+            <span>{stats ? `${stats.total_promoted} promoted • ${stats.total_scanned} scanned` : 'Loading...'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />

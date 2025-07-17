@@ -2486,6 +2486,23 @@ async def get_agent_scanned_posts(
         )
 
 
+@app.get("/api/agent-scanned-posts/stats")
+async def get_agent_scanned_stats(db: Session = Depends(get_db)):
+    """Get statistics about agent scanned posts."""
+    try:
+        total_scanned = db.query(AgentScannedPost).count()
+        total_promoted = db.query(AgentScannedPost).filter(AgentScannedPost.promoted == True).count()
+        
+        return {
+            "total_scanned": total_scanned,
+            "total_promoted": total_promoted
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting agent scanned stats: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to get agent scanned stats"
+        )
 
 
 @app.get("/api/agent-scanned-posts/{post_id}", response_model=AgentScannedPostSchema)
@@ -2532,6 +2549,8 @@ async def check_post_scanned(post_id: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=500, detail="Failed to check post scan status"
         )
+
+
 
 
 if __name__ == "__main__":
