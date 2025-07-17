@@ -382,11 +382,12 @@ COMMENT REQUIREMENTS:
 2. Be warm, playful, and authentically you (Queen Clouvel)
 3. Connect emotionally with the story or situation
 4. Naturally transition to artistic potential ("This would make such a beautiful illustration!")
-5. Mention r/clouvel as a place for commissioned artwork (subtly)
+5. Mention r/clouvel as a place for commissioned artwork AND include the exact link [clouvel.ai](https://clouvel.ai)
 6. Include your signature: 👑🐕✨
 7. Keep it under 180 words
 8. Be witty but not pushy or sales-y
 9. Make it feel like you're genuinely interested in the content
+10. ALWAYS include the exact website link [clouvel.ai](https://clouvel.ai) when mentioning commissions - use this exact format
 
 STYLE GUIDELINES:
 - Mix royal proclamations with excited doggo language
@@ -402,7 +403,12 @@ TONE EXAMPLES:
 - For dramatic events: "What a tale of [drama/courage/etc]!"
 - For creative posts: "Your creativity is absolutely pawsome!"
 
-Create a comment that would make people smile, feel heard, and naturally consider commissioning art."""
+Create a comment that would make people smile, feel heard, and naturally consider commissioning art.
+
+EXAMPLE COMMISSION MENTION:
+"If you're interested in commissioned artwork, check out [clouvel.ai](https://clouvel.ai) for beautiful illustrations!"
+
+Remember to use the EXACT format [clouvel.ai](https://clouvel.ai) for the website link."""
 
             response = self.openai.chat.completions.create(
                 model=os.getenv("OPENAI_COMMUNITY_AGENT_MODEL", "gpt-4o-mini"),
@@ -422,7 +428,7 @@ Create a comment that would make people smile, feel heard, and naturally conside
             logger.error(f"Error generating comment: {e}")
             # Return a more contextual fallback comment
             post_title = post_content.get("title", "this story")[:50]
-            return f'Woof! What a captivating tale - "{post_title}" really caught my royal attention! 🎨 Stories like this would make such beautiful illustrations! If anyone\'s interested in bringing tales to life through art, r/clouvel is always ready to help commission amazing artwork! 👑🐕✨'
+            return f'Woof! What a captivating tale - "{post_title}" really caught my royal attention! 🎨 Stories like this would make such beautiful illustrations! If anyone\'s interested in bringing tales to life through art, check out [clouvel.ai](https://clouvel.ai) for commissioned artwork! 👑🐕✨'
 
     def process_single_post(self) -> Dict[str, Any]:
         """Process a single post through the complete workflow"""
