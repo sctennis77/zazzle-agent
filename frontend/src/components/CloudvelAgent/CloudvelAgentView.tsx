@@ -19,9 +19,14 @@ interface ScannedPost {
     tier: string;
     donor_username: string | null;
   } | null;
+  agent_ratings: {
+    mood?: string;
+    topic?: string;
+    illustration_potential?: number;
+  } | null;
 }
 
-type SortField = 'score' | 'date' | 'subreddit';
+type SortField = 'score' | 'date' | 'subreddit' | 'potential';
 type SortDirection = 'asc' | 'desc';
 
 interface CloudvelAgentViewProps {
@@ -105,6 +110,10 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
         case 'subreddit':
           aValue = a.subreddit.toLowerCase();
           bValue = b.subreddit.toLowerCase();
+          break;
+        case 'potential':
+          aValue = a.agent_ratings?.illustration_potential || 0;
+          bValue = b.agent_ratings?.illustration_potential || 0;
           break;
         default:
           return 0;
@@ -196,7 +205,7 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                 <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Title</th>
                 <SortableHeader field="subreddit">Subreddit</SortableHeader>
                 <SortableHeader field="score">Score</SortableHeader>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">Comment</th>
+                <SortableHeader field="potential">Potential</SortableHeader>
                 <SortableHeader field="date">Date</SortableHeader>
                 <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm w-28">Actions</th>
               </tr>
@@ -206,14 +215,49 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                 <tr key={post.id} className={`group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                   <td className="py-5 px-6">
                     <div className="flex items-center gap-3">
-                      <div className="text-gray-800 text-sm font-medium line-clamp-2 flex-1 leading-relaxed">
-                        {post.post_title || post.post_id}
+                      <div className="flex-1">
+                        <div className="text-gray-800 text-sm font-medium line-clamp-2 leading-relaxed">
+                          {post.post_title || post.post_id}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {post.comment_id ? (
+                            <a
+                              href={getRedditCommentUrl(post.post_id, post.comment_id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 hover:from-blue-200 hover:to-indigo-200 transition-all duration-200 shadow-sm"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              Commented
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              No comment
+                            </span>
+                          )}
+                          {post.is_commissioned && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 shadow-sm">
+                              🎨 Commissioned
+                            </span>
+                          )}
+                        </div>
+                        {post.agent_ratings && (post.agent_ratings.mood || post.agent_ratings.topic) && (
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                            {post.agent_ratings.mood && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium">Mood:</span>
+                                <span className="capitalize">{post.agent_ratings.mood}</span>
+                              </span>
+                            )}
+                            {post.agent_ratings.topic && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium">Topic:</span>
+                                <span className="capitalize">{post.agent_ratings.topic}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {post.is_commissioned && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 shadow-sm">
-                          🎨 Commissioned
-                        </span>
-                      )}
                       <button
                         onClick={() => window.open(getRedditPostUrl(post.post_id), '_blank')}
                         className="flex-shrink-0 p-1.5 hover:bg-gray-200 rounded-full transition-all duration-200 group-hover:bg-white/50"
@@ -234,19 +278,11 @@ export const CloudvelAgentView: React.FC<CloudvelAgentViewProps> = ({ onCommissi
                     </span>
                   </td>
                   <td className="py-5 px-6">
-                    {post.comment_id ? (
-                      <a
-                        href={getRedditCommentUrl(post.post_id, post.comment_id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 text-sm font-medium hover:bg-indigo-50 px-2 py-1 rounded-md transition-all duration-200"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        View Comment
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-sm italic">No comment</span>
-                    )}
+                    <span className="text-gray-700 font-medium text-sm">
+                      {post.agent_ratings?.illustration_potential !== undefined 
+                        ? post.agent_ratings.illustration_potential.toFixed(1)
+                        : 'N/A'}
+                    </span>
                   </td>
                   <td className="py-5 px-6">
                     <span className="text-gray-600 text-sm font-medium">
