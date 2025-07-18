@@ -33,6 +33,15 @@ class ClouvelPromoterAgent:
         self.karma_target = 1000  # Target karma before aggressive promotion
         self.promotional_probability = 0.4  # 40% chance to promote eligible posts
         
+        # Subreddits to cycle through for finding creative content
+        self.target_subreddits = [
+            "popular",
+            "mildlyinteresting",
+            "interestingasfuck",
+            "golf",
+        ]
+        self.current_subreddit_index = 0
+        
         # Karma building subreddits (diverse communities for natural engagement)
         self.karma_subreddits = [
             # Creative communities
@@ -63,20 +72,21 @@ class ClouvelPromoterAgent:
             "GetMotivated", "decidingtobebetter", "selfimprovement", "mentalhealth",
             "anxiety", "depression", "ADHD", "socialskills"
         ]
-        
         # Validate required credentials
         required_vars = [
             "PROMOTER_AGENT_CLIENT_ID",
             "PROMOTER_AGENT_CLIENT_SECRET",
             "PROMOTER_AGENT_USERNAME",
             "PROMOTER_AGENT_PASSWORD",
-            "PROMOTER_AGENT_USER_AGENT"
+            "PROMOTER_AGENT_USER_AGENT",
         ]
-        
+
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
-        
+            raise ValueError(
+                f"Missing required environment variables: {', '.join(missing_vars)}"
+            )
+
         self.reddit = praw.Reddit(
             client_id=os.getenv("PROMOTER_AGENT_CLIENT_ID"),
             client_secret=os.getenv("PROMOTER_AGENT_CLIENT_SECRET"),
@@ -332,13 +342,19 @@ class ClouvelPromoterAgent:
         logger.info(f"Recorded scanned post {post_id}: promoted={promoted}")
 
     def find_novel_post(self) -> Optional[Submission]:
-        """Find a new post from r/popular/hot that hasn't been scanned or commissioned yet"""
+        """Find a new post from target subreddits that hasn't been scanned or commissioned yet"""
         try:
             with self._get_db_session() as session:
-                subreddit = self.reddit.subreddit("popular")
+                # Cycle through target subreddits
+                current_subreddit_name = self.target_subreddits[
+                    self.current_subreddit_index
+                ]
+                subreddit = self.reddit.subreddit(current_subreddit_name)
 
-                # Get hot posts from popular
-                for post in subreddit.hot(limit=50):
+                logger.info(f"Scanning r/{current_subreddit_name} for novel posts...")
+
+                # Get hot posts from current subreddit
+                for post in subreddit.hot(limit=5):
                     # Skip if already scanned
                     if self._check_post_already_scanned(session, post.id):
                         continue
@@ -362,12 +378,22 @@ class ClouvelPromoterAgent:
                     )
                     return post
 
+                # No novel posts found in current subreddit, advance to next
+                self._advance_to_next_subreddit()
                 logger.info("No novel posts found in current batch")
                 return None
 
         except Exception as e:
             logger.error(f"Error finding novel post: {e}")
             return None
+
+    def _advance_to_next_subreddit(self):
+        """Advance to the next subreddit in the cycle"""
+        self.current_subreddit_index = (self.current_subreddit_index + 1) % len(
+            self.target_subreddits
+        )
+        next_subreddit = self.target_subreddits[self.current_subreddit_index]
+        logger.info(f"Advanced to next subreddit: r/{next_subreddit}")
 
     def analyze_post_content(self, post: Submission) -> Dict[str, Any]:
         """Analyze post content for artistic potential"""
@@ -761,10 +787,13 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
                                 logger.info(f"Upvoted post {post.id}")
 
                                 # Post the comment
-                                comment = post.reply(comment_text)
-                                comment_id = comment.id
+                                # comment = post.reply(comment_text)
+                                # comment_id = comment.id
+                                # logger.info(
+                                #     f"Would Posted comment {comment_id} on post {post.id}"
+                                # )
                                 logger.info(
-                                    f"Posted comment {comment_id} on post {post.id}"
+                                    f"Would have posted comment {comment_text}.\t{post.id}"
                                 )
 
                             except Exception as e:
@@ -818,8 +847,9 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
                     if not self.dry_run:
                         try:
                             # Downvote the post
-                            post.downvote()
-                            logger.info(f"Downvoted post {post.id}")
+                            # post.downvote()
+                            # logger.info(f"Downvoted post {post.id}")
+                            logger.info(f"Would have downvoted post {post.id}")
 
                         except Exception as e:
                             logger.error(f"Error executing rejection actions: {e}")
