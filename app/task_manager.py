@@ -19,8 +19,15 @@ from sqlalchemy.orm import Session
 from app.commission_worker import CommissionWorker
 from app.db.database import SessionLocal
 from app.db.models import Donation, PipelineTask
-from app.k8s_job_manager import K8sJobManager
 from app.utils.logging_config import get_logger
+
+# Optional k8s dependency
+try:
+    from app.k8s_job_manager import K8sJobManager
+    K8S_AVAILABLE = True
+except ImportError:
+    K8S_AVAILABLE = False
+    K8sJobManager = None
 
 logger = get_logger(__name__)
 
@@ -40,8 +47,12 @@ class TaskManager:
 
     def __init__(self):
         """Initialize the task manager."""
-        self.k8s_manager = K8sJobManager()
-        self.use_k8s = self.k8s_manager.enabled
+        if K8S_AVAILABLE:
+            self.k8s_manager = K8sJobManager()
+            self.use_k8s = self.k8s_manager.enabled
+        else:
+            self.k8s_manager = None
+            self.use_k8s = False
         logger.info(f"Task Manager initialized - K8s available: {self.use_k8s}")
 
     def create_commission_task(
