@@ -54,8 +54,8 @@ Clouvel is an intelligent automation platform that transforms trending Reddit co
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/clouvel.git
-cd clouvel
+git clone https://github.com/yourusername/zazzle-agent.git
+cd zazzle-agent
 
 # Install dependencies
 make install-deps
@@ -159,7 +159,7 @@ make check-db            # Inspect database contents
 ### Project Structure
 
 ```
-clouvel/
+zazzle-agent/
 ├── app/                          # Backend application
 │   ├── agents/                   # AI agents
 │   │   ├── reddit_agent.py       # Core product generation
@@ -359,7 +359,7 @@ make show-logs
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
@@ -372,9 +372,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/clouvel/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/clouvel/discussions)
-- **Documentation**: [Wiki](https://github.com/yourusername/clouvel/wiki)
+- **Issues**: [GitHub Issues](https://github.com/yourusername/zazzle-agent/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/zazzle-agent/discussions)
+- **Documentation**: [Wiki](https://github.com/yourusername/zazzle-agent/wiki)
 
 ---
 
