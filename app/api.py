@@ -61,6 +61,7 @@ from app.models import (
 from app.models import ProductInfo as ProductInfoDataClass
 from app.models import (
     ProductInfoSchema,
+    ProductRedditCommentSchema,
     ProductSubredditPostSchema,
     RedditContext,
     RedditPostSchema,
@@ -74,7 +75,7 @@ from app.pipeline_status import PipelineStatus
 from app.services.commission_validator import CommissionValidator
 from app.services.fundraising_goals_service import FundraisingGoalsService
 from app.services.stripe_service import StripeService
-from app.subreddit_publisher import SubredditPublisher
+from app.reddit_commenter import RedditCommenter
 from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_manager import TaskManager
@@ -1825,9 +1826,9 @@ async def get_commission_product(donation_id: int, db: Session = Depends(get_db)
 
 
 @app.post(
-    "/api/publish/product/{product_id}", response_model=ProductSubredditPostSchema
+    "/api/publish/product/{product_id}", response_model=ProductRedditCommentSchema
 )
-async def publish_product_to_subreddit(
+async def comment_on_original_post(
     product_id: str,
     dry_run: bool = Query(
         os.getenv("REDDIT_MODE", "dryrun") == "dryrun",
@@ -1836,102 +1837,132 @@ async def publish_product_to_subreddit(
     db: Session = Depends(get_db),
 ):
     """
-    Publish a product to the clouvel subreddit.
+    Comment on the original Reddit post with commissioned artwork.
 
     Args:
-        product_id: The ID of the product to publish
+        product_id: The ID of the product to comment with
         dry_run: Whether to run in dry run mode (default: True)
         db: Database session
 
     Returns:
-        ProductSubredditPostSchema: The published post data
+        ProductRedditCommentSchema: The comment data
     """
     try:
         logger.info(
-            f"Publishing product {product_id} to clouvel subreddit (dry_run: {dry_run})"
+            f"Commenting on original post for product {product_id} (dry_run: {dry_run})"
         )
 
-        # Create publisher
-        publisher = SubredditPublisher(dry_run=dry_run, session=db)
+        # Create commenter
+        commenter = RedditCommenter(dry_run=dry_run, session=db)
 
         try:
-            # Publish the product
-            result = publisher.publish_product(product_id)
+            # Comment on the original post
+            result = commenter.comment_on_original_post(product_id)
 
-            logger.info(f"Publication result: {result}")
+            logger.info(f"Comment result: {result}")
 
             if not result["success"]:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Failed to publish product: {result.get('error', 'Unknown error')}",
+                    detail=f"Failed to comment on post: {result.get('error', 'Unknown error')}",
                 )
 
-            # Map the saved post data to match the schema
-            saved_post_data = result["saved_post"]
+            # Map the saved comment data to match the schema
+            saved_comment_data = result["saved_comment"]
             schema_data = {
                 "id": 0,  # This will be set by the database
-                "product_info_id": int(saved_post_data["product_id"]),
-                "subreddit_name": saved_post_data["subreddit"],
-                "reddit_post_id": saved_post_data["reddit_post_id"],
-                "reddit_post_url": saved_post_data["reddit_post_url"],
-                "reddit_post_title": saved_post_data.get("reddit_post_title"),
-                "submitted_at": saved_post_data["submitted_at"],
-                "dry_run": saved_post_data["dry_run"],
-                "status": saved_post_data["status"],
-                "error_message": saved_post_data.get("error_message"),
-                "engagement_data": saved_post_data.get("engagement_data"),
+                "product_info_id": int(saved_comment_data["product_id"]),
+                "original_post_id": saved_comment_data["original_post_id"],
+                "comment_id": saved_comment_data.get("comment_id"),
+                "comment_url": saved_comment_data.get("comment_url"),
+                "subreddit_name": saved_comment_data.get("subreddit"),
+                "commented_at": saved_comment_data["commented_at"],
+                "comment_content": saved_comment_data.get("comment_content"),
+                "dry_run": saved_comment_data["dry_run"],
+                "status": saved_comment_data["status"],
+                "error_message": saved_comment_data.get("error_message"),
+                "engagement_data": saved_comment_data.get("engagement_data"),
             }
 
-            return ProductSubredditPostSchema.model_validate(schema_data)
+            return ProductRedditCommentSchema.model_validate(schema_data)
 
         finally:
-            publisher.close()
+            commenter.close()
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error publishing product {product_id}: {e}")
+        logger.error(f"Error commenting on product {product_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to publish product: {str(e)}"
+            status_code=500, detail=f"Failed to comment on post: {str(e)}"
         )
 
 
-@app.get("/api/publish/product/{product_id}", response_model=ProductSubredditPostSchema)
-async def get_product_subreddit_post(product_id: str, db: Session = Depends(get_db)):
+@app.get("/api/publish/product/{product_id}", response_model=ProductRedditCommentSchema)
+async def get_product_reddit_interaction(product_id: str, db: Session = Depends(get_db)):
     """
-    Get the ProductSubredditPost for a given product.
+    Get the Reddit interaction (comment or post) for a given product.
+    Prioritizes comments over posts.
 
     Args:
         product_id: The ID of the product
         db: Database session
 
     Returns:
-        ProductSubredditPostSchema: The subreddit post data if found, 404 if not found
+        ProductRedditCommentSchema: The comment data if found, 404 if not found
     """
     try:
-        logger.info(f"Fetching ProductSubredditPost for product {product_id}")
+        logger.info(f"Fetching Reddit interaction for product {product_id}")
 
-        # Find the ProductSubredditPost for this product
+        # First, check for ProductRedditComment (comments on original posts)
+        from app.db.models import ProductRedditComment
+        comment = (
+            db.query(ProductRedditComment)
+            .filter(ProductRedditComment.product_info_id == product_id)
+            .first()
+        )
+
+        if comment:
+            # Convert to schema
+            return ProductRedditCommentSchema.model_validate(comment)
+
+        # If no comment found, check for legacy ProductSubredditPost and convert to comment format
+        from app.db.models import ProductSubredditPost
         post = (
             db.query(ProductSubredditPost)
             .filter(ProductSubredditPost.product_info_id == product_id)
             .first()
         )
 
-        if not post:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No ProductSubredditPost found for product {product_id}",
-            )
+        if post:
+            # Convert ProductSubredditPost to ProductRedditCommentSchema format for compatibility
+            comment_data = {
+                "id": post.id,
+                "product_info_id": post.product_info_id,
+                "original_post_id": post.reddit_post_id or "legacy_post",
+                "comment_id": post.reddit_post_id,
+                "comment_url": post.reddit_post_url,
+                "subreddit_name": post.subreddit_name,
+                "commented_at": post.submitted_at,
+                "comment_content": f"Legacy post: {post.reddit_post_title or 'Subreddit post'}",
+                "dry_run": post.dry_run,
+                "status": post.status,
+                "error_message": post.error_message,
+                "engagement_data": post.engagement_data,
+            }
+            return ProductRedditCommentSchema.model_validate(comment_data)
 
-        # Convert to schema
-        return ProductSubredditPostSchema.model_validate(post)
+        # Neither comment nor post found
+        raise HTTPException(
+            status_code=404,
+            detail=f"No Reddit interaction found for product {product_id}",
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(
-            f"Error fetching ProductSubredditPost for product {product_id}: {e}"
+            f"Error fetching Reddit interaction for product {product_id}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 

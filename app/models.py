@@ -1105,6 +1105,25 @@ class ProductSubredditPostSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProductRedditCommentSchema(BaseModel):
+    """Schema for tracking comments made on original Reddit posts with commissioned artwork."""
+
+    id: int
+    product_info_id: int
+    original_post_id: str
+    comment_id: Optional[str] = None
+    comment_url: Optional[str] = None
+    subreddit_name: Optional[str] = None
+    commented_at: datetime
+    comment_content: Optional[str] = None
+    dry_run: bool
+    status: str
+    error_message: Optional[str] = None
+    engagement_data: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Subreddit Management Models
 
 
