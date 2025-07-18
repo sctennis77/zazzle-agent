@@ -277,7 +277,7 @@ class RedditCommenter:
 
 {{image1}}
 
-Commissioned by u/{commission_username} • Made with Clouvel • [View in Gallery](https://clouvel.ai/?product={reddit_post.post_id})"""
+Commissioned by u/{commission_username} • Made with [Clouvel](https://clouvel.ai/?product={reddit_post.post_id})"""
 
             # Submit the image comment using the Reddit client
             result = self.reddit_client.comment_with_image(
