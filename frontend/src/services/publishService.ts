@@ -1,16 +1,16 @@
 import axios from 'axios';
-import type { ProductSubredditPost } from '../types/productTypes';
+import type { ProductSubredditPost, ProductRedditComment } from '../types/productTypes';
 import { API_BASE } from '../utils/apiBase';
 
 const PUBLISH_API_BASE = `${API_BASE}/api/publish`;
 
 export const publishService = {
   /**
-   * Publish a product to the clouvel subreddit
+   * Comment on the original Reddit post for a product
    */
-  async publishProduct(productId: string, dryRun?: boolean): Promise<ProductSubredditPost> {
+  async publishProduct(productId: string, dryRun?: boolean): Promise<ProductRedditComment> {
     const params = dryRun !== undefined ? { dry_run: dryRun } : {};
-    const response = await axios.post<ProductSubredditPost>(
+    const response = await axios.post<ProductRedditComment>(
       `${PUBLISH_API_BASE}/product/${productId}`,
       null,
       { params }
@@ -19,11 +19,11 @@ export const publishService = {
   },
 
   /**
-   * Get the ProductSubredditPost for a given product
+   * Get the ProductRedditComment for a given product (with backward compatibility)
    */
-  async getProductSubredditPost(productId: string): Promise<ProductSubredditPost | null> {
+  async getProductSubredditPost(productId: string): Promise<ProductRedditComment | null> {
     try {
-      const response = await axios.get<ProductSubredditPost>(
+      const response = await axios.get<ProductRedditComment>(
         `${PUBLISH_API_BASE}/product/${productId}`
       );
       return response.data;

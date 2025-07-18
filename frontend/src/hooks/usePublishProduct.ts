@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import { publishService } from '../services/publishService';
-import type { ProductSubredditPost } from '../types/productTypes';
+import type { ProductRedditComment } from '../types/productTypes';
 
 export const usePublishProduct = () => {
   const [publishing, setPublishing] = useState(false);
-  const [publishedPost, setPublishedPost] = useState<ProductSubredditPost | null>(null);
+  const [publishedPost, setPublishedPost] = useState<ProductRedditComment | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const publishProduct = useCallback(async (productId: string, dryRun?: boolean) => {

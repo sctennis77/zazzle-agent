@@ -97,6 +97,21 @@ export interface ProductSubredditPost {
   engagement_data?: Record<string, any>;
 }
 
+export interface ProductRedditComment {
+  id: number;
+  product_info_id: number;
+  original_post_id: string;
+  comment_id?: string;
+  comment_url?: string;
+  subreddit_name: string;
+  commented_at: string;
+  comment_content?: string;
+  dry_run: boolean;
+  status: string;
+  error_message?: string;
+  engagement_data?: Record<string, any>;
+}
+
 export interface GeneratedProductSchema {
   product_info: ProductInfo;
   pipeline_run: PipelineRun;

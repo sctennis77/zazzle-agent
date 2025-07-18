@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import type { GeneratedProduct, CommissionInfo, ProductSubredditPost } from '../../types/productTypes';
+import type { GeneratedProduct, CommissionInfo, ProductRedditComment } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
@@ -216,11 +216,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 {publishedPost && (
                   <div className="flex items-center gap-2 mt-2">
                     <a
-                      href={publishedPost.reddit_post_url}
+                      href={publishedPost.comment_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
-                      title="View on Reddit"
+                      title="View Comment on Reddit"
                     >
                       <FaReddit size={16} className="text-green-600" />
                     </a>
@@ -228,7 +228,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                       r/{publishedPost.subreddit_name}
                     </span>
                     <span className="text-xs text-gray-600">
-                      &nbsp;• {new Date(publishedPost.submitted_at).toLocaleString('en-US', {
+                      &nbsp;• {new Date(publishedPost.commented_at).toLocaleString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
