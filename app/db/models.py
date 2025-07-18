@@ -342,6 +342,9 @@ class ProductInfo(Base):
     subreddit_post = relationship(
         "ProductSubredditPost", back_populates="product_info", uselist=False
     )
+    reddit_comments = relationship(
+        "ProductRedditComment", back_populates="product_info", cascade="all, delete-orphan"
+    )
 
 
 class ErrorLog(Base):
@@ -553,4 +556,28 @@ class AgentScannedPost(Base):
     post_score = Column(Integer, nullable=True)
     promotion_message = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)
-    agent_ratings = Column(JSON, nullable=True)  # JSON field for mood, topic, illustration_potential
+
+
+class ProductRedditComment(Base):
+    """Tracks comments made on original Reddit posts with commissioned artwork"""
+
+    __tablename__ = "product_reddit_comments"
+    id = Column(Integer, primary_key=True)
+    product_info_id = Column(
+        Integer, ForeignKey("product_infos.id"), nullable=False, index=True
+    )
+    original_post_id = Column(String(32), nullable=False, index=True)  # Reddit post ID that inspired the art
+    comment_id = Column(String(32), nullable=True, index=True)  # Our comment ID
+    comment_url = Column(Text, nullable=True)  # Full URL to our comment
+    subreddit_name = Column(String(100), nullable=True, index=True)  # Subreddit where comment was posted
+    commented_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
+    )
+    comment_content = Column(Text, nullable=True)  # The actual comment text
+    dry_run = Column(Boolean, default=True, nullable=False)  # Whether this was a dry run
+    status = Column(String(50), default="commented", nullable=False)  # commented, failed, etc.
+    error_message = Column(Text, nullable=True)  # Error if comment failed
+    engagement_data = Column(JSON, nullable=True)  # Track upvotes, replies, etc.
+    
+    # Relationship to product
+    product_info = relationship("ProductInfo", back_populates="reddit_comments")
