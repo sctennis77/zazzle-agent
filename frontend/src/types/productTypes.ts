@@ -117,4 +117,14 @@ export interface GeneratedProductSchema {
   pipeline_run: PipelineRun;
   reddit_post: RedditPost;
   usage?: PipelineRunUsage;
+}
+
+// Unified Reddit interaction types
+export type RedditInteractionMode = 'comment' | 'post';
+
+export type RedditInteraction = ProductRedditComment | ProductSubredditPost;
+
+export interface RedditInteractionConfig {
+  mode: RedditInteractionMode;
+  dryRun?: boolean;
 } 

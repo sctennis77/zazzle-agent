@@ -43,7 +43,6 @@ from app.models import (
     AgentScannedPostCreateRequest,
     AgentScannedPostSchema,
     AgentScannedPostWithCommissionSchema,
-    ScannedPostDonationInfoSchema,
     CheckoutSessionResponse,
     CommissionRequest,
     CommissionValidationRequest,
@@ -65,6 +64,7 @@ from app.models import (
     ProductSubredditPostSchema,
     RedditContext,
     RedditPostSchema,
+    ScannedPostDonationInfoSchema,
     SubredditCreateRequest,
     SubredditFundraisingGoalSchema,
     SubredditSchema,
@@ -72,10 +72,10 @@ from app.models import (
     get_tier_from_amount,
 )
 from app.pipeline_status import PipelineStatus
+from app.reddit_commenter import RedditCommenter
 from app.services.commission_validator import CommissionValidator
 from app.services.fundraising_goals_service import FundraisingGoalsService
 from app.services.stripe_service import StripeService
-from app.reddit_commenter import RedditCommenter
 from app.subreddit_service import get_subreddit_service
 from app.subreddit_tier_service import SubredditTierService
 from app.task_manager import TaskManager
@@ -390,7 +390,9 @@ async def redirect_to_product(image_name: str):
         )
 
         if not reddit_post:
-            raise HTTPException(status_code=404, detail="Associated Reddit post not found")
+            raise HTTPException(
+                status_code=404, detail="Associated Reddit post not found"
+            )
 
         # Redirect to the gallery with product parameter
         gallery_url = f"https://clouvel.ai/?product={reddit_post.post_id}"
@@ -1179,11 +1181,11 @@ async def get_post_donations(post_id: str, db: Session = Depends(get_db)):
 def get_donations_by_post_id(post_id: str, db: Session):
     """
     Get all successful donations for a specific post.
-    
+
     Args:
         post_id: Reddit post ID
         db: Database session
-    
+
     Returns:
         List: Donations with related data for the post
     """
@@ -1207,11 +1209,15 @@ def get_donations_by_post_id(post_id: str, db: Session):
                 "commission_type": donation.commission_type,
                 "commission_message": donation.commission_message,
                 "created_at": donation.created_at.isoformat(),
-                "subreddit": {
-                    "subreddit_name": donation.subreddit.subreddit_name,
-                    "display_name": donation.subreddit.display_name,
-                    "description": donation.subreddit.description,
-                } if donation.subreddit else None,
+                "subreddit": (
+                    {
+                        "subreddit_name": donation.subreddit.subreddit_name,
+                        "display_name": donation.subreddit.display_name,
+                        "description": donation.subreddit.description,
+                    }
+                    if donation.subreddit
+                    else None
+                ),
                 "reddit_username": donation.reddit_username,
                 "is_anonymous": donation.is_anonymous,
                 "status": donation.status,
@@ -1899,7 +1905,9 @@ async def comment_on_original_post(
 
 
 @app.get("/api/publish/product/{product_id}", response_model=ProductRedditCommentSchema)
-async def get_product_reddit_interaction(product_id: str, db: Session = Depends(get_db)):
+async def get_product_reddit_interaction(
+    product_id: str, db: Session = Depends(get_db)
+):
     """
     Get the Reddit interaction (comment or post) for a given product.
     Prioritizes comments over posts.
@@ -1916,6 +1924,7 @@ async def get_product_reddit_interaction(product_id: str, db: Session = Depends(
 
         # First, check for ProductRedditComment (comments on original posts)
         from app.db.models import ProductRedditComment
+
         comment = (
             db.query(ProductRedditComment)
             .filter(ProductRedditComment.product_info_id == product_id)
@@ -1928,6 +1937,7 @@ async def get_product_reddit_interaction(product_id: str, db: Session = Depends(
 
         # If no comment found, check for legacy ProductSubredditPost and convert to comment format
         from app.db.models import ProductSubredditPost
+
         post = (
             db.query(ProductSubredditPost)
             .filter(ProductSubredditPost.product_info_id == product_id)
@@ -1961,10 +1971,237 @@ async def get_product_reddit_interaction(product_id: str, db: Session = Depends(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Error fetching Reddit interaction for product {product_id}: {e}"
-        )
+        logger.error(f"Error fetching Reddit interaction for product {product_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# NEW CLEAN REDDIT INTERACTION API ENDPOINTS
+# ============================================================================
+
+
+@app.get(
+    "/api/reddit/product/{product_id}/comment",
+    response_model=ProductRedditCommentSchema,
+)
+async def get_product_comment(product_id: str, db: Session = Depends(get_db)):
+    """
+    Get the Reddit comment for a given product.
+    Args:
+        product_id: The ID of the product
+        db: Database session
+    Returns:
+        ProductRedditCommentSchema: The comment data if found, 404 if not found
+    """
+    try:
+        logger.info(f"Fetching Reddit comment for product {product_id}")
+        from app.db.models import ProductRedditComment
+
+        comment = (
+            db.query(ProductRedditComment)
+            .filter(ProductRedditComment.product_info_id == product_id)
+            .first()
+        )
+        if comment:
+            return ProductRedditCommentSchema.model_validate(comment)
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"No Reddit comment found for product {product_id}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching Reddit comment for product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post(
+    "/api/reddit/product/{product_id}/comment",
+    response_model=ProductRedditCommentSchema,
+)
+async def submit_product_comment(
+    product_id: str,
+    dry_run: bool = Query(
+        os.getenv("REDDIT_MODE", "dryrun") == "dryrun",
+        description="Whether to run in dry run mode (defaults based on REDDIT_MODE env var)",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Submit a comment on the original Reddit post for a product.
+    Args:
+        product_id: The ID of the product to comment with
+        dry_run: Whether to run in dry run mode (default: True)
+        db: Database session
+    Returns:
+        ProductRedditCommentSchema: The comment data
+    """
+    try:
+        logger.info(
+            f"Submitting Reddit comment for product {product_id} (dry_run: {dry_run})"
+        )
+        # Create commenter
+        commenter = RedditCommenter(dry_run=dry_run, session=db)
+        try:
+            # Comment on the original post
+            saved_comment_data = commenter.comment_on_original_post(product_id)
+
+            # Return the comment data in the expected schema format
+            schema_data = {
+                "id": saved_comment_data["id"],
+                "product_info_id": saved_comment_data["product_info_id"],
+                "original_post_id": saved_comment_data["original_post_id"],
+                "comment_id": saved_comment_data.get("comment_id"),
+                "comment_url": saved_comment_data.get("comment_url"),
+                "subreddit_name": saved_comment_data.get("subreddit"),
+                "commented_at": saved_comment_data["commented_at"],
+                "comment_content": saved_comment_data.get("comment_content"),
+                "dry_run": saved_comment_data["dry_run"],
+                "status": saved_comment_data["status"],
+                "error_message": saved_comment_data.get("error_message"),
+                "engagement_data": saved_comment_data.get("engagement_data"),
+            }
+            return ProductRedditCommentSchema.model_validate(schema_data)
+        finally:
+            commenter.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting comment for product {product_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to submit comment: {str(e)}"
+        )
+
+
+@app.get(
+    "/api/reddit/product/{product_id}/post", response_model=ProductSubredditPostSchema
+)
+async def get_product_post(product_id: str, db: Session = Depends(get_db)):
+    """
+    Get the Reddit subreddit post for a given product.
+    Args:
+        product_id: The ID of the product
+        db: Database session
+    Returns:
+        ProductSubredditPostSchema: The post data if found, 404 if not found
+    """
+    try:
+        logger.info(f"Fetching Reddit post for product {product_id}")
+        from app.db.models import ProductSubredditPost
+
+        post = (
+            db.query(ProductSubredditPost)
+            .filter(ProductSubredditPost.product_info_id == product_id)
+            .first()
+        )
+        if post:
+            return ProductSubredditPostSchema.model_validate(post)
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"No Reddit post found for product {product_id}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching Reddit post for product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post(
+    "/api/reddit/product/{product_id}/post", response_model=ProductSubredditPostSchema
+)
+async def submit_product_post(
+    product_id: str,
+    dry_run: bool = Query(
+        os.getenv("REDDIT_MODE", "dryrun") == "dryrun",
+        description="Whether to run in dry run mode (defaults based on REDDIT_MODE env var)",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Submit a new subreddit post for a product.
+    Args:
+        product_id: The ID of the product to create a post for
+        dry_run: Whether to run in dry run mode (default: True)
+        db: Database session
+    Returns:
+        ProductSubredditPostSchema: The post data
+    """
+    try:
+        logger.info(
+            f"Submitting Reddit post for product {product_id} (dry_run: {dry_run})"
+        )
+        # Create publisher
+        from app.subreddit_publisher import SubredditPublisher
+
+        publisher = SubredditPublisher(dry_run=dry_run, session=db)
+        try:
+            # Publish the product
+            result = publisher.publish_product(product_id)
+
+            # Get the created post from database
+            from app.db.models import ProductSubredditPost
+
+            post = (
+                db.query(ProductSubredditPost)
+                .filter(ProductSubredditPost.product_info_id == product_id)
+                .order_by(ProductSubredditPost.id.desc())
+                .first()
+            )
+
+            if post:
+                return ProductSubredditPostSchema.model_validate(post)
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Post created but not found in database for product {product_id}",
+                )
+        finally:
+            publisher.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting post for product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit post: {str(e)}")
+
+
+@app.get("/api/reddit/product/{product_id}/interaction")
+async def get_product_interaction(
+    product_id: str,
+    mode: str = Query("comment", description="Interaction mode: 'comment' or 'post'"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get the Reddit interaction (comment or post) for a given product.
+    Args:
+        product_id: The ID of the product
+        mode: The type of interaction to fetch ('comment' or 'post')
+        db: Database session
+    Returns:
+        The interaction data based on the mode parameter
+    """
+    try:
+        if mode == "comment":
+            return await get_product_comment(product_id, db)
+        elif mode == "post":
+            return await get_product_post(product_id, db)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid interaction mode: {mode}. Must be 'comment' or 'post'",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching {mode} for product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# END NEW CLEAN REDDIT INTERACTION API ENDPOINTS
+# ============================================================================
 
 
 @app.get("/api/publish/available-products")
@@ -2390,7 +2627,7 @@ async def create_agent_scanned_post(
             .filter(AgentScannedPost.post_id == request.post_id)
             .first()
         )
-        
+
         if existing_post:
             raise HTTPException(
                 status_code=409, detail=f"Post {request.post_id} already scanned"
@@ -2424,13 +2661,20 @@ async def create_agent_scanned_post(
         )
 
 
-@app.get("/api/agent-scanned-posts", response_model=Union[List[AgentScannedPostSchema], List[AgentScannedPostWithCommissionSchema]])
+@app.get(
+    "/api/agent-scanned-posts",
+    response_model=Union[
+        List[AgentScannedPostSchema], List[AgentScannedPostWithCommissionSchema]
+    ],
+)
 async def get_agent_scanned_posts(
     promoted: Optional[bool] = Query(None, description="Filter by promoted status"),
     subreddit: Optional[str] = Query(None, description="Filter by subreddit"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    include_commission_status: bool = Query(False, description="Include commission status information"),
+    include_commission_status: bool = Query(
+        False, description="Include commission status information"
+    ),
     db: Session = Depends(get_db),
 ):
     """Get agent scanned posts with optional filtering and commission status."""
@@ -2442,10 +2686,8 @@ async def get_agent_scanned_posts(
                 Donation.id.label("donation_id"),
                 Donation.amount_usd.label("donation_amount"),
                 Donation.tier.label("donation_tier"),
-                Donation.reddit_username.label("donor_username")
-            ).outerjoin(
-                Donation, AgentScannedPost.post_id == Donation.post_id
-            )
+                Donation.reddit_username.label("donor_username"),
+            ).outerjoin(Donation, AgentScannedPost.post_id == Donation.post_id)
 
             # Apply filters
             if promoted is not None:
@@ -2458,12 +2700,12 @@ async def get_agent_scanned_posts(
             query = query.offset(offset).limit(limit)
 
             results = query.all()
-            
+
             # Format enhanced response using schema
             formatted_results = []
             for result in results:
                 scanned_post = result.AgentScannedPost
-                
+
                 # Create donation info if exists
                 donation_info = None
                 if result.donation_id:
@@ -2471,9 +2713,9 @@ async def get_agent_scanned_posts(
                         donation_id=result.donation_id,
                         amount_usd=float(result.donation_amount),
                         tier=result.donation_tier,
-                        donor_username=result.donor_username
+                        donor_username=result.donor_username,
                     )
-                
+
                 # Create enhanced post schema
                 post_with_commission = AgentScannedPostWithCommissionSchema(
                     id=scanned_post.id,
@@ -2488,7 +2730,7 @@ async def get_agent_scanned_posts(
                     rejection_reason=scanned_post.rejection_reason,
                     is_commissioned=result.donation_id is not None,
                     donation_info=donation_info,
-                    agent_ratings=scanned_post.agent_ratings
+                    agent_ratings=scanned_post.agent_ratings,
                 )
                 formatted_results.append(post_with_commission)
 
@@ -2508,7 +2750,9 @@ async def get_agent_scanned_posts(
             query = query.offset(offset).limit(limit)
 
             scanned_posts = query.all()
-            return [AgentScannedPostSchema.model_validate(post) for post in scanned_posts]
+            return [
+                AgentScannedPostSchema.model_validate(post) for post in scanned_posts
+            ]
 
     except Exception as e:
         logger.error(f"Error fetching agent scanned posts: {e}")
@@ -2522,18 +2766,15 @@ async def get_agent_scanned_stats(db: Session = Depends(get_db)):
     """Get statistics about agent scanned posts."""
     try:
         total_scanned = db.query(AgentScannedPost).count()
-        total_promoted = db.query(AgentScannedPost).filter(AgentScannedPost.promoted == True).count()
-        
-        return {
-            "total_scanned": total_scanned,
-            "total_promoted": total_promoted
-        }
-    
+        total_promoted = (
+            db.query(AgentScannedPost).filter(AgentScannedPost.promoted == True).count()
+        )
+
+        return {"total_scanned": total_scanned, "total_promoted": total_promoted}
+
     except Exception as e:
         logger.error(f"Error getting agent scanned stats: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to get agent scanned stats"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get agent scanned stats")
 
 
 @app.get("/api/agent-scanned-posts/{post_id}", response_model=AgentScannedPostSchema)
@@ -2548,7 +2789,8 @@ async def get_agent_scanned_post(post_id: str, db: Session = Depends(get_db)):
 
         if not scanned_post:
             raise HTTPException(
-                status_code=404, detail=f"Agent scanned post with ID {post_id} not found"
+                status_code=404,
+                detail=f"Agent scanned post with ID {post_id} not found",
             )
 
         return AgentScannedPostSchema.model_validate(scanned_post)
@@ -2577,11 +2819,7 @@ async def check_post_scanned(post_id: str, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error checking if post {post_id} is scanned: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to check post scan status"
-        )
-
-
+        raise HTTPException(status_code=500, detail="Failed to check post scan status")
 
 
 if __name__ == "__main__":

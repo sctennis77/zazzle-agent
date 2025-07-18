@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
-import type { GeneratedProduct, CommissionInfo, ProductRedditComment } from '../../types/productTypes';
+import type { GeneratedProduct, CommissionInfo, RedditInteraction } from '../../types/productTypes';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
-import { usePublishProduct } from '../../hooks/usePublishProduct';
+import { useRedditInteraction } from '../../hooks/useRedditInteraction';
+import { redditConfig } from '../../utils/redditConfig';
 import { API_BASE } from '../../utils/apiBase';
 
 interface ProductModalProps {
@@ -35,7 +36,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
 
   const { getTierDisplay } = useDonationTiers();
-  const { publishedPost, getPublishedPost, publishProduct } = usePublishProduct();
+  const { 
+    interaction: redditInteraction, 
+    autoSubmitIfNeeded, 
+    isComment,
+    isPost,
+    hasInteraction,
+    interactionUrl,
+    subredditName,
+    interactionDate,
+    submitting: submittingInteraction 
+  } = useRedditInteraction({ 
+    mode: redditConfig.interactionMode,
+    autoSubmit: true 
+  });
 
   // Fetch donation information when modal opens
   useEffect(() => {
@@ -57,34 +71,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         }
       };
 
-      const autoPublishIfNeeded = async () => {
+      const autoSubmitRedditInteraction = async () => {
         try {
-          // First check if a post exists
-          const existingPost = await getPublishedPost(product.product_info.id.toString());
+          const productId = product.product_info.id.toString();
+          const isDryRun = redditConfig.isDryRun;
           
-          if (!existingPost) {
-            // No post exists, so publish
-            const isDryRun = import.meta.env.VITE_REDDIT_MODE !== 'live';
-            console.log(`Product ${product.product_info.id} not published yet, auto-publishing (dry_run: ${isDryRun})...`);
-            await publishProduct(product.product_info.id.toString(), isDryRun);
-          } else {
-            // Post exists - but if it's a dry run and we're in live mode, try to publish anyway
-            // The backend will handle deleting the dry run and creating a live post
-            const isLiveMode = import.meta.env.VITE_REDDIT_MODE === 'live';
-            if (existingPost.dry_run && isLiveMode) {
-              console.log(`Product ${product.product_info.id} has dry run post, publishing live version...`);
-              await publishProduct(product.product_info.id.toString(), false);
-            }
-          }
+          await autoSubmitIfNeeded(productId, { 
+            mode: redditConfig.interactionMode,
+            dryRun: isDryRun 
+          });
         } catch (error) {
-          console.error('Error in auto-publish logic:', error);
+          console.error(`Error in auto-submit ${redditConfig.interactionMode} logic:`, error);
         }
       };
 
       fetchDonationInfo();
-      autoPublishIfNeeded();
+      autoSubmitRedditInteraction();
     }
-  }, [isOpen, product.pipeline_run.id, product.product_info.id, getPublishedPost, publishProduct]);
+  }, [isOpen, product.pipeline_run.id, product.product_info.id, autoSubmitIfNeeded]);
 
   // Create custom title with HD badge
   const modalTitle = (
@@ -212,29 +216,45 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     )}
                   </div>
                 </div>
-                {/* Published to Reddit/Clouvel Section */}
-                {publishedPost && (
+                {/* Reddit Interaction Section */}
+                {hasInteraction && redditInteraction && (
                   <div className="flex items-center gap-2 mt-2">
                     <a
-                      href={publishedPost.comment_url}
+                      href={interactionUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
-                      title="View Comment on Reddit"
+                      title={`View ${isComment(redditInteraction) ? 'Comment' : 'Post'} on Reddit`}
                     >
                       <FaReddit size={16} className="text-green-600" />
                     </a>
                     <span className="font-semibold text-gray-900 text-sm">
-                      r/{publishedPost.subreddit_name}
+                      r/{subredditName}
                     </span>
                     <span className="text-xs text-gray-600">
-                      &nbsp;• {new Date(publishedPost.commented_at).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      &nbsp;• {isComment(redditInteraction) ? 'Comment' : 'Post'}
+                      {redditInteraction.dry_run && <span className="text-orange-600"> (Dry Run)</span>}
+                    </span>
+                    {interactionDate && (
+                      <span className="text-xs text-gray-600">
+                        &nbsp;• {new Date(interactionDate).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {submittingInteraction && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="p-1.5 rounded-full bg-blue-100 border border-blue-300">
+                      <FaReddit size={16} className="text-blue-600 animate-pulse" />
+                    </div>
+                    <span className="text-sm text-blue-600 italic">
+                      Submitting {redditConfig.interactionMode}...
                     </span>
                   </div>
                 )}
