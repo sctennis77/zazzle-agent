@@ -1036,9 +1036,10 @@ Create a comment that builds genuine community connection and shows real interes
                         logger.info(f"Upvoted karma building post {post.id}")
                         
                         # Post the genuine comment
-                        comment = post.reply(comment_text)
-                        comment_id = comment.id
-                        logger.info(f"Posted karma building comment {comment_id} on post {post.id}")
+                        # comment = post.reply(comment_text)
+                        # comment_id = comment.id
+                        # logger.info(f"Posted karma building comment {comment_id} on post {post.id}")
+                        logger.info(f"KARMA: Would have posted comment {comment_text}.\t{post.id}")
                         
                     except Exception as e:
                         logger.error(f"Error executing karma building actions: {e}")
