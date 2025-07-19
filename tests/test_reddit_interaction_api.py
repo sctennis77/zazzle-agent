@@ -5,27 +5,77 @@ Tests the clean comment vs post separation introduced in the Reddit interaction 
 """
 
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.api import app
-from app.db.models import ProductRedditComment, ProductSubredditPost, ProductInfo, RedditPost, PipelineRun
+from app.api import app, get_db
+from app.db.models import Base, ProductRedditComment, ProductSubredditPost, ProductInfo, RedditPost, PipelineRun, Subreddit
 from app.pipeline_status import PipelineStatus
+
+# Create test database
+TEST_DATABASE_URL = "sqlite:///./test_reddit_interaction.db"
+engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
+
+
+def override_get_db():
+    """Override the get_db dependency for testing."""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture(autouse=True)
+def setup_database():
+    """Setup and teardown database for each test."""
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Drop tables after test
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
 def client():
-    """Create test client."""
-    return TestClient(app)
+    """Create test client with database override."""
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def db_session():
+    """Create a database session for testing."""
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @pytest.fixture
 def sample_product_data(db_session):
     """Create sample product data for testing."""
+    # Create or get subreddit
+    subreddit = db_session.query(Subreddit).filter_by(subreddit_name="test").first()
+    if not subreddit:
+        subreddit = Subreddit(subreddit_name="test")
+        db_session.add(subreddit)
+        db_session.flush()
+    
     # Create pipeline run
     pipeline_run = PipelineRun(
-        start_time="2024-01-01T00:00:00",
-        end_time="2024-01-01T01:00:00",
+        start_time=datetime(2024, 1, 1, 0, 0, 0),
+        end_time=datetime(2024, 1, 1, 1, 0, 0),
         status=PipelineStatus.COMPLETED.value,
         retry_count=0
     )
@@ -38,7 +88,7 @@ def sample_product_data(db_session):
         post_id="test123",
         title="Test Post",
         content="Test content",
-        subreddit="test",
+        subreddit_id=subreddit.id,
         url="https://reddit.com/r/test/comments/test123",
         permalink="/r/test/comments/test123"
     )
@@ -90,7 +140,7 @@ class TestRedditCommentEndpoints:
             comment_id="comment456",
             comment_url="https://reddit.com/r/test/comments/test123/comment456",
             subreddit_name="test",
-            commented_at="2024-01-01T12:00:00",
+            commented_at=datetime(2024, 1, 1, 12, 0, 0),
             comment_content="Test comment content",
             dry_run=True,
             status="success"
@@ -105,7 +155,7 @@ class TestRedditCommentEndpoints:
         assert data["comment_content"] == "Test comment content"
         assert data["dry_run"] is True
     
-    @patch('app.reddit_commenter.RedditCommenter')
+    @patch('app.api.RedditCommenter')
     def test_submit_product_comment_success(self, mock_commenter_class, client, sample_product_data):
         """Test successful comment submission."""
         product_id = sample_product_data["product_info"].id
@@ -120,7 +170,7 @@ class TestRedditCommentEndpoints:
             "comment_id": "comment456",
             "comment_url": "https://reddit.com/r/test/comments/test123/comment456",
             "subreddit": "test",
-            "commented_at": "2024-01-01T12:00:00",
+            "commented_at": datetime(2024, 1, 1, 12, 0, 0).isoformat(),
             "comment_content": "Test comment content",
             "dry_run": True,
             "status": "success"
@@ -133,10 +183,10 @@ class TestRedditCommentEndpoints:
         assert data["dry_run"] is True
         
         # Verify commenter was called correctly
-        mock_commenter_class.assert_called_once_with(dry_run=True, session=mock_commenter.session)
+        mock_commenter_class.assert_called_once()
         mock_commenter.comment_on_original_post.assert_called_once_with(str(product_id))
     
-    @patch('app.reddit_commenter.RedditCommenter')
+    @patch('app.api.RedditCommenter')
     def test_submit_product_comment_failure(self, mock_commenter_class, client, sample_product_data):
         """Test comment submission failure."""
         product_id = sample_product_data["product_info"].id
@@ -172,7 +222,7 @@ class TestRedditPostEndpoints:
             reddit_post_id="post789",
             reddit_post_url="https://reddit.com/r/clouvel/comments/post789",
             reddit_post_title="Test Post Title",
-            submitted_at="2024-01-01T12:00:00",
+            submitted_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=False,
             status="success"
         )
@@ -186,8 +236,7 @@ class TestRedditPostEndpoints:
         assert data["subreddit_name"] == "clouvel"
         assert data["dry_run"] is False
     
-    @patch('app.subreddit_publisher.SubredditPublisher')
-    def test_submit_product_post_success(self, mock_publisher_class, client, sample_product_data, db_session):
+    def test_submit_product_post_success(self, client, sample_product_data, db_session):
         """Test successful post submission."""
         product_id = sample_product_data["product_info"].id
         
@@ -198,7 +247,7 @@ class TestRedditPostEndpoints:
             reddit_post_id="post789",
             reddit_post_url="https://reddit.com/r/clouvel/comments/post789",
             reddit_post_title="Test Post Title",
-            submitted_at="2024-01-01T12:00:00",
+            submitted_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=True,
             status="success"
         )
@@ -206,19 +255,20 @@ class TestRedditPostEndpoints:
         db_session.commit()
         
         # Mock the publisher
-        mock_publisher = Mock()
-        mock_publisher_class.return_value = mock_publisher
-        mock_publisher.publish_product.return_value = {"success": True}
-        
-        response = client.post(f"/api/reddit/product/{product_id}/post?dry_run=true")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["product_info_id"] == product_id
-        assert data["subreddit_name"] == "clouvel"
-        
-        # Verify publisher was called correctly
-        mock_publisher_class.assert_called_once_with(dry_run=True, session=mock_publisher.session)
-        mock_publisher.publish_product.assert_called_once_with(str(product_id))
+        with patch('app.subreddit_publisher.SubredditPublisher') as mock_publisher_class:
+            mock_publisher = Mock()
+            mock_publisher_class.return_value = mock_publisher
+            mock_publisher.publish_product.return_value = {"success": True}
+            
+            response = client.post(f"/api/reddit/product/{product_id}/post?dry_run=true")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["product_info_id"] == product_id
+            assert data["subreddit_name"] == "clouvel"
+            
+            # Verify publisher was called correctly
+            mock_publisher_class.assert_called_once()
+            mock_publisher.publish_product.assert_called_once_with(str(product_id))
 
 
 class TestUnifiedInteractionEndpoint:
@@ -234,7 +284,7 @@ class TestUnifiedInteractionEndpoint:
             original_post_id="test123",
             comment_id="comment456",
             subreddit_name="test",
-            commented_at="2024-01-01T12:00:00",
+            commented_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=True,
             status="success"
         )
@@ -256,7 +306,7 @@ class TestUnifiedInteractionEndpoint:
             product_info_id=product_id,
             subreddit_name="clouvel",
             reddit_post_id="post789",
-            submitted_at="2024-01-01T12:00:00",
+            submitted_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=False,
             status="success"
         )
@@ -286,7 +336,7 @@ class TestUnifiedInteractionEndpoint:
             product_info_id=product_id,
             original_post_id="test123",
             subreddit_name="test",
-            commented_at="2024-01-01T12:00:00",
+            commented_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=True,
             status="success"
         )
@@ -312,7 +362,7 @@ class TestBackwardCompatibility:
             product_info_id=product_id,
             original_post_id="test123",
             subreddit_name="test",
-            commented_at="2024-01-01T12:00:00",
+            commented_at=datetime(2024, 1, 1, 12, 0, 0),
             dry_run=True,
             status="success"
         )

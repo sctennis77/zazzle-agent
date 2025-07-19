@@ -21,7 +21,7 @@ class TestClouvelPromoterAgent:
         assert agent.subreddit_name == "popular"
         assert agent.max_posts_per_hour == 10
         assert agent.min_score_threshold == 0
-        assert len(agent.tools) == 9
+        assert len(agent.tools) == 10
 
     def test_agent_initialization_custom_subreddit(self):
         """Test agent initializes with custom subreddit"""
@@ -44,8 +44,8 @@ class TestClouvelPromoterAgent:
         agent = ClouvelPromoterAgent(dry_run=True)
 
         assert "Queen Clouvel" in agent.personality
-        assert "golden retriever monarch" in agent.personality
-        assert "Commission Promoter" in agent.personality
+        assert "golden retriever" in agent.personality
+        assert "ancient art of clouveling" in agent.personality
 
     @patch("app.agents.clouvel_promoter_agent.SessionLocal")
     def test_check_post_already_scanned(self, mock_session_local):
