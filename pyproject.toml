@@ -26,6 +26,7 @@ requests = "^2.31.0"
 schedule = "^1.2.0"
 qrcode = {version = "^8.2", extras = ["pil", "all"]}
 python-multipart = "^0.0.20"
+psycopg2-binary = "^2.9.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
