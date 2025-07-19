@@ -81,7 +81,7 @@ class OpenAIUsageTracker:
 
     def __init__(self, test_mode: bool = False):
         """Initialize the usage tracker.
-        
+
         Args:
             test_mode: If True, disables detailed logging and session summaries for faster tests
         """
@@ -196,7 +196,7 @@ class OpenAIUsageTracker:
         # Skip detailed logging in test mode
         if self.test_mode:
             return
-            
+
         # Get current usage for this model
         current = self.current_usage.get(usage.model, {})
         rate_limits = self.RATE_LIMITS.get(usage.model, {})
@@ -356,7 +356,7 @@ class OpenAIUsageTracker:
         # Skip session summary in test mode
         if self.test_mode:
             return
-            
+
         summary = self.get_session_summary()
         logger.info("=" * 80)
         logger.info("OPENAI API USAGE SESSION SUMMARY")
@@ -368,6 +368,7 @@ class OpenAIUsageTracker:
 # Global tracker instance
 # Check if we're in test mode based on environment or pytest
 import sys
+
 _test_mode = "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST") is not None
 _usage_tracker = OpenAIUsageTracker(test_mode=_test_mode)
 
@@ -425,7 +426,9 @@ def track_openai_call(model: str, operation: str = "chat"):
                 # Check for specific error types and log appropriate warnings (skip in test mode)
                 if not _test_mode:
                     if "429" in error_message or "rate limit" in error_message.lower():
-                        logger.warning(f"🚨 Rate limit exceeded for {model} - {operation}")
+                        logger.warning(
+                            f"🚨 Rate limit exceeded for {model} - {operation}"
+                        )
                     elif "quota" in error_message.lower():
                         logger.error(f"💳 API quota exceeded for {model} - {operation}")
                     elif "insufficient_quota" in error_message.lower():

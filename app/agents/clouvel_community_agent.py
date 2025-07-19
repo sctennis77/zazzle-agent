@@ -289,9 +289,15 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                     "content": p.selftext[:500] if p.selftext else "",
                     "score": p.score,
                     "num_comments": p.num_comments,
-                    "subreddit": str(p.subreddit.display_name) if hasattr(p.subreddit, 'display_name') else self.subreddit_name,
+                    "subreddit": (
+                        str(p.subreddit.display_name)
+                        if hasattr(p.subreddit, "display_name")
+                        else self.subreddit_name
+                    ),
                     "flair": (
-                        str(p.link_flair_text) if hasattr(p, "link_flair_text") and p.link_flair_text else None
+                        str(p.link_flair_text)
+                        if hasattr(p, "link_flair_text") and p.link_flair_text
+                        else None
                     ),
                 }
                 for p in posts[:10]
@@ -302,7 +308,11 @@ You rule your creative kingdom with a gentle paw and an artist's eye.
                     "author": str(c.author) if c.author else "[deleted]",
                     "content": c.body[:300],
                     "score": c.score,
-                    "subreddit": str(c.subreddit.display_name) if hasattr(c.subreddit, 'display_name') else self.subreddit_name,
+                    "subreddit": (
+                        str(c.subreddit.display_name)
+                        if hasattr(c.subreddit, "display_name")
+                        else self.subreddit_name
+                    ),
                     "parent_type": (
                         "post" if c.parent_id.startswith("t3_") else "comment"
                     ),

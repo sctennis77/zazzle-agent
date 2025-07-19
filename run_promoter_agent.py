@@ -15,6 +15,7 @@ from typing import Optional
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from app.agents.clouvel_promoter_agent import ClouvelPromoterAgent
@@ -42,59 +43,55 @@ Examples:
 
   # Check agent status
   python run_promoter_agent.py --status-only
-        """
+        """,
     )
 
     parser.add_argument(
         "--dry-run",
         action="store_true",
         default=os.getenv("PROMOTER_DRY_RUN", "true").lower() == "true",
-        help="Run in dry-run mode (analyze but don't post/vote)"
+        help="Run in dry-run mode (analyze but don't post/vote)",
     )
 
     parser.add_argument(
         "--subreddit",
         type=str,
         default=os.getenv("PROMOTER_SUBREDDIT", "popular"),
-        help="Target subreddit (default: popular)"
+        help="Target subreddit (default: popular)",
     )
 
     parser.add_argument(
         "--single-cycle",
         action="store_true",
-        help="Run only one cycle instead of continuous operation"
+        help="Run only one cycle instead of continuous operation",
     )
 
     parser.add_argument(
         "--continuous",
         action="store_true",
-        help="Run continuously with delay between cycles"
+        help="Run continuously with delay between cycles",
     )
 
     parser.add_argument(
         "--delay-minutes",
         type=int,
         default=int(os.getenv("PROMOTER_DELAY_MINUTES", "30")),
-        help="Minutes to wait between cycles in continuous mode (default: 30)"
+        help="Minutes to wait between cycles in continuous mode (default: 30)",
     )
 
     parser.add_argument(
-        "--max-cycles",
-        type=int,
-        help="Maximum number of cycles to run (for testing)"
+        "--max-cycles", type=int, help="Maximum number of cycles to run (for testing)"
     )
 
     parser.add_argument(
-        "--status-only",
-        action="store_true",
-        help="Only check and display agent status"
+        "--status-only", action="store_true", help="Only check and display agent status"
     )
 
     parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
-        help="Set logging level (default: INFO)"
+        help="Set logging level (default: INFO)",
     )
 
     args = parser.parse_args()
@@ -104,11 +101,18 @@ Examples:
         print("Error: Cannot use both --continuous and --single-cycle", file=sys.stderr)
         sys.exit(1)
 
-    if not args.dry_run and not args.continuous and not args.single_cycle and not args.status_only:
-        print("Warning: Running without --dry-run. This will perform actual Reddit actions!")
+    if (
+        not args.dry_run
+        and not args.continuous
+        and not args.single_cycle
+        and not args.status_only
+    ):
+        print(
+            "Warning: Running without --dry-run. This will perform actual Reddit actions!"
+        )
         print("Consider using --dry-run for testing first.")
         response = input("Continue anyway? (y/N): ")
-        if response.lower() != 'y':
+        if response.lower() != "y":
             print("Exiting...")
             sys.exit(0)
 
@@ -119,10 +123,11 @@ Examples:
     # Initialize agent
     try:
         agent = ClouvelPromoterAgent(
-            subreddit_name=args.subreddit,
-            dry_run=args.dry_run
+            subreddit_name=args.subreddit, dry_run=args.dry_run
         )
-        logger.info(f"Initialized ClouvelPromoterAgent for r/{args.subreddit} (dry_run={args.dry_run})")
+        logger.info(
+            f"Initialized ClouvelPromoterAgent for r/{args.subreddit} (dry_run={args.dry_run})"
+        )
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}")
         sys.exit(1)
@@ -131,25 +136,25 @@ Examples:
     if args.status_only:
         try:
             status = agent.get_status()
-            print("\n" + "="*50)
+            print("\n" + "=" * 50)
             print("🏛️  QUEEN CLOUVEL'S PROMOTER AGENT STATUS")
-            print("="*50)
+            print("=" * 50)
             print(f"Agent Type: {status.get('agent_type', 'Unknown')}")
             print(f"Dry Run Mode: {status.get('dry_run', 'Unknown')}")
             print(f"Total Scanned: {status.get('total_scanned', 0)}")
             print(f"Total Promoted: {status.get('total_promoted', 0)}")
             print(f"Total Rejected: {status.get('total_rejected', 0)}")
             print(f"Promotion Rate: {status.get('promotion_rate', 0):.1f}%")
-            
-            recent = status.get('recent_activity', [])
+
+            recent = status.get("recent_activity", [])
             if recent:
                 print(f"\nRecent Activity ({len(recent)} posts):")
                 for post in recent[:5]:  # Show last 5
-                    action = "✅ Promoted" if post.get('promoted') else "❌ Rejected"
-                    title = post.get('post_title', 'No title')[:40]
+                    action = "✅ Promoted" if post.get("promoted") else "❌ Rejected"
+                    title = post.get("post_title", "No title")[:40]
                     print(f"  {action}: {title}... (r/{post.get('subreddit', '?')})")
-            
-            print("="*50)
+
+            print("=" * 50)
         except Exception as e:
             logger.error(f"Failed to get status: {e}")
             sys.exit(1)
@@ -160,11 +165,11 @@ Examples:
         logger.info("Running single cycle...")
         try:
             result = agent.run_single_cycle()
-            
-            print("\n" + "="*50)
+
+            print("\n" + "=" * 50)
             print("🏛️  SINGLE CYCLE RESULTS")
-            print("="*50)
-            
+            print("=" * 50)
+
             if result.get("processed"):
                 action = result.get("action", "unknown")
                 post_id = result.get("post_id", "unknown")
@@ -173,8 +178,8 @@ Examples:
                 print(f"❌ Error: {result['error']}")
             else:
                 print("ℹ️  No posts processed (no novel posts found)")
-            
-            print("="*50)
+
+            print("=" * 50)
         except Exception as e:
             logger.error(f"Error in single cycle: {e}")
             sys.exit(1)
@@ -182,39 +187,45 @@ Examples:
 
     # Continuous mode
     if args.continuous:
-        logger.info(f"Starting continuous operation (delay: {args.delay_minutes} minutes)")
+        logger.info(
+            f"Starting continuous operation (delay: {args.delay_minutes} minutes)"
+        )
         cycle_count = 0
-        
+
         try:
             while True:
                 cycle_count += 1
                 logger.info(f"Starting cycle {cycle_count}")
-                
+
                 try:
                     result = agent.run_single_cycle()
-                    
+
                     if result.get("processed"):
                         action = result.get("action", "unknown")
                         post_id = result.get("post_id", "unknown")
                         logger.info(f"Cycle {cycle_count}: {action} post {post_id}")
                     elif result.get("error"):
-                        logger.warning(f"Cycle {cycle_count}: Error - {result['error']}")
+                        logger.warning(
+                            f"Cycle {cycle_count}: Error - {result['error']}"
+                        )
                     else:
                         logger.info(f"Cycle {cycle_count}: No novel posts found")
-                        
+
                 except Exception as e:
                     logger.error(f"Error in cycle {cycle_count}: {e}")
-                
+
                 # Check max cycles
                 if args.max_cycles and cycle_count >= args.max_cycles:
                     logger.info(f"Reached maximum cycles ({args.max_cycles}), stopping")
                     break
-                
+
                 # Wait before next cycle
                 delay_seconds = args.delay_minutes * 60
-                logger.info(f"Waiting {args.delay_minutes} minutes before next cycle...")
+                logger.info(
+                    f"Waiting {args.delay_minutes} minutes before next cycle..."
+                )
                 time.sleep(delay_seconds)
-                
+
         except KeyboardInterrupt:
             logger.info("Received interrupt signal, stopping gracefully...")
         except Exception as e:

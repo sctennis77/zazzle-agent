@@ -128,7 +128,9 @@ class SubredditPublisher:
                 "dry_run": self.dry_run,
             }
 
-    def get_product_from_db(self, product_id: str) -> tuple[Optional[GeneratedProductSchema], Optional[object]]:
+    def get_product_from_db(
+        self, product_id: str
+    ) -> tuple[Optional[GeneratedProductSchema], Optional[object]]:
         """
         Fetch a product from the database by product_id.
 
@@ -282,7 +284,9 @@ class SubredditPublisher:
             post_title = product.image_title or product.theme
 
             # Determine the commission username to use in title
-            commission_username = self._get_commission_username(generated_product, donation)
+            commission_username = self._get_commission_username(
+                generated_product, donation
+            )
 
             # Create title for the image post
             title = f"🎨 {post_title} - commissioned by u/{commission_username}"

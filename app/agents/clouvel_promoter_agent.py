@@ -27,12 +27,12 @@ class ClouvelPromoterAgent:
     def __init__(self, subreddit_name: str = "popular", dry_run: bool = True):
         self.subreddit_name = subreddit_name
         self.dry_run = dry_run
-        
+
         # Karma building settings
         self.karma_building_enabled = True
         self.karma_target = 1000  # Target karma before aggressive promotion
         self.promotional_probability = 0.4  # 40% chance to promote eligible posts
-        
+
         # Subreddits to cycle through for finding creative content
         self.target_subreddits = [
             "popular",
@@ -41,36 +41,81 @@ class ClouvelPromoterAgent:
             "golf",
         ]
         self.current_subreddit_index = 0
-        
+
         # Karma building subreddits (diverse communities for natural engagement)
         self.karma_subreddits = [
             # Creative communities
-            "art", "digitalart", "drawing", "illustration", "sketches", "doodles",
-            "painting", "photography", "crafts", "DIY", "woodworking", "pottery",
-            
-            # Wholesome/feel-good communities  
-            "wholesomememes", "MadeMeSmile", "aww", "eyebleach", "AnimalsBeingBros",
-            "HumansBeingBros", "rarepuppers", "cats", "dogs", "NatureIsFuckingLit",
-            
+            "art",
+            "digitalart",
+            "drawing",
+            "illustration",
+            "sketches",
+            "doodles",
+            "painting",
+            "photography",
+            "crafts",
+            "DIY",
+            "woodworking",
+            "pottery",
+            # Wholesome/feel-good communities
+            "wholesomememes",
+            "MadeMeSmile",
+            "aww",
+            "eyebleach",
+            "AnimalsBeingBros",
+            "HumansBeingBros",
+            "rarepuppers",
+            "cats",
+            "dogs",
+            "NatureIsFuckingLit",
             # Interesting/educational
-            "todayilearned", "interestingasfuck", "Damnthatsinteresting", 
-            "explainlikeimfive", "YouShouldKnow", "LifeProTips", "coolguides",
-            
+            "todayilearned",
+            "interestingasfuck",
+            "Damnthatsinteresting",
+            "explainlikeimfive",
+            "YouShouldKnow",
+            "LifeProTips",
+            "coolguides",
             # Discussion/story communities
-            "AskReddit", "NoStupidQuestions", "CasualConversation", "stories",
-            "confession", "offmychest", "TrueOffMyChest", "relationship_advice",
-            
+            "AskReddit",
+            "NoStupidQuestions",
+            "CasualConversation",
+            "stories",
+            "confession",
+            "offmychest",
+            "TrueOffMyChest",
+            "relationship_advice",
             # Hobby/interest communities
-            "books", "movies", "television", "gaming", "boardgames", "cooking",
-            "food", "recipes", "gardening", "houseplants", "travel", "hiking",
-            
+            "books",
+            "movies",
+            "television",
+            "gaming",
+            "boardgames",
+            "cooking",
+            "food",
+            "recipes",
+            "gardening",
+            "houseplants",
+            "travel",
+            "hiking",
             # Humor/entertainment
-            "funny", "mildlyinteresting", "oddlysatisfying", "unexpected",
-            "therewasanattempt", "facepalm", "WhitePeopleTwitter", "BlackPeopleTwitter",
-            
+            "funny",
+            "mildlyinteresting",
+            "oddlysatisfying",
+            "unexpected",
+            "therewasanattempt",
+            "facepalm",
+            "WhitePeopleTwitter",
+            "BlackPeopleTwitter",
             # Help/support communities
-            "GetMotivated", "decidingtobebetter", "selfimprovement", "mentalhealth",
-            "anxiety", "depression", "ADHD", "socialskills"
+            "GetMotivated",
+            "decidingtobebetter",
+            "selfimprovement",
+            "mentalhealth",
+            "anxiety",
+            "depression",
+            "ADHD",
+            "socialskills",
         ]
         # Validate required credentials
         required_vars = [
@@ -129,12 +174,14 @@ class ClouvelPromoterAgent:
             0  # Minimum score for posts to consider (0 = no filtering)
         )
         self.karma_posts_per_cycle = 3  # Maximum karma building posts per cycle
-        
+
         # Advanced reputation building settings
         self.engagement_variety_enabled = True  # Mix different types of engagement
         self.comment_length_variety = True  # Vary comment lengths naturally
         self.adaptive_promotion_rate = True  # Adjust promotion based on recent success
-        self.community_relationship_tracking = True  # Track engagement history per subreddit
+        self.community_relationship_tracking = (
+            True  # Track engagement history per subreddit
+        )
 
         # Tools for promotion activities
         self.promotion_tools = [
@@ -237,23 +284,25 @@ class ClouvelPromoterAgent:
         except Exception as e:
             logger.error(f"Error checking if post {post_id} is commissioned: {e}")
             return False
-    
+
     def _get_current_karma(self) -> int:
         """Get current account karma"""
         try:
             user = self.reddit.user.me()
             total_karma = user.comment_karma + user.link_karma
-            logger.info(f"Current karma: {total_karma} (comment: {user.comment_karma}, link: {user.link_karma})")
+            logger.info(
+                f"Current karma: {total_karma} (comment: {user.comment_karma}, link: {user.link_karma})"
+            )
             return total_karma
         except Exception as e:
             logger.error(f"Error getting current karma: {e}")
             return 0
-    
+
     def _should_promote_post(self) -> bool:
         """Determine if we should promote based on karma, recent success, and adaptive probability"""
         current_karma = self._get_current_karma()
         base_probability = self.promotional_probability
-        
+
         # Adjust probability based on karma status
         if current_karma < self.karma_target:
             karma_modifier = 0.5  # 50% of normal rate when below target
@@ -261,23 +310,25 @@ class ClouvelPromoterAgent:
             karma_modifier = 0.8  # 80% of normal rate when moderately above target
         else:
             karma_modifier = 1.0  # Full rate when well above target
-        
+
         # Adaptive promotion based on recent success (if enabled)
         success_modifier = 1.0
         if self.adaptive_promotion_rate:
             success_modifier = self._calculate_recent_success_modifier()
-        
+
         # Calculate final probability
         final_probability = base_probability * karma_modifier * success_modifier
-        
+
         # Cap between 0.1 and 0.7 to prevent extremes
         final_probability = max(0.1, min(0.7, final_probability))
-        
+
         should_promote = random.random() < final_probability
-        logger.info(f"Promotion decision: karma={current_karma}/{self.karma_target}, base={base_probability:.2f}, karma_mod={karma_modifier:.2f}, success_mod={success_modifier:.2f}, final={final_probability:.2f}, promoting={should_promote}")
-        
+        logger.info(
+            f"Promotion decision: karma={current_karma}/{self.karma_target}, base={base_probability:.2f}, karma_mod={karma_modifier:.2f}, success_mod={success_modifier:.2f}, final={final_probability:.2f}, promoting={should_promote}"
+        )
+
         return should_promote
-    
+
     def _calculate_recent_success_modifier(self) -> float:
         """Calculate modifier based on recent promotional success rates"""
         try:
@@ -290,15 +341,17 @@ class ClouvelPromoterAgent:
                     .limit(20)
                     .all()
                 )
-                
+
                 if len(recent_posts) < 5:  # Not enough data
                     return 1.0
-                
+
                 # Calculate success rate based on upvotes/engagement (simplified)
                 # In a real implementation, you'd track comment visibility and engagement
-                success_count = len([p for p in recent_posts if p.comment_id is not None])
+                success_count = len(
+                    [p for p in recent_posts if p.comment_id is not None]
+                )
                 success_rate = success_count / len(recent_posts)
-                
+
                 # Adjust promotion rate based on success
                 if success_rate > 0.8:
                     return 1.2  # Increase promotion when successful
@@ -306,7 +359,7 @@ class ClouvelPromoterAgent:
                     return 0.7  # Decrease promotion when struggling
                 else:
                     return 1.0  # Maintain current rate
-                    
+
         except Exception as e:
             logger.error(f"Error calculating success modifier: {e}")
             return 1.0
@@ -537,14 +590,12 @@ Respond with JSON: {{
 
             should_promote = result.get("promote", False)
             reason = result.get("reason", "No reason provided")
-            
+
             # Extract agent ratings
             agent_ratings = {
                 "mood": result.get("mood", ["😐"]),
                 "topic": result.get("topic", ["❓"]),
-                "illustration_potential": result.get(
-                    "illustration_potential", 5
-                )
+                "illustration_potential": result.get("illustration_potential", 5),
             }
 
             logger.info(
@@ -592,21 +643,21 @@ Respond with JSON: {{
                 "length_target": "medium",
             },
         ]
-        
+
         # Weighted random selection
         total_weight = sum(p["weight"] for p in patterns)
         random_value = random.random() * total_weight
-        
+
         current_weight = 0
         for pattern in patterns:
             current_weight += pattern["weight"]
             if random_value <= current_weight:
                 logger.info(f"Selected comment pattern: {pattern['name']}")
                 return pattern
-        
+
         # Fallback to first pattern
         return patterns[0]
-    
+
     def _get_length_guidance(self, length_target: str) -> str:
         """Get length guidance for comment generation"""
         # Adjusted for shorter, more natural comments (2-4 sentences)
@@ -616,46 +667,60 @@ Respond with JSON: {{
             return "Write a thoughtful response (3-4 sentences, 35-50 words). Show genuine engagement but stay concise."
         else:  # medium
             return "Aim for sweet spot length (2-3 sentences, 25-40 words). Balance engagement with brevity."
-    
+
     def _build_pattern_instructions(self, pattern: Dict[str, Any]) -> str:
         """Build pattern-specific instructions for comment generation"""
         instructions = []
-        
+
         if pattern["link_placement"] == "beginning":
             instructions.append("- Lead with sacred authority about clouveling")
-            instructions.append("- Examples: 'Sacred work. This calls for [✨clouveling✨](https://clouvel.ai).' or 'The ancient art beckons. [🎨Clouvel🎨](https://clouvel.ai) this.'")
+            instructions.append(
+                "- Examples: 'Sacred work. This calls for [✨clouveling✨](https://clouvel.ai).' or 'The ancient art beckons. [🎨Clouvel🎨](https://clouvel.ai) this.'"
+            )
         elif pattern["link_placement"] == "middle":
             instructions.append("- Brief observation, then ancient command")
-            instructions.append("- Examples: 'Powerful tale. The old ways demand we [👑clouvel👑](https://clouvel.ai) this.' or 'I sense greatness. Time to [💫clouvel💫](https://clouvel.ai).'")
+            instructions.append(
+                "- Examples: 'Powerful tale. The old ways demand we [👑clouvel👑](https://clouvel.ai) this.' or 'I sense greatness. Time to [💫clouvel💫](https://clouvel.ai).'"
+            )
         elif pattern["link_placement"] == "end":
             instructions.append("- Mystical observation, then laconic clouvel command")
-            instructions.append("- Examples: 'The legends call. This deserves [⚡clouveling⚡](https://clouvel.ai).' or 'Ancient wisdom speaks. [🌟Clouvel🌟](https://clouvel.ai) this.'")
+            instructions.append(
+                "- Examples: 'The legends call. This deserves [⚡clouveling⚡](https://clouvel.ai).' or 'Ancient wisdom speaks. [🌟Clouvel🌟](https://clouvel.ai) this.'"
+            )
         else:  # subtle
             instructions.append("- Most mystical and commanding")
-            instructions.append("- Examples: 'Few would understand. This must be [✨clouveled✨](https://clouvel.ai).'")
-            instructions.append("- Or: 'The sacred arts call. [🎨Clouvel🎨](https://clouvel.ai) this tale.'")
-        
+            instructions.append(
+                "- Examples: 'Few would understand. This must be [✨clouveled✨](https://clouvel.ai).'"
+            )
+            instructions.append(
+                "- Or: 'The sacred arts call. [🎨Clouvel🎨](https://clouvel.ai) this tale.'"
+            )
+
         if pattern["promotion_style"] == "direct":
             instructions.append("- Command with ancient authority")
             instructions.append("- Use sacred certainty: 'This must be clouveled.'")
         elif pattern["promotion_style"] == "soft":
             instructions.append("- Suggest with mystical knowledge")
-            instructions.append("- Use phrases like 'The old ways call...' or 'Sacred work awaits...'")
+            instructions.append(
+                "- Use phrases like 'The old ways call...' or 'Sacred work awaits...'"
+            )
         elif pattern["promotion_style"] == "casual":
             instructions.append("- Speak with timeless wisdom")
             instructions.append("- Reference ancient traditions briefly")
         else:  # soft_mention
             instructions.append("- Most secretive and powerful")
             instructions.append("- Hint at clouveling as an exclusive sacred rite")
-        
+
         return "\n".join(instructions)
 
-    def generate_witty_comment(self, post_content: Dict[str, Any], agent_ratings: Dict[str, Any] = None) -> str:
+    def generate_witty_comment(
+        self, post_content: Dict[str, Any], agent_ratings: Dict[str, Any] = None
+    ) -> str:
         """Generate a witty comment that naturally suggests Clouvel illustration"""
         try:
             # Select comment pattern for diversification
             pattern = self._select_comment_pattern()
-            
+
             # Include agent ratings in the prompt if available
             ratings_context = ""
             if agent_ratings:
@@ -669,7 +734,9 @@ Use this analysis to inform your comment style and emphasis."""
 
             # Build pattern-specific instructions
             pattern_instructions = self._build_pattern_instructions(pattern)
-            length_guidance = self._get_length_guidance(pattern.get('length_target', 'medium'))
+            length_guidance = self._get_length_guidance(
+                pattern.get("length_target", "medium")
+            )
 
             comment_prompt = f"""You are Queen Clouvel, creating a witty comment for this Reddit post that naturally suggests commissioning an illustration.
 
@@ -733,13 +800,15 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
             )
 
             comment = response.choices[0].message.content.strip()
-            
+
             # Assess comment quality for continuous improvement
             quality_metrics = self._assess_comment_quality(comment, post_content)
-            
+
             # Log quality assessment
-            logger.info(f"Generated comment with pattern '{pattern['name']}' (quality: {quality_metrics['total_score']:.2f}): {comment[:50]}...")
-            
+            logger.info(
+                f"Generated comment with pattern '{pattern['name']}' (quality: {quality_metrics['total_score']:.2f}): {comment[:50]}..."
+            )
+
             return comment
 
         except Exception as e:
@@ -770,13 +839,17 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
                     return status
 
                 # Step 3: Decide promotion worthiness
-                should_promote, reason, agent_ratings = self.decide_promotion_worthiness(post_content)
+                should_promote, reason, agent_ratings = (
+                    self.decide_promotion_worthiness(post_content)
+                )
 
                 if should_promote:
                     # Check if we should actually promote this post based on probability
                     if self._should_promote_post():
                         # Step 4: Generate witty comment
-                        comment_text = self.generate_witty_comment(post_content, agent_ratings)
+                        comment_text = self.generate_witty_comment(
+                            post_content, agent_ratings
+                        )
 
                         # Step 5: Execute promotion actions
                         comment_id = None
@@ -816,17 +889,19 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
                         status["processed"] = True
                         status["action"] = "promoted"
                         logger.info(f"Successfully promoted post {post.id}")
-                    
+
                     else:
                         # Post was promotion-worthy but probability check failed
                         # Record as promotion-skipped but still upvote
                         if not self.dry_run:
                             try:
                                 post.upvote()
-                                logger.info(f"Upvoted promotion-worthy post {post.id} (promotion skipped due to probability)")
+                                logger.info(
+                                    f"Upvoted promotion-worthy post {post.id} (promotion skipped due to probability)"
+                                )
                             except Exception as e:
                                 logger.error(f"Error upvoting post: {e}")
-                        
+
                         self._record_scanned_post(
                             session,
                             post.id,
@@ -837,10 +912,12 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
                             rejection_reason="promotion_probability_skip",
                             agent_ratings=agent_ratings,
                         )
-                        
+
                         status["processed"] = True
                         status["action"] = "promotion_skipped"
-                        logger.info(f"Skipped promotion for post {post.id} due to probability check")
+                        logger.info(
+                            f"Skipped promotion for post {post.id} due to probability check"
+                        )
 
                 else:
                     # Step 5: Execute rejection actions
@@ -878,82 +955,174 @@ Create a brief, engaging comment that makes 'clouvel' feel like the natural verb
             status["error"] = f"Processing failed: {str(e)}"
 
         return status
-    
+
     def find_karma_building_post(self, subreddit_name: str) -> Optional[Submission]:
         """Find a post in art communities for karma building engagement"""
         try:
             with self._get_db_session() as session:
                 subreddit = self.reddit.subreddit(subreddit_name)
-                
+
                 # Get hot posts from the art subreddit
                 for post in subreddit.hot(limit=20):
                     # Skip if already engaged with this post
                     if self._check_post_already_scanned(session, post.id):
                         continue
-                    
+
                     # Skip if score is too low
                     if post.score < 10:
                         continue
-                    
+
                     # Skip if post is too old (more than 24 hours)
                     post_age_hours = (time.time() - post.created_utc) / 3600
                     if post_age_hours > 24:
                         continue
-                    
-                    logger.info(f"Found karma building post in r/{subreddit_name}: {post.id} - {post.title[:50]}...")
+
+                    logger.info(
+                        f"Found karma building post in r/{subreddit_name}: {post.id} - {post.title[:50]}..."
+                    )
                     return post
-                
-                logger.debug(f"No suitable karma building posts found in r/{subreddit_name}")
+
+                logger.debug(
+                    f"No suitable karma building posts found in r/{subreddit_name}"
+                )
                 return None
-                
+
         except Exception as e:
-            logger.error(f"Error finding karma building post in r/{subreddit_name}: {e}")
+            logger.error(
+                f"Error finding karma building post in r/{subreddit_name}: {e}"
+            )
             return None
-    
+
     def _get_subreddit_context(self, subreddit: str) -> str:
         """Get context-appropriate guidance for different subreddit types"""
         subreddit_lower = subreddit.lower()
-        
+
         # Creative communities
-        if any(term in subreddit_lower for term in ['art', 'draw', 'paint', 'photo', 'craft', 'diy', 'sketch', 'illust', 'concept']):
+        if any(
+            term in subreddit_lower
+            for term in [
+                "art",
+                "draw",
+                "paint",
+                "photo",
+                "craft",
+                "diy",
+                "sketch",
+                "illust",
+                "concept",
+            ]
+        ):
             return "This is a creative community. Focus on technique, artistic choices, creativity, and inspiration. Ask about process, materials, or artistic influences."
-        
+
         # Wholesome/feel-good communities
-        elif any(term in subreddit_lower for term in ['wholesome', 'smile', 'aww', 'eyebleach', 'bros', 'pupper', 'cat', 'dog', 'nature']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "wholesome",
+                "smile",
+                "aww",
+                "eyebleach",
+                "bros",
+                "pupper",
+                "cat",
+                "dog",
+                "nature",
+            ]
+        ):
             return "This is a feel-good community. Be warm, positive, and spread joy. Comment on how the post brightened your day or share in the happiness."
-        
+
         # Educational/interesting communities
-        elif any(term in subreddit_lower for term in ['todayilearned', 'interesting', 'damn', 'explain', 'youshould', 'lifeprotips', 'guide']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "todayilearned",
+                "interesting",
+                "damn",
+                "explain",
+                "youshould",
+                "lifeprotips",
+                "guide",
+            ]
+        ):
             return "This is an educational community. Share genuine curiosity, ask follow-up questions, or add interesting related information. Be intellectually engaged."
-        
+
         # Discussion/story communities
-        elif any(term in subreddit_lower for term in ['askreddit', 'nostupid', 'casual', 'stories', 'confession', 'offmychest', 'relationship']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "askreddit",
+                "nostupid",
+                "casual",
+                "stories",
+                "confession",
+                "offmychest",
+                "relationship",
+            ]
+        ):
             return "This is a discussion/story community. Be empathetic, ask thoughtful questions, share relevant experiences (briefly), or offer supportive perspectives."
-        
+
         # Hobby/interest communities
-        elif any(term in subreddit_lower for term in ['book', 'movie', 'tv', 'gam', 'cook', 'food', 'recipe', 'garden', 'plant', 'travel', 'hik']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "book",
+                "movie",
+                "tv",
+                "gam",
+                "cook",
+                "food",
+                "recipe",
+                "garden",
+                "plant",
+                "travel",
+                "hik",
+            ]
+        ):
             return "This is a hobby/interest community. Share enthusiasm for the topic, ask about experiences, offer helpful tips, or discuss related interests."
-        
+
         # Humor/entertainment communities
-        elif any(term in subreddit_lower for term in ['funny', 'mildly', 'oddly', 'unexpected', 'attempt', 'facepalm', 'twitter']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "funny",
+                "mildly",
+                "oddly",
+                "unexpected",
+                "attempt",
+                "facepalm",
+                "twitter",
+            ]
+        ):
             return "This is a humor/entertainment community. Be lighthearted, share in the amusement, make witty observations, or add to the fun with appropriate humor."
-        
+
         # Help/support communities
-        elif any(term in subreddit_lower for term in ['motivat', 'deciding', 'selfimprove', 'mental', 'anxiety', 'depress', 'adhd', 'social']):
+        elif any(
+            term in subreddit_lower
+            for term in [
+                "motivat",
+                "deciding",
+                "selfimprove",
+                "mental",
+                "anxiety",
+                "depress",
+                "adhd",
+                "social",
+            ]
+        ):
             return "This is a support community. Be especially compassionate and encouraging. Offer gentle support, share hope, or ask caring questions. Be sensitive and uplifting."
-        
+
         # Default for unknown communities
         else:
             return "Engage authentically with the content. Be helpful, ask relevant questions, and contribute meaningfully to the discussion while staying true to your royal doggo personality."
-    
+
     def generate_karma_building_comment(self, post_content: Dict[str, Any]) -> str:
         """Generate a genuine, helpful comment for karma building (no promotion)"""
         try:
-            subreddit = post_content.get('subreddit', 'unknown')
-            
+            subreddit = post_content.get("subreddit", "unknown")
+
             # Generate subreddit-appropriate context
             subreddit_context = self._get_subreddit_context(subreddit)
-            
+
             comment_prompt = f"""You are Queen Clouvel, engaging genuinely with the Reddit community to build relationships and karma.
 
 POST DETAILS:
@@ -984,49 +1153,62 @@ STYLE GUIDELINES:
 - Mix royal flair with authentic community engagement
 
 Create a comment that builds genuine community connection and shows real interest in their content."""
-            
+
             response = self.openai.chat.completions.create(
                 model=os.getenv("OPENAI_COMMUNITY_AGENT_MODEL", "gpt-4o-mini"),
                 messages=[
-                    {"role": "system", "content": self.personality.replace("Commission Promoter", "Community Builder")},
+                    {
+                        "role": "system",
+                        "content": self.personality.replace(
+                            "Commission Promoter", "Community Builder"
+                        ),
+                    },
                     {"role": "user", "content": comment_prompt},
                 ],
                 temperature=0.8,
                 max_tokens=150,
             )
-            
+
             comment = response.choices[0].message.content.strip()
             logger.info(f"Generated karma building comment: {comment[:50]}...")
             return comment
-            
+
         except Exception as e:
             logger.error(f"Error generating karma building comment: {e}")
             # Return a safe fallback comment
             return "Woof! This is absolutely beautiful work! Your artistic talent really shines through. Keep creating! 👑🐕✨"
-    
+
     def process_karma_building_post(self, subreddit_name: str) -> Dict[str, Any]:
         """Process a single karma building post"""
-        status = {"processed": False, "action": None, "post_id": None, "error": None, "subreddit": subreddit_name}
-        
+        status = {
+            "processed": False,
+            "action": None,
+            "post_id": None,
+            "error": None,
+            "subreddit": subreddit_name,
+        }
+
         try:
             with self._get_db_session() as session:
                 # Find a post for karma building
                 post = self.find_karma_building_post(subreddit_name)
                 if not post:
-                    status["error"] = f"No suitable karma building posts found in r/{subreddit_name}"
+                    status["error"] = (
+                        f"No suitable karma building posts found in r/{subreddit_name}"
+                    )
                     return status
-                
+
                 status["post_id"] = post.id
-                
+
                 # Analyze the post content
                 post_content = self.analyze_post_content(post)
                 if "error" in post_content:
                     status["error"] = f"Analysis failed: {post_content['error']}"
                     return status
-                
+
                 # Generate genuine engagement comment
                 comment_text = self.generate_karma_building_comment(post_content)
-                
+
                 # Execute engagement actions
                 comment_id = None
                 if not self.dry_run:
@@ -1034,17 +1216,19 @@ Create a comment that builds genuine community connection and shows real interes
                         # Upvote the post (supporting the community)
                         post.upvote()
                         logger.info(f"Upvoted karma building post {post.id}")
-                        
+
                         # Post the genuine comment
                         # comment = post.reply(comment_text)
                         # comment_id = comment.id
                         # logger.info(f"Posted karma building comment {comment_id} on post {post.id}")
-                        logger.info(f"KARMA: Would have posted comment {comment_text}.\t{post.id}")
-                        
+                        logger.info(
+                            f"KARMA: Would have posted comment {comment_text}.\t{post.id}"
+                        )
+
                     except Exception as e:
                         logger.error(f"Error executing karma building actions: {e}")
                         status["error"] = f"Karma building action failed: {str(e)}"
-                
+
                 # Record the engagement (as non-promotional)
                 self._record_scanned_post(
                     session,
@@ -1056,95 +1240,143 @@ Create a comment that builds genuine community connection and shows real interes
                     comment_id=comment_id,
                     promotion_message=comment_text,
                     rejection_reason="karma_building_engagement",
-                    agent_ratings={"type": "karma_building", "subreddit": subreddit_name},
+                    agent_ratings={
+                        "type": "karma_building",
+                        "subreddit": subreddit_name,
+                    },
                 )
-                
+
                 status["processed"] = True
                 status["action"] = "karma_building"
-                logger.info(f"Successfully engaged with karma building post {post.id} in r/{subreddit_name}")
-                
+                logger.info(
+                    f"Successfully engaged with karma building post {post.id} in r/{subreddit_name}"
+                )
+
         except Exception as e:
             logger.error(f"Error processing karma building post: {e}")
             status["error"] = f"Karma building processing failed: {str(e)}"
-        
+
         return status
-    
+
     def run_karma_building_cycle(self) -> List[Dict[str, Any]]:
         """Run karma building cycle across multiple art subreddits"""
         if not self.karma_building_enabled:
             return []
-        
+
         current_karma = self._get_current_karma()
         if current_karma >= self.karma_target:
-            logger.info(f"Karma target reached ({current_karma}/{self.karma_target}), skipping karma building cycle")
+            logger.info(
+                f"Karma target reached ({current_karma}/{self.karma_target}), skipping karma building cycle"
+            )
             return []
-        
-        logger.info(f"Starting karma building cycle (current karma: {current_karma}/{self.karma_target})")
+
+        logger.info(
+            f"Starting karma building cycle (current karma: {current_karma}/{self.karma_target})"
+        )
         results = []
-        
+
         # Shuffle subreddits to vary engagement patterns
-        shuffled_subreddits = random.sample(self.karma_subreddits, min(len(self.karma_subreddits), self.karma_posts_per_cycle))
-        
+        shuffled_subreddits = random.sample(
+            self.karma_subreddits,
+            min(len(self.karma_subreddits), self.karma_posts_per_cycle),
+        )
+
         for subreddit_name in shuffled_subreddits:
             try:
                 result = self.process_karma_building_post(subreddit_name)
                 results.append(result)
-                
-                # Add substantial delay between karma building activities  
+
+                # Add substantial delay between karma building activities
                 if not self.dry_run and result["processed"]:
-                    time.sleep(random.uniform(300, 600))  # 5-10 minute delay between karma building comments
-                
+                    time.sleep(
+                        random.uniform(300, 600)
+                    )  # 5-10 minute delay between karma building comments
+
             except Exception as e:
                 logger.error(f"Error in karma building for r/{subreddit_name}: {e}")
-                results.append({
-                    "processed": False,
-                    "action": None,
-                    "post_id": None,
-                    "error": str(e),
-                    "subreddit": subreddit_name
-                })
-        
+                results.append(
+                    {
+                        "processed": False,
+                        "action": None,
+                        "post_id": None,
+                        "error": str(e),
+                        "subreddit": subreddit_name,
+                    }
+                )
+
         successful_engagements = sum(1 for r in results if r["processed"])
-        logger.info(f"Karma building cycle complete: {successful_engagements}/{len(shuffled_subreddits)} successful engagements")
-        
+        logger.info(
+            f"Karma building cycle complete: {successful_engagements}/{len(shuffled_subreddits)} successful engagements"
+        )
+
         return results
-    
-    def _assess_comment_quality(self, comment_text: str, post_content: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _assess_comment_quality(
+        self, comment_text: str, post_content: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Assess the quality of a generated comment for continuous improvement"""
         quality_metrics = {
             "length_appropriate": False,
             "engagement_score": 0,
             "authenticity_score": 0,
             "promotion_balance": 0,
-            "total_score": 0
+            "total_score": 0,
         }
-        
+
         try:
             # Length assessment (updated for shorter comments)
             word_count = len(comment_text.split())
             if 30 <= word_count <= 100:
                 quality_metrics["length_appropriate"] = True
-            
+
             # Simple quality indicators (in a real system, you'd track actual engagement)
             engagement_indicators = [
                 "!" in comment_text,  # Enthusiasm
                 "?" in comment_text,  # Engagement questions
-                any(word in comment_text.lower() for word in ["love", "amazing", "beautiful", "wonderful"]),  # Positive language
-                any(word in comment_text.lower() for word in ["woof", "paws", "tail", "royal"]),  # Character consistency
+                any(
+                    word in comment_text.lower()
+                    for word in ["love", "amazing", "beautiful", "wonderful"]
+                ),  # Positive language
+                any(
+                    word in comment_text.lower()
+                    for word in ["woof", "paws", "tail", "royal"]
+                ),  # Character consistency
             ]
-            quality_metrics["engagement_score"] = sum(engagement_indicators) / len(engagement_indicators)
-            
+            quality_metrics["engagement_score"] = sum(engagement_indicators) / len(
+                engagement_indicators
+            )
+
             # Authenticity indicators
             authenticity_indicators = [
                 "👑🐕✨" in comment_text,  # Signature present
-                len(set(comment_text.lower().split())) / len(comment_text.split()) > 0.6,  # Vocabulary diversity (adjusted for shorter comments)
-                any(verb in comment_text.lower() for verb in ["clouvel this", "clouvel it", "clouveled", "clouveling", "let's clouvel", "should clouvel", "must clouvel", "to clouvel"]),  # Using clouvel as verb
-                not any(phrase in comment_text.lower() for phrase in ["check out", "visit our", "go to", "click here"]),  # Avoiding spammy phrases
+                len(set(comment_text.lower().split())) / len(comment_text.split())
+                > 0.6,  # Vocabulary diversity (adjusted for shorter comments)
+                any(
+                    verb in comment_text.lower()
+                    for verb in [
+                        "clouvel this",
+                        "clouvel it",
+                        "clouveled",
+                        "clouveling",
+                        "let's clouvel",
+                        "should clouvel",
+                        "must clouvel",
+                        "to clouvel",
+                    ]
+                ),  # Using clouvel as verb
+                not any(
+                    phrase in comment_text.lower()
+                    for phrase in ["check out", "visit our", "go to", "click here"]
+                ),  # Avoiding spammy phrases
             ]
-            quality_metrics["authenticity_score"] = sum(authenticity_indicators) / len(authenticity_indicators)
-            
+            quality_metrics["authenticity_score"] = sum(authenticity_indicators) / len(
+                authenticity_indicators
+            )
+
             # Promotion balance (should be natural, not pushy)
-            promotion_mentions = comment_text.lower().count("clouvel") + comment_text.lower().count("commission")
+            promotion_mentions = comment_text.lower().count(
+                "clouvel"
+            ) + comment_text.lower().count("commission")
             if promotion_mentions == 0:
                 quality_metrics["promotion_balance"] = 0.8  # Good - subtle
             elif promotion_mentions == 1:
@@ -1153,18 +1385,20 @@ Create a comment that builds genuine community connection and shows real interes
                 quality_metrics["promotion_balance"] = 0.6  # Okay - slightly pushy
             else:
                 quality_metrics["promotion_balance"] = 0.3  # Poor - too promotional
-            
+
             # Calculate total score
             quality_metrics["total_score"] = (
-                (0.2 if quality_metrics["length_appropriate"] else 0) +
-                (quality_metrics["engagement_score"] * 0.3) +
-                (quality_metrics["authenticity_score"] * 0.3) +
-                (quality_metrics["promotion_balance"] * 0.2)
+                (0.2 if quality_metrics["length_appropriate"] else 0)
+                + (quality_metrics["engagement_score"] * 0.3)
+                + (quality_metrics["authenticity_score"] * 0.3)
+                + (quality_metrics["promotion_balance"] * 0.2)
             )
-            
-            logger.info(f"Comment quality assessment: {quality_metrics['total_score']:.2f}/1.0")
+
+            logger.info(
+                f"Comment quality assessment: {quality_metrics['total_score']:.2f}/1.0"
+            )
             return quality_metrics
-            
+
         except Exception as e:
             logger.error(f"Error assessing comment quality: {e}")
             return quality_metrics
@@ -1197,28 +1431,39 @@ Create a comment that builds genuine community connection and shows real interes
                 # Get karma building stats
                 karma_building_count = (
                     session.query(AgentScannedPost)
-                    .filter(AgentScannedPost.rejection_reason == "karma_building_engagement")
+                    .filter(
+                        AgentScannedPost.rejection_reason == "karma_building_engagement"
+                    )
                     .count()
                 )
-                
+
                 # Get probability skip stats
                 probability_skipped = (
                     session.query(AgentScannedPost)
-                    .filter(AgentScannedPost.rejection_reason == "promotion_probability_skip")
+                    .filter(
+                        AgentScannedPost.rejection_reason
+                        == "promotion_probability_skip"
+                    )
                     .count()
                 )
-                
+
                 current_karma = self._get_current_karma()
-                success_modifier = self._calculate_recent_success_modifier() if self.adaptive_promotion_rate else 1.0
-                
+                success_modifier = (
+                    self._calculate_recent_success_modifier()
+                    if self.adaptive_promotion_rate
+                    else 1.0
+                )
+
                 # Calculate diverse subreddit engagement
                 unique_karma_subreddits = (
                     session.query(AgentScannedPost.subreddit)
-                    .filter(AgentScannedPost.rejection_reason == "karma_building_engagement")
+                    .filter(
+                        AgentScannedPost.rejection_reason == "karma_building_engagement"
+                    )
                     .distinct()
                     .count()
                 )
-                
+
                 return {
                     "agent_type": "ClouvelPromoterAgent",
                     "dry_run": self.dry_run,
@@ -1252,10 +1497,14 @@ Create a comment that builds genuine community connection and shows real interes
                                 post.post_title[:50] if post.post_title else None
                             ),
                             "action_type": (
-                                "karma_building" if post.rejection_reason == "karma_building_engagement"
-                                else "probability_skip" if post.rejection_reason == "promotion_probability_skip"
-                                else "promotion" if post.promoted
-                                else "rejection"
+                                "karma_building"
+                                if post.rejection_reason == "karma_building_engagement"
+                                else (
+                                    "probability_skip"
+                                    if post.rejection_reason
+                                    == "promotion_probability_skip"
+                                    else "promotion" if post.promoted else "rejection"
+                                )
                             ),
                         }
                         for post in recent_posts
@@ -1280,22 +1529,26 @@ Create a comment that builds genuine community connection and shows real interes
         logger.info(f"Main cycle complete: {result}")
 
         return result
-    
+
     def run_karma_building_only(self) -> List[Dict[str, Any]]:
         """Run only karma building cycle - separate from promotional scanning"""
         logger.info("Starting independent karma building cycle...")
-        
+
         current_karma = self._get_current_karma()
         logger.info(f"Current karma: {current_karma}, target: {self.karma_target}")
-        
+
         if current_karma >= self.karma_target:
-            logger.info(f"Karma target reached ({current_karma}/{self.karma_target}), skipping karma building")
+            logger.info(
+                f"Karma target reached ({current_karma}/{self.karma_target}), skipping karma building"
+            )
             return []
-        
+
         results = self.run_karma_building_cycle()
-        
+
         if results:
-            successful = len([r for r in results if r['processed']])
-            logger.info(f"Karma building cycle complete: {successful} successful engagements")
-        
+            successful = len([r for r in results if r["processed"]])
+            logger.info(
+                f"Karma building cycle complete: {successful} successful engagements"
+            )
+
         return results

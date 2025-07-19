@@ -387,8 +387,8 @@ class StripeService:
                     fundraising_goal_id = goal.id
 
             # Import tier function and SourceType
-            from app.models import get_tier_from_amount
             from app.db.models import SourceType
+            from app.models import get_tier_from_amount
 
             # Determine tier based on amount
             tier = get_tier_from_amount(donation_request.amount_usd)

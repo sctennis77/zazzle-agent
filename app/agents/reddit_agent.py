@@ -650,7 +650,7 @@ class RedditAgent:
 
             # 11 milestones over 25 seconds total
             milestones = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 89]
-            
+
             # Calculate delay between milestones to reach ~25 seconds total
             # 25 seconds - 1 second initial delay = 24 seconds for 10 intervals
             interval_delay = 24.0 / 10.0  # 2.4 seconds per interval
@@ -667,7 +667,9 @@ class RedditAgent:
                         logger.error(f"Progress callback failed at {progress}%: {e}")
 
                 if i < len(milestones) - 1:
-                    await asyncio.sleep(random.uniform(interval_delay - 0.3, interval_delay + 0.3))  # ~2.4-3.0 seconds
+                    await asyncio.sleep(
+                        random.uniform(interval_delay - 0.3, interval_delay + 0.3)
+                    )  # ~2.4-3.0 seconds
 
             # Simplified event coordination
             if hasattr(self, "image_generation_event") and self.image_generation_event:

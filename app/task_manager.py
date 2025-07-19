@@ -90,9 +90,7 @@ class TaskManager:
 
         try:
             # Get the task and related data
-            task = db.query(PipelineTask).filter(
-                PipelineTask.id == task_id
-            ).first()
+            task = db.query(PipelineTask).filter(PipelineTask.id == task_id).first()
             if not task:
                 logger.warning(f"Task {task_id} not found for broadcasting")
                 return
@@ -122,9 +120,7 @@ class TaskManager:
                 "subreddit": subreddit.subreddit_name if subreddit else None,
                 "amount_usd": float(donation.amount_usd) if donation else None,
                 "is_anonymous": donation.is_anonymous if donation else None,
-                "timestamp": (
-                    task.created_at.timestamp() if task.created_at else None
-                ),
+                "timestamp": (task.created_at.timestamp() if task.created_at else None),
             }
 
             # Broadcast via Redis pub/sub
