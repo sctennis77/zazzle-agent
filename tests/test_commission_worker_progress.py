@@ -79,9 +79,7 @@ class TestCommissionWorkerProgress(unittest.TestCase):
         call_args = worker._update_task_status.call_args
         self.assertEqual(call_args[1]["progress"], 65)
         self.assertEqual(call_args[1]["stage"], "image_generation_in_progress")
-        self.assertEqual(
-            call_args[1]["message"], "Clouvel illustrating ...  (65%)"
-        )
+        self.assertEqual(call_args[1]["message"], "Clouvel illustrating ...  (65%)")
 
     @pytest.mark.asyncio
     async def test_progress_callback_image_generation_complete(self):

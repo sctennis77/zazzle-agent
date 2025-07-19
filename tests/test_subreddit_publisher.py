@@ -372,16 +372,22 @@ class TestSubredditPublisher:
         mock_pipeline_task_query = Mock()
         mock_donation_query = Mock()
         mock_product_subreddit_post_query = Mock()
-        
+
         # Setup the query chains to return the expected values
-        mock_product_info_query.filter.return_value.first.return_value = mock_product_info
+        mock_product_info_query.filter.return_value.first.return_value = (
+            mock_product_info
+        )
         mock_reddit_post_query.filter.return_value.first.return_value = mock_reddit_post
-        mock_pipeline_run_query.filter.return_value.first.return_value = mock_pipeline_run
+        mock_pipeline_run_query.filter.return_value.first.return_value = (
+            mock_pipeline_run
+        )
         mock_pipeline_usage_query.filter.return_value.first.return_value = mock_usage
         mock_pipeline_task_query.filter.return_value.first.return_value = None
         mock_donation_query.filter.return_value.first.return_value = None
-        mock_product_subreddit_post_query.filter.return_value.first.return_value = mock_existing_post
-        
+        mock_product_subreddit_post_query.filter.return_value.first.return_value = (
+            mock_existing_post
+        )
+
         # Mock the query method to return the appropriate query based on the table
         def query_side_effect(table):
             if table == ProductInfo:
@@ -400,7 +406,7 @@ class TestSubredditPublisher:
                 return mock_product_subreddit_post_query
             else:
                 return Mock()
-        
+
         mock_session.query.side_effect = query_side_effect
 
         mock_session_local.return_value = mock_session

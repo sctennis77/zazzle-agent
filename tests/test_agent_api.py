@@ -4,12 +4,13 @@ Tests for agent-related API endpoints.
 Tests the agent_scanned_posts CRUD endpoints and get_donations_by_post_id functionality.
 """
 
-import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import patch
 
-from app.db.models import AgentScannedPost, Donation, Subreddit, SourceType
+import pytest
+
+from app.db.models import AgentScannedPost, Donation, SourceType, Subreddit
 from app.models import AgentScannedPostCreateRequest
 
 
@@ -31,7 +32,7 @@ class TestAgentScannedPostsAPI:
 
         response = client.post("/api/agent-scanned-posts", json=post_data)
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["post_id"] == "test_post_123"
         assert data["subreddit"] == "popular"
@@ -39,7 +40,10 @@ class TestAgentScannedPostsAPI:
         assert data["post_title"] == "Test Post Title"
         assert data["post_score"] == 150
         assert data["comment_id"] == "comment_456"
-        assert data["promotion_message"] == "Great post! Check out r/clouvel for artwork! 👑🐕✨"
+        assert (
+            data["promotion_message"]
+            == "Great post! Check out r/clouvel for artwork! 👑🐕✨"
+        )
         assert data["rejection_reason"] is None
         assert "id" in data
         assert "scanned_at" in data
@@ -59,7 +63,7 @@ class TestAgentScannedPostsAPI:
 
         response = client.post("/api/agent-scanned-posts", json=post_data)
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["post_id"] == "test_post_456"
         assert data["promoted"] is False
@@ -77,7 +81,7 @@ class TestAgentScannedPostsAPI:
             "post_title": "Original Post",
             "post_score": 100,
         }
-        
+
         response = client.post("/api/agent-scanned-posts", json=post_data)
         assert response.status_code == 200
 
@@ -113,17 +117,17 @@ class TestAgentScannedPostsAPI:
                 post_score=200,
             ),
         ]
-        
+
         for post in posts:
             db_session.add(post)
         db_session.commit()
 
         response = client.get("/api/agent-scanned-posts")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert len(data) == 3
-        
+
         # Check posts are returned in correct order (most recent first)
         assert data[0]["post_id"] == "post_3"
         assert data[1]["post_id"] == "post_2"
@@ -149,7 +153,7 @@ class TestAgentScannedPostsAPI:
                 rejection_reason="Low quality",
             ),
         ]
-        
+
         for post in posts:
             db_session.add(post)
         db_session.commit()
@@ -189,7 +193,7 @@ class TestAgentScannedPostsAPI:
                 post_score=75,
             ),
         ]
-        
+
         for post in posts:
             db_session.add(post)
         db_session.commit()
@@ -215,7 +219,7 @@ class TestAgentScannedPostsAPI:
             )
             for i in range(5)
         ]
-        
+
         for post in posts:
             db_session.add(post)
         db_session.commit()
@@ -252,7 +256,7 @@ class TestAgentScannedPostsAPI:
 
         response = client.get("/api/agent-scanned-posts/specific_post")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["post_id"] == "specific_post"
         assert data["subreddit"] == "popular"
@@ -283,7 +287,7 @@ class TestAgentScannedPostsAPI:
 
         response = client.get("/api/agent-scanned-posts/check/scanned_post")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["post_id"] == "scanned_post"
         assert data["already_scanned"] is True
@@ -292,7 +296,7 @@ class TestAgentScannedPostsAPI:
         """Test checking if post has been scanned - does not exist."""
         response = client.get("/api/agent-scanned-posts/check/unscanned_post")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["post_id"] == "unscanned_post"
         assert data["already_scanned"] is False
@@ -310,7 +314,7 @@ class TestAgentScannedPostsAPI:
             promotion_message="Great content! 👑🐕✨",
         )
         db_session.add(scanned_post)
-        
+
         # Create test subreddit
         subreddit = Subreddit(
             subreddit_name="popular",
@@ -320,7 +324,7 @@ class TestAgentScannedPostsAPI:
         )
         db_session.add(subreddit)
         db_session.commit()
-        
+
         # Create test donation for commission
         donation = Donation(
             stripe_payment_intent_id="pi_test_commission",
@@ -337,35 +341,37 @@ class TestAgentScannedPostsAPI:
         )
         db_session.add(donation)
         db_session.commit()
-        
+
         # Test without commission status (original format)
         response = client.get("/api/agent-scanned-posts?limit=10")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Find our test post
         test_post = None
         for post in data:
             if post["post_id"] == "commission_test_post":
                 test_post = post
                 break
-        
+
         assert test_post is not None
         assert "is_commissioned" not in test_post
         assert "donation_info" not in test_post
-        
+
         # Test with commission status (enhanced format)
-        response = client.get("/api/agent-scanned-posts?include_commission_status=true&limit=10")
+        response = client.get(
+            "/api/agent-scanned-posts?include_commission_status=true&limit=10"
+        )
         assert response.status_code == 200
         data = response.json()
-        
+
         # Find our test post
         test_post = None
         for post in data:
             if post["post_id"] == "commission_test_post":
                 test_post = post
                 break
-        
+
         assert test_post is not None
         assert test_post["is_commissioned"] is True
         assert test_post["donation_info"] is not None
@@ -373,7 +379,7 @@ class TestAgentScannedPostsAPI:
         assert test_post["donation_info"]["amount_usd"] == 10.0
         assert test_post["donation_info"]["tier"] == "gold"
         assert test_post["donation_info"]["donor_username"] == "test_user"
-        
+
         # Test non-commissioned post
         non_commissioned_post = AgentScannedPost(
             post_id="no_commission_post",
@@ -384,18 +390,20 @@ class TestAgentScannedPostsAPI:
         )
         db_session.add(non_commissioned_post)
         db_session.commit()
-        
-        response = client.get("/api/agent-scanned-posts?include_commission_status=true&limit=10")
+
+        response = client.get(
+            "/api/agent-scanned-posts?include_commission_status=true&limit=10"
+        )
         assert response.status_code == 200
         data = response.json()
-        
+
         # Find the non-commissioned post
         non_commissioned = None
         for post in data:
             if post["post_id"] == "no_commission_post":
                 non_commissioned = post
                 break
-        
+
         assert non_commissioned is not None
         assert non_commissioned["is_commissioned"] is False
         assert non_commissioned["donation_info"] is None
@@ -459,17 +467,17 @@ class TestGetDonationsByPostIdAPI:
                 source=SourceType.STRIPE,
             ),
         ]
-        
+
         for donation in donations:
             db_session.add(donation)
         db_session.commit()
 
         response = client.get("/api/posts/test_post_123/donations")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert len(data) == 2  # Only donations for test_post_123
-        
+
         # Check first donation
         assert data[0]["post_id"] == "test_post_123"
         assert data[0]["amount_usd"] == 25.00
@@ -477,7 +485,7 @@ class TestGetDonationsByPostIdAPI:
         assert data[0]["customer_name"] == "Test User 1"
         assert data[0]["commission_message"] == "Amazing story!"
         assert data[0]["status"] == "succeeded"
-        
+
         # Check second donation
         assert data[1]["post_id"] == "test_post_123"
         assert data[1]["amount_usd"] == 10.00
@@ -489,7 +497,7 @@ class TestGetDonationsByPostIdAPI:
         """Test retrieving donations for post with no donations."""
         response = client.get("/api/posts/no_donations_post/donations")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert len(data) == 0
 
@@ -542,14 +550,14 @@ class TestGetDonationsByPostIdAPI:
                 source=SourceType.STRIPE,
             ),
         ]
-        
+
         for donation in donations:
             db_session.add(donation)
         db_session.commit()
 
         response = client.get("/api/posts/status_test_post/donations")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert len(data) == 1  # Only the succeeded donation
         assert data[0]["status"] == "succeeded"
@@ -586,7 +594,7 @@ class TestGetDonationsByPostIdAPI:
 
         response = client.get("/api/posts/subreddit_test_post/donations")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert len(data) == 1
         assert data[0]["subreddit"]["subreddit_name"] == "test_community"

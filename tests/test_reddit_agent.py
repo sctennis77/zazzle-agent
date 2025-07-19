@@ -86,20 +86,30 @@ class TestRedditAgent:
             post_content="Discussion about card packs vs singles",
             subreddit="cards",
             score=100,
-            comments=[{"text": "Packs are more exciting but singles are more efficient"}],
+            comments=[
+                {"text": "Packs are more exciting but singles are more efficient"}
+            ],
         )
 
         # Mock OpenAI response with markdown bold format (like newer models use)
         reddit_agent.openai.chat.completions.create.return_value.choices[
             0
-        ].message.content = "**Theme:** The tension between chaos and control in card collecting\n**Image Title:** \"Chance vs. Choice: The Duel of Decks\"\n**Image Description:** A vibrant card shop with swirling packs on left and organized singles on right"
+        ].message.content = '**Theme:** The tension between chaos and control in card collecting\n**Image Title:** "Chance vs. Choice: The Duel of Decks"\n**Image Description:** A vibrant card shop with swirling packs on left and organized singles on right'
 
         result = await reddit_agent._determine_product_idea(reddit_context)
 
         assert result is not None
-        assert result.theme == "The tension between chaos and control in card collecting"
-        assert result.image_description == "A vibrant card shop with swirling packs on left and organized singles on right"
-        assert result.design_instructions.get("image_title") == "Chance vs. Choice: The Duel of Decks"
+        assert (
+            result.theme == "The tension between chaos and control in card collecting"
+        )
+        assert (
+            result.image_description
+            == "A vibrant card shop with swirling packs on left and organized singles on right"
+        )
+        assert (
+            result.design_instructions.get("image_title")
+            == "Chance vs. Choice: The Duel of Decks"
+        )
 
     @pytest.mark.asyncio
     async def test_determine_product_idea_handles_errors(self, reddit_agent):
