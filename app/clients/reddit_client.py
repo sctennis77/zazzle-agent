@@ -995,7 +995,7 @@ class RedditClient:
         """
         Submit an image post with improved format - image at top, minimal text.
         This is the new version for testing before switching over.
-        
+
         Args:
             subreddit_name: The subreddit to post to
             title: The post title
@@ -1135,12 +1135,12 @@ class RedditClient:
     ) -> dict:
         """
         Comment on a Reddit post with an embedded image.
-        
+
         Args:
             post_id: The ID of the post to comment on
             comment_text: The comment text (should include {image1} placeholder)
             image_url: URL of the image to embed
-            
+
         Returns:
             Dict containing the comment result
         """
@@ -1155,7 +1155,7 @@ class RedditClient:
                 "mode": self.mode,
             },
         )
-        
+
         try:
             import os
             import tempfile
@@ -1178,13 +1178,13 @@ class RedditClient:
                 inline_image = InlineImage(
                     path=temp_file_path, caption="Commissioned artwork"
                 )
-                
+
                 # Create media dictionary
                 media = {"image1": inline_image}
-                
+
                 # Get the post to comment on (for both dry-run and live mode)
                 post = self.get_post(post_id)
-                
+
                 # DRY RUN: Log what would be submitted and return mock data
                 if self.mode == "dryrun":
                     log_operation(
@@ -1214,7 +1214,7 @@ class RedditClient:
                         "comment_url": f"https://reddit.com{post.permalink}_/dryrun_comment_id",
                         "subreddit": post.subreddit.display_name,
                     }
-                
+
                 # LIVE MODE: Actually submit comment to Reddit
                 else:
                     new_comment = post.reply(body=comment_text, inline_media=media)

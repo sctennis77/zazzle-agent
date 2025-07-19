@@ -86,7 +86,9 @@ class RedditCommenter:
             commenter.close()
         """
         try:
-            logger.info(f"Starting comment on original post for product_id: {product_id}")
+            logger.info(
+                f"Starting comment on original post for product_id: {product_id}"
+            )
 
             # Fetch and validate product
             generated_product, donation = self.get_product_from_db(product_id)
@@ -101,7 +103,9 @@ class RedditCommenter:
             submitted_comment = self.submit_image_comment(generated_product, donation)
 
             # Save the submitted comment to database
-            saved_comment = self.save_submitted_comment_to_db(product_id, submitted_comment)
+            saved_comment = self.save_submitted_comment_to_db(
+                product_id, submitted_comment
+            )
 
             logger.info(
                 f"Successfully commented on original post for product {product_id}"
@@ -117,7 +121,9 @@ class RedditCommenter:
             }
 
         except Exception as e:
-            logger.error(f"Failed to comment on original post for product {product_id}: {e}")
+            logger.error(
+                f"Failed to comment on original post for product {product_id}: {e}"
+            )
             return {
                 "success": False,
                 "product_id": product_id,
@@ -125,7 +131,9 @@ class RedditCommenter:
                 "dry_run": self.dry_run,
             }
 
-    def get_product_from_db(self, product_id: str) -> tuple[Optional[GeneratedProductSchema], Optional[object]]:
+    def get_product_from_db(
+        self, product_id: str
+    ) -> tuple[Optional[GeneratedProductSchema], Optional[object]]:
         """
         Fetch a product from the database by product_id.
 
@@ -270,7 +278,9 @@ class RedditCommenter:
             reddit_post = generated_product.reddit_post
 
             # Determine the commission username to use
-            commission_username = self._get_commission_username(generated_product, donation)
+            commission_username = self._get_commission_username(
+                generated_product, donation
+            )
 
             # Create content for the image comment
             comment_content = f"""Love this story! Created some art inspired by your post 🎨
@@ -300,11 +310,11 @@ Commissioned by u/{commission_username} • Made with [Clouvel](https://clouvel.
     ) -> Dict[str, Any]:
         """
         Save the submitted comment information to the database.
-        
+
         Args:
             product_id: The ID of the original product
             submitted_comment: The result from the Reddit comment submission
-            
+
         Returns:
             Dict containing the saved comment information
         """

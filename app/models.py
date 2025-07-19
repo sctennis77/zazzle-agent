@@ -1241,7 +1241,7 @@ class AgentScannedPostSchema(BaseModel):
 
 class ScannedPostDonationInfoSchema(BaseModel):
     """Schema for donation information in agent scanned posts."""
-    
+
     donation_id: int
     amount_usd: float
     tier: str
@@ -1273,10 +1273,16 @@ class AgentScannedPostCreateRequest(BaseModel):
 
     post_id: str = Field(..., max_length=32, description="Reddit post ID")
     subreddit: str = Field(..., max_length=100, description="Subreddit name")
-    comment_id: Optional[str] = Field(None, max_length=32, description="Comment ID if promoted")
+    comment_id: Optional[str] = Field(
+        None, max_length=32, description="Comment ID if promoted"
+    )
     promoted: bool = Field(..., description="Whether the post was promoted")
     post_title: Optional[str] = Field(None, description="Post title")
     post_score: Optional[int] = Field(None, description="Post score at time of scan")
-    promotion_message: Optional[str] = Field(None, description="Message used for promotion")
+    promotion_message: Optional[str] = Field(
+        None, description="Message used for promotion"
+    )
     rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
-    agent_ratings: Optional[Dict[str, Any]] = Field(None, description="Agent ratings (mood, topic, illustration_potential)")
+    agent_ratings: Optional[Dict[str, Any]] = Field(
+        None, description="Agent ratings (mood, topic, illustration_potential)"
+    )
