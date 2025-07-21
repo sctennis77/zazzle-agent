@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.agents.reddit_agent import RedditAgent, pick_subreddit
 from app.clients.reddit_client import RedditClient
 from app.db.database import SessionLocal
-from app.db.models import Subreddit
+from app.db.models import AgentScannedPost, Donation, Subreddit
 from app.models import PipelineConfig, RedditContext
 from app.utils.logging_config import get_logger
 
@@ -34,6 +34,7 @@ class ValidationResult:
         post_content: Optional[str] = None,
         commission_type: Optional[str] = None,
         error: Optional[str] = None,
+        agent_ratings: Optional[Dict[str, Any]] = None,
     ):
         self.valid = valid
         self.subreddit = subreddit
@@ -44,6 +45,7 @@ class ValidationResult:
         self.post_content = post_content
         self.commission_type = commission_type
         self.error = error
+        self.agent_ratings = agent_ratings
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response."""
@@ -57,6 +59,7 @@ class ValidationResult:
             "post_content": self.post_content,
             "commission_type": self.commission_type,
             "error": self.error,
+            "agent_ratings": self.agent_ratings,
         }
 
 
@@ -135,7 +138,11 @@ class CommissionValidator:
             return ValidationResult(valid=False, error=f"Validation error: {str(e)}")
 
     async def _validate_post(
-        self, subreddit_name: str, post_id: str, commission_type: str
+        self,
+        subreddit_name: str,
+        post_id: str,
+        commission_type: str,
+        agent_ratings: Optional[Dict[str, Any]] = None,
     ) -> ValidationResult:
         """Validate a post given subreddit and post_id."""
         try:
@@ -160,6 +167,7 @@ class CommissionValidator:
                 post_url=url,
                 post_content=content,
                 commission_type=commission_type,
+                agent_ratings=agent_ratings,
             )
         except Exception as e:
             logger.error(f"Error validating post {post_id}: {str(e)}")
@@ -167,25 +175,142 @@ class CommissionValidator:
                 valid=False, error=f"Failed to validate post {post_id}: {str(e)}"
             )
 
+    def _validate_scanned_post(
+        self, scanned_post: AgentScannedPost, commission_type: str
+    ) -> ValidationResult:
+        """Validate a scanned post using database data (no Reddit API call needed)."""
+        try:
+            # Use the data we already have from the database
+            subreddit_id = self._get_subreddit_id(scanned_post.subreddit)
+            post_url = f"https://reddit.com/r/{scanned_post.subreddit}/comments/{scanned_post.post_id}/"
+            
+            return ValidationResult(
+                valid=True,
+                subreddit=scanned_post.subreddit,
+                subreddit_id=subreddit_id,
+                post_id=scanned_post.post_id,
+                post_title=scanned_post.post_title or "Scanned Post",
+                post_url=post_url,
+                post_content="",  # We don't store content for scanned posts
+                commission_type=commission_type,
+                agent_ratings=scanned_post.agent_ratings,
+            )
+        except Exception as e:
+            logger.error(f"Error validating scanned post {scanned_post.post_id}: {str(e)}")
+            return ValidationResult(
+                valid=False, error=f"Failed to validate scanned post {scanned_post.post_id}: {str(e)}"
+            )
+
+    def _find_uncommissioned_scanned_post(self) -> Optional[AgentScannedPost]:
+        """
+        Find a scanned post with high artistic potential that has never had any commission attempt.
+
+        Returns:
+            AgentScannedPost with artistic_potential > 7 that has no donation entries, or None
+        """
+        try:
+            # Query for scanned posts with artistic_potential > 7 that aren't commissioned
+            # First get post_ids that have ANY commission entry (regardless of status)
+            commissioned_post_ids = (
+                self.session.query(Donation.post_id)
+                .filter(Donation.post_id.isnot(None))
+                .subquery()
+            )
+
+            # Then find scanned posts not in that list with high artistic potential
+            # Order by scanned_at desc to get newer posts first
+            scanned_post = (
+                self.session.query(AgentScannedPost)
+                .filter(
+                    AgentScannedPost.post_id.notin_(commissioned_post_ids),
+                    AgentScannedPost.agent_ratings.isnot(None),
+                )
+                .order_by(AgentScannedPost.scanned_at.desc())
+                .limit(100)  # Limit to avoid processing too many records
+                .all()
+            )
+
+            # Filter by artistic_potential > 7 (need to check JSON field)
+            for post in scanned_post:
+                if post.agent_ratings and isinstance(post.agent_ratings, dict):
+                    try:
+                        artistic_potential = post.agent_ratings.get(
+                            "illustration_potential", 0
+                        )
+                        # Ensure it's a number and > 7
+                        if (
+                            isinstance(artistic_potential, (int, float))
+                            and artistic_potential > 7
+                        ):
+                            logger.info(
+                                f"Found scanned post with no commission attempts: {post.post_id} "
+                                f"in r/{post.subreddit} with artistic_potential: "
+                                f"{artistic_potential}"
+                            )
+                            return post
+                    except (KeyError, TypeError, ValueError) as e:
+                        logger.warning(
+                            f"Invalid agent_ratings data for post {post.post_id}: {e}"
+                        )
+                        continue
+
+            logger.info(
+                "No scanned posts found with artistic_potential > 7 that haven't had commission attempts"
+            )
+            return None
+
+        except Exception as e:
+            logger.error(f"Error finding uncommissioned scanned post: {str(e)}")
+            return None
+
     async def _validate_random_random(self) -> ValidationResult:
         try:
-            subreddit_name = pick_subreddit()
-            logger.info(f"Finding top post in subreddit: {subreddit_name}")
-            submission = await self.reddit_agent.find_top_post_from_subreddit(
-                subreddit_name=subreddit_name
-            )
-            # if not submission:
-            #     submission = await self.reddit_agent._find_trending_post_for_task(subreddit_name=subreddit_name)
-            if not submission:
-                return ValidationResult(
-                    valid=False,
-                    error=f"No top or trending posts found in r/{subreddit_name}",
+            # First try to find an uncommissioned scanned post with high artistic potential
+            scanned_post = self._find_uncommissioned_scanned_post()
+            if scanned_post:
+                logger.info(
+                    f"Using scanned post {scanned_post.post_id} from "
+                    f"r/{scanned_post.subreddit} with artistic_potential: "
+                    f"{scanned_post.agent_ratings.get('illustration_potential', 0)}"
                 )
+                return self._validate_scanned_post(
+                    scanned_post, "random_random"
+                )
+
+            # Fallback to existing random selection logic
             logger.info(
-                f"Found post from {submission.subreddit.display_name} in top /all"
+                "No suitable scanned posts found, falling back to random selection"
             )
-            return await self._validate_post(
-                submission.subreddit.display_name, submission.id, "random_random"
+            
+            # Try multiple subreddits until we find a valid post
+            max_attempts = 5
+            for attempt in range(max_attempts):
+                subreddit_name = pick_subreddit()
+                logger.info(f"Attempt {attempt + 1}/{max_attempts}: Finding top post in subreddit: {subreddit_name}")
+                
+                try:
+                    submission = await self.reddit_agent.find_top_post_from_subreddit(
+                        subreddit_name=subreddit_name
+                    )
+                    
+                    if submission:
+                        logger.info(
+                            f"Found post from {submission.subreddit.display_name} in top /all"
+                        )
+                        return await self._validate_post(
+                            submission.subreddit.display_name, submission.id, "random_random"
+                        )
+                    else:
+                        logger.warning(f"No posts found in r/{subreddit_name}, trying another subreddit...")
+                        
+                except Exception as e:
+                    logger.warning(f"Error finding post in r/{subreddit_name}: {str(e)}, trying another subreddit...")
+                    continue
+            
+            # If all attempts fail, return error
+            return ValidationResult(
+                valid=False,
+                error="Unable to find suitable posts after multiple attempts. Please try again.",
             )
         except Exception as e:
             logger.error(f"Error in random_random validation: {str(e)}")

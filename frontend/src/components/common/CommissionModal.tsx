@@ -41,6 +41,11 @@ interface ValidationResult {
   post_url?: string;
   commission_type: string;
   error?: string;
+  agent_ratings?: {
+    mood?: string[];
+    topic?: string[];
+    illustration_potential?: number;
+  };
 }
 
 // Subreddit API types
@@ -128,6 +133,58 @@ function extractPostIdFromUrl(url: string | any): string | null {
     return null;
   }
 }
+
+// Helper to format artistic potential level
+function formatArtisticPotential(potential: number | undefined): { level: string; color: string } {
+  const safePotential = potential || 0;
+  if (safePotential >= 9) {
+    return { level: 'Very High', color: 'text-purple-600' };
+  } else if (safePotential >= 7) {
+    return { level: 'High', color: 'text-blue-600' };
+  } else {
+    return { level: 'Medium', color: 'text-green-600' };
+  }
+}
+
+// Component to display agent ratings
+const AgentRatingsDisplay: React.FC<{ agentRatings: NonNullable<ValidationResult['agent_ratings']> }> = ({ agentRatings }) => {
+  const { level, color } = formatArtisticPotential(agentRatings.illustration_potential || 0);
+  
+  // Don't render if no meaningful data
+  const hasMood = agentRatings.mood && agentRatings.mood.length > 0;
+  const hasTopic = agentRatings.topic && agentRatings.topic.length > 0;
+  const hasPotential = agentRatings.illustration_potential !== undefined && agentRatings.illustration_potential > 0;
+  
+  if (!hasMood && !hasTopic && !hasPotential) {
+    return null;
+  }
+  
+  return (
+    <div className="mt-2 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+      <div className="text-sm font-medium text-gray-700 mb-2">✨ AI Content Analysis</div>
+      <div className="flex flex-wrap gap-3 text-sm">
+        {hasMood && (
+          <div className="flex items-center gap-1">
+            <span className="text-gray-600">Mood:</span>
+            <span>{agentRatings.mood.join(' ')}</span>
+          </div>
+        )}
+        {hasTopic && (
+          <div className="flex items-center gap-1">
+            <span className="text-gray-600">Theme:</span>
+            <span>{agentRatings.topic.join(' ')}</span>
+          </div>
+        )}
+        {hasPotential && (
+          <div className="flex items-center gap-1">
+            <span className="text-gray-600">Artistic Potential:</span>
+            <span className={`font-semibold ${color}`}>{level} ({agentRatings.illustration_potential}/10)</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Wrapper component to handle Elements readiness
 const CommissionFormWrapper: React.FC<{
@@ -1078,6 +1135,9 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
             <div>Subreddit: r/{validationResult.subreddit}</div>
             {validationResult.post_id && (
               <div>Post: {validationResult.post_title || validationResult.post_id}</div>
+            )}
+            {validationResult.agent_ratings && (
+              <AgentRatingsDisplay agentRatings={validationResult.agent_ratings} />
             )}
           </div>
         )}

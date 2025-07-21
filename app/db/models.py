@@ -558,7 +558,9 @@ class AgentScannedPost(Base):
     post_score = Column(Integer, nullable=True)
     promotion_message = Column(Text, nullable=True)
     rejection_reason = Column(Text, nullable=True)
-    agent_ratings = Column(JSON, nullable=True)  # JSON field for mood, topic, illustration_potential
+    agent_ratings = Column(
+        JSON, nullable=True
+    )  # JSON field for mood, topic, illustration_potential
 
 
 class ProductRedditComment(Base):

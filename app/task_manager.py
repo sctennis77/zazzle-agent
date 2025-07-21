@@ -24,6 +24,7 @@ from app.utils.logging_config import get_logger
 # Optional k8s dependency
 try:
     from app.k8s_job_manager import K8sJobManager
+
     K8S_AVAILABLE = True
 except ImportError:
     K8S_AVAILABLE = False

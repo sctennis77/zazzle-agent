@@ -1609,9 +1609,7 @@ async def validate_commission(
             post_url=None,  # Not supported in current model
         )
         logger.info(f"Commission validation result: valid={result.valid}")
-        if not result.valid:
-            logger.warning(f"Commission validation failed: {result.error}")
-            raise HTTPException(status_code=422, detail=result.to_dict())
+        # Always return the result, even if invalid - let frontend handle it
         return result.to_dict()
     except HTTPException as e:
         raise e
