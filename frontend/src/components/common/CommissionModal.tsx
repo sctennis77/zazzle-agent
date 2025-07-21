@@ -137,7 +137,7 @@ function extractPostIdFromUrl(url: string | any): string | null {
 // Helper to format artistic potential level
 function formatArtisticPotential(potential: number | undefined): { level: string; color: string } {
   const safePotential = potential || 0;
-  if (safePotential >= 9) {
+  if (safePotential >= 8) {
     return { level: 'Very High', color: 'text-purple-600' };
   } else if (safePotential >= 7) {
     return { level: 'High', color: 'text-blue-600' };
@@ -161,7 +161,7 @@ const AgentRatingsDisplay: React.FC<{ agentRatings: NonNullable<ValidationResult
   
   return (
     <div className="mt-2 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
-      <div className="text-sm font-medium text-gray-700 mb-2">✨ AI Content Analysis</div>
+      <div className="text-sm font-medium text-gray-700 mb-2">✨ Clouvel muses...</div>
       <div className="flex flex-wrap gap-3 text-sm">
         {hasMood && (
           <div className="flex items-center gap-1">
@@ -176,9 +176,21 @@ const AgentRatingsDisplay: React.FC<{ agentRatings: NonNullable<ValidationResult
           </div>
         )}
         {hasPotential && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <span className="text-gray-600">Artistic Potential:</span>
-            <span className={`font-semibold ${color}`}>{level} ({agentRatings.illustration_potential}/10)</span>
+            <div 
+              className="flex items-center gap-0.5 cursor-help"
+              title={`${level} (${agentRatings.illustration_potential}/10)`}
+            >
+              {/* Visual indicator */}
+              {agentRatings.illustration_potential >= 8 ? (
+                <>⭐⭐⭐</>
+              ) : agentRatings.illustration_potential >= 7 ? (
+                <>⭐⭐<span className="opacity-30">⭐</span></>
+              ) : (
+                <>⭐<span className="opacity-30">⭐⭐</span></>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -421,6 +433,7 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
   const [validationError, setValidationError] = useState('');
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
+  const [isRerolling, setIsRerolling] = useState(false);
   
   const isMounted = useRef(false);
 
@@ -1130,8 +1143,58 @@ const CommissionModal: React.FC<CommissionModalProps> = ({ isOpen, onClose, onSu
         )}
 
         {validationResult && validationResult.valid && (
-          <div className="text-green-600 text-sm bg-green-50 p-3 rounded-md">
-            <div className="font-semibold mb-1">✅ Commission Validated</div>
+          <div className="text-green-600 text-sm bg-green-50 p-3 rounded-md relative">
+            <div className="flex items-center justify-between mb-1">
+              <div className="font-semibold">✅ Commission Validated</div>
+              {(commissionType === COMMISSION_TYPES.RANDOM || 
+                (commissionType === COMMISSION_TYPES.SUBREDDIT && subreddit)) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsRerolling(true);
+                    try {
+                      // Re-validate without clearing existing content
+                      const validationRequest = {
+                        commission_type: commissionType === COMMISSION_TYPES.RANDOM ? 'random_random' : 'random_subreddit',
+                        subreddit: commissionType === COMMISSION_TYPES.RANDOM ? undefined : subreddit,
+                      };
+                      const response = await fetch(`${API_BASE}/api/commissions/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(validationRequest),
+                      });
+                      if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Validation failed');
+                      }
+                      const result: ValidationResult = await response.json();
+                      if (result.valid) {
+                        // Update with new result
+                        setValidationResult(result);
+                        setValidationError('');
+                        // Create new payment intent for the new post
+                        createPaymentIntent(result);
+                      } else {
+                        setValidationError(result.error || 'Failed to find another post');
+                      }
+                    } catch (error) {
+                      setValidationError(error instanceof Error ? error.message : 'Failed to get another post');
+                    } finally {
+                      setIsRerolling(false);
+                    }
+                  }}
+                  disabled={isRerolling}
+                  className={`p-1.5 rounded-full transition-all ${
+                    isRerolling 
+                      ? 'text-green-500 cursor-not-allowed' 
+                      : 'text-green-700 hover:text-green-800 hover:bg-green-100'
+                  }`}
+                  title="Get another random post"
+                >
+                  <span className={`inline-block ${isRerolling ? 'animate-spin' : ''}`}>🎲</span>
+                </button>
+              )}
+            </div>
             <div>Subreddit: r/{validationResult.subreddit}</div>
             {validationResult.post_id && (
               <div>Post: {validationResult.post_title || validationResult.post_id}</div>

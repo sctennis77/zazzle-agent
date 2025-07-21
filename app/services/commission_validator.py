@@ -6,7 +6,8 @@ we have valid subreddit and post data before creating pipeline tasks.
 """
 
 import logging
-from typing import Any, Dict, Optional
+import random
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -230,7 +231,8 @@ class CommissionValidator:
                 .all()
             )
 
-            # Filter by artistic_potential > 7 (need to check JSON field)
+            # Filter by artistic_potential > 7 and collect all candidates
+            candidates: List[AgentScannedPost] = []
             for post in scanned_post:
                 if post.agent_ratings and isinstance(post.agent_ratings, dict):
                     try:
@@ -242,17 +244,22 @@ class CommissionValidator:
                             isinstance(artistic_potential, (int, float))
                             and artistic_potential > 7
                         ):
-                            logger.info(
-                                f"Found scanned post with no commission attempts: {post.post_id} "
-                                f"in r/{post.subreddit} with artistic_potential: "
-                                f"{artistic_potential}"
-                            )
-                            return post
+                            candidates.append(post)
                     except (KeyError, TypeError, ValueError) as e:
                         logger.warning(
                             f"Invalid agent_ratings data for post {post.post_id}: {e}"
                         )
                         continue
+
+            # Randomly select from candidates if any found
+            if candidates:
+                selected_post = random.choice(candidates)
+                artistic_potential = selected_post.agent_ratings.get("illustration_potential", 0)
+                logger.info(
+                    f"Randomly selected post {selected_post.post_id} from {len(candidates)} candidates "
+                    f"in r/{selected_post.subreddit} with artistic_potential: {artistic_potential}"
+                )
+                return selected_post
 
             logger.info(
                 "No scanned posts found with artistic_potential > 7 that haven't had commission attempts"
