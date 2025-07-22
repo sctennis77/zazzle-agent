@@ -314,10 +314,10 @@ class CommissionValidator:
                     logger.warning(f"Error finding post in r/{subreddit_name}: {str(e)}, trying another subreddit...")
                     continue
             
-            # If all attempts fail, return error
+            # If all attempts fail, return error with the last subreddit tried
             return ValidationResult(
                 valid=False,
-                error="Unable to find suitable posts after multiple attempts. Please try again.",
+                error=f"No top or trending posts found in r/{subreddit_name}",
             )
         except Exception as e:
             logger.error(f"Error in random_random validation: {str(e)}")

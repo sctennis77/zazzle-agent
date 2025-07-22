@@ -1610,6 +1610,8 @@ async def validate_commission(
         )
         logger.info(f"Commission validation result: valid={result.valid}")
         # Always return the result, even if invalid - let frontend handle it
+        if not result.valid:
+            raise HTTPException(status_code=422, detail=result.to_dict())
         return result.to_dict()
     except HTTPException as e:
         raise e
