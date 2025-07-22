@@ -40,7 +40,14 @@ class TestRedditAuthentication:
             assert subreddit.display_name.lower() == "python", "Failed to access subreddit"
             
         except Exception as e:
-            pytest.fail(f"Reddit client authentication failed: {str(e)}")
+            error_msg = f"Reddit client authentication failed: {str(e)}\n\n" \
+                       f"🔧 TROUBLESHOOTING:\n" \
+                       f"If you see 401/403 errors or 'unauthorized_client':\n" \
+                       f"1. Check that the Reddit app (Client ID: {os.getenv('REDDIT_CLIENT_ID', 'N/A')[:10]}...) is configured as 'script' type\n" \
+                       f"2. Verify credentials in .env file are correct\n" \
+                       f"3. Create new Reddit app at https://www.reddit.com/prefs/apps if needed\n" \
+                       f"4. Update REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD in .env"
+            pytest.fail(error_msg)
     
     def test_promoter_agent_reddit_auth(self):
         """Test that promoter agent can authenticate with PROMOTER_AGENT_* credentials"""
@@ -70,7 +77,14 @@ class TestRedditAuthentication:
             assert subreddit.display_name.lower() == "art", "Failed to access subreddit"
             
         except Exception as e:
-            pytest.fail(f"Promoter agent authentication failed: {str(e)}")
+            error_msg = f"Promoter agent authentication failed: {str(e)}\n\n" \
+                       f"🔧 TROUBLESHOOTING:\n" \
+                       f"If you see 401/403 errors or 'unauthorized_client':\n" \
+                       f"1. Check that the Promoter Reddit app (Client ID: {os.getenv('PROMOTER_AGENT_CLIENT_ID', 'N/A')[:10]}...) is configured as 'script' type\n" \
+                       f"2. Verify promoter credentials in .env file are correct\n" \
+                       f"3. Create new Reddit app at https://www.reddit.com/prefs/apps if needed\n" \
+                       f"4. Update PROMOTER_AGENT_CLIENT_ID, PROMOTER_AGENT_CLIENT_SECRET, PROMOTER_AGENT_USERNAME, PROMOTER_AGENT_PASSWORD in .env"
+            pytest.fail(error_msg)
     
     def test_both_clients_different_users(self):
         """Verify that the two clients authenticate as different users"""
