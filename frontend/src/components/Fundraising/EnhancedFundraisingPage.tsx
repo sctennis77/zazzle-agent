@@ -154,32 +154,6 @@ const ProgressBar: React.FC<{
           )}
         </div>
         
-        {/* Axis labels */}
-        <div className="relative mt-1 text-xs text-gray-500">
-          {/* Start label */}
-          <div className="absolute left-0 transform -translate-x-1/2">$0</div>
-          
-          {/* Net amount label */}
-          {netAmount >= 0 && (
-            <div 
-              className="absolute transform -translate-x-1/2"
-              style={{ left: `${netPercentage}%` }}
-            >
-              ${Math.round(netAmount)}
-            </div>
-          )}
-          
-          {/* Community amount label (only show if different from net) */}
-          {communityAmount > netAmount && (
-            <div 
-              className="absolute transform -translate-x-1/2"
-              style={{ left: `${communityPercentage}%` }}
-            >
-              ${Math.round(communityAmount)}
-            </div>
-          )}
-          
-        </div>
       </div>
     );
   }
