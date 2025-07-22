@@ -110,7 +110,7 @@ const ProgressBar: React.FC<{
   if (negative !== 0 || positive !== 0) {
     const communityAmount = positive;
     const selfCommissionAmount = Math.abs(negative);
-    const netAmount = current; // This should be positive - selfCommission
+    const netAmount = positive + negative; // Community raised + negative self commissions
     
     // Calculate percentages relative to target
     const communityPercentage = Math.min((communityAmount / target) * 100, 100);
@@ -179,8 +179,6 @@ const ProgressBar: React.FC<{
             </div>
           )}
           
-          {/* Goal label */}
-          <div className="absolute right-0 transform translate-x-1/2">${target.toLocaleString()}</div>
         </div>
       </div>
     );
