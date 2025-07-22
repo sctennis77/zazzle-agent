@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ExternalLink } from 'lucide-react';
 import DonationsLeaderboardTable from './DonationsLeaderboardTable';
 import { API_BASE } from '../../utils/apiBase';
 
@@ -16,6 +17,7 @@ interface DonationData {
   source?: string;
   post_id?: string;
   post_title?: string;
+  subreddit?: string;
 }
 
 interface SubredditDonations {
@@ -339,9 +341,9 @@ const EnhancedFundraisingPage: React.FC = () => {
   }
 
   // Calculate metrics
-  const allDonations = Object.values(data).flatMap(d => [
-    ...(d.commission ? [d.commission] : []),
-    ...d.support
+  const allDonations = Object.entries(data).flatMap(([subredditName, d]) => [
+    ...(d.commission ? [{ ...d.commission, subreddit: subredditName }] : []),
+    ...d.support.map(donation => ({ ...donation, subreddit: subredditName }))
   ]);
   
   const communityDonations = allDonations.filter(d => d.source === null || d.source === 'stripe');
@@ -578,11 +580,12 @@ const EnhancedFundraisingPage: React.FC = () => {
               {allDonations.slice(0, 5).map((donation, index) => (
                 <div key={donation.donation_id} className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between">
+                    {/* Left: User info */}
                     <div className="flex items-center space-x-3 flex-1">
                       <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
                         {donation.reddit_username?.charAt(0).toUpperCase() || 'A'}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0">
                         <div className="font-medium text-gray-900">
                           {donation.is_anonymous ? 'Anonymous' : donation.reddit_username}
                           {donation.source === 'manual' && (
@@ -594,8 +597,30 @@ const EnhancedFundraisingPage: React.FC = () => {
                         <div className="text-sm text-gray-500">
                           {new Date(donation.created_at).toLocaleDateString()}
                         </div>
+                        {/* Commission or donation message below user info */}
+                        {(donation.message || donation.commission_message) && (
+                          <div className="mt-1 text-xs text-gray-600 truncate max-w-xs">
+                            <span className="font-medium">Message:</span> {donation.message || donation.commission_message}
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {/* Center: Post title and subreddit */}
+                    <div className="flex-1 px-4 text-center">
+                      {donation.post_title && (
+                        <div className="text-sm text-gray-700 font-medium truncate">
+                          "{donation.post_title}"
+                        </div>
+                      )}
+                      {donation.subreddit && (
+                        <div className="text-xs text-gray-500 font-bold">
+                          r/{donation.subreddit}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Amount and gallery link */}
                     <div className="flex items-center gap-3">
                       {donation.post_id && (
                         <button
@@ -603,19 +628,7 @@ const EnhancedFundraisingPage: React.FC = () => {
                           className="p-1.5 hover:bg-gray-200 rounded-full transition-all duration-200"
                           title="View in gallery"
                         >
-                          <svg 
-                            className="w-4 h-4 text-gray-600" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth={2} 
-                              d="M13 7l5 5m0 0l-5 5m5-5H6" 
-                            />
-                          </svg>
+                          <ExternalLink className="w-4 h-4 text-gray-400 hover:text-indigo-600 transition-colors" />
                         </button>
                       )}
                       <div className="text-right">
@@ -630,18 +643,6 @@ const EnhancedFundraisingPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  {/* Post title if available */}
-                  {donation.post_title && (
-                    <div className="mt-2 text-sm text-gray-600 italic truncate">
-                      "{donation.post_title}"
-                    </div>
-                  )}
-                  {/* Donation or commission message if available */}
-                  {(donation.message || donation.commission_message) && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      <span className="font-medium">Message:</span> {donation.message || donation.commission_message}
-                    </div>
-                  )}
                 </div>
               ))}
               {allDonations.length === 0 && (
