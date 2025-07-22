@@ -166,3 +166,20 @@ def test_donations_by_subreddit_endpoint(client, test_data):
             assert "is_anonymous" in donation
             assert "created_at" in donation
             assert "donation_id" in donation
+            assert "post_id" in donation  # New field
+            assert "post_title" in donation  # New field
+        
+        # Check commission donation structure if present
+        if donations["commission"]:
+            commission = donations["commission"]
+            assert "reddit_username" in commission
+            assert "tier_name" in commission
+            assert "tier_min_amount" in commission
+            assert "donation_amount" in commission
+            assert "is_anonymous" in commission
+            assert "created_at" in commission
+            assert "donation_id" in commission
+            assert "commission_message" in commission
+            assert "commission_type" in commission
+            assert "post_id" in commission  # New field
+            assert "post_title" in commission  # New field

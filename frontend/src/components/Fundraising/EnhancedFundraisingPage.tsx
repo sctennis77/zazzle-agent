@@ -14,6 +14,8 @@ interface DonationData {
   commission_message?: string;
   commission_type?: string;
   source?: string;
+  post_id?: string;
+  post_title?: string;
 }
 
 interface SubredditDonations {
@@ -574,35 +576,72 @@ const EnhancedFundraisingPage: React.FC = () => {
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
             <div className="space-y-4">
               {allDonations.slice(0, 5).map((donation, index) => (
-                <div key={donation.donation_id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-                      {donation.reddit_username?.charAt(0).toUpperCase() || 'A'}
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900">
-                        {donation.is_anonymous ? 'Anonymous' : donation.reddit_username}
-                        {donation.source === 'manual' && (
-                          <span className="ml-2 px-2 py-1 bg-rose-100 text-rose-400 text-xs rounded-full">
-                            Self Commissioned
-                          </span>
-                        )}
+                <div key={donation.donation_id} className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                        {donation.reddit_username?.charAt(0).toUpperCase() || 'A'}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(donation.created_at).toLocaleDateString()}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900">
+                          {donation.is_anonymous ? 'Anonymous' : donation.reddit_username}
+                          {donation.source === 'manual' && (
+                            <span className="ml-2 px-2 py-1 bg-rose-100 text-rose-400 text-xs rounded-full">
+                              Self Commissioned
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(donation.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {donation.post_id && (
+                        <button
+                          onClick={() => window.location.href = `/?product=${donation.post_id}`}
+                          className="p-1.5 hover:bg-gray-200 rounded-full transition-all duration-200"
+                          title="View in gallery"
+                        >
+                          <svg 
+                            className="w-4 h-4 text-gray-600" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M13 7l5 5m0 0l-5 5m5-5H6" 
+                            />
+                          </svg>
+                        </button>
+                      )}
+                      <div className="text-right">
+                        <div className={`font-bold ${
+                          donation.source === 'manual' ? 'text-rose-400' : 'text-green-600'
+                        }`}>
+                          ${donation.donation_amount.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-gray-500 capitalize">
+                          {donation.tier_name} Tier
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`font-bold ${
-                      donation.source === 'manual' ? 'text-rose-400' : 'text-green-600'
-                    }`}>
-                      ${donation.donation_amount.toFixed(2)}
+                  {/* Post title if available */}
+                  {donation.post_title && (
+                    <div className="mt-2 text-sm text-gray-600 italic truncate">
+                      "{donation.post_title}"
                     </div>
-                    <div className="text-xs text-gray-500 capitalize">
-                      {donation.tier_name} Tier
+                  )}
+                  {/* Donation or commission message if available */}
+                  {(donation.message || donation.commission_message) && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <span className="font-medium">Message:</span> {donation.message || donation.commission_message}
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
               {allDonations.length === 0 && (

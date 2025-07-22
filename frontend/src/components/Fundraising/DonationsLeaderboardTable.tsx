@@ -143,9 +143,14 @@ interface Props {
 }
 
 const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress }) => {
+  const [showAll, setShowAll] = useState(false);
   const rows = summarizeLeaderboard(data);
   // Find which tiers are present in the data
   const presentTiers = TIER_ORDER.filter(tier => rows.some(row => row.tiers[tier]));
+
+  // Determine which rows to display
+  const displayedRows = showAll ? rows : rows.slice(0, 5);
+  const hasMoreRows = rows.length > 5;
 
   // Compute max total for scaling bar widths (always use amount mode)
   const maxTotal = Math.max(
@@ -176,7 +181,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
           </tr>
         </thead>
         <tbody>
-          {rows.map(row => {
+          {displayedRows.map(row => {
             // For the stacked bar: sum all donation amounts per tier
             const totalValue = presentTiers.reduce((sum, tier) => sum + (row.tiers[tier]?.amount || 0), 0) || 1;
             const totalDisplay = row.total;
@@ -330,6 +335,52 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
           })}
         </tbody>
       </table>
+      
+      {/* Show More/Less Button */}
+      {hasMoreRows && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 transition-colors duration-200"
+          >
+            {showAll ? (
+              <>
+                <span>Show Less</span>
+                <svg 
+                  className="w-4 h-4" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M5 15l7-7 7 7" 
+                  />
+                </svg>
+              </>
+            ) : (
+              <>
+                <span>Show More ({rows.length - 5} more)</span>
+                <svg 
+                  className="w-4 h-4" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M19 9l-7 7-7-7" 
+                  />
+                </svg>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

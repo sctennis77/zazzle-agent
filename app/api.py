@@ -593,7 +593,17 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
                 "created_at": donation.created_at.isoformat(),
                 "donation_id": donation.id,
                 "source": donation.source.value if donation.source else None,
+                "post_id": donation.post_id,
+                "post_title": None,  # Will be populated below if post exists
             }
+            
+            # If there's a post_id, fetch the post title
+            if donation.post_id:
+                reddit_post = (
+                    db.query(RedditPost).filter_by(post_id=donation.post_id).first()
+                )
+                if reddit_post:
+                    donation_data["post_title"] = reddit_post.title
             if donation.donation_type == "commission":
                 donation_data.update(
                     {
