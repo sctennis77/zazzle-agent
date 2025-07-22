@@ -579,7 +579,7 @@ const EnhancedFundraisingPage: React.FC = () => {
             <div className="space-y-4">
               {allDonations.slice(0, 5).map((donation, index) => (
                 <div key={donation.donation_id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     {/* Left: User info */}
                     <div className="flex items-center space-x-3 flex-1">
                       <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
@@ -607,14 +607,14 @@ const EnhancedFundraisingPage: React.FC = () => {
                     </div>
 
                     {/* Center: Post title and subreddit */}
-                    <div className="flex-1 px-4 text-center">
+                    <div className="flex-1 px-4 text-center min-w-0">
                       {donation.post_title && (
-                        <div className="text-sm text-gray-700 font-medium truncate">
+                        <div className="text-xs text-gray-700 font-medium break-words line-clamp-2 leading-tight mb-1">
                           "{donation.post_title}"
                         </div>
                       )}
                       {donation.subreddit && (
-                        <div className="text-xs text-gray-500 font-bold">
+                        <div className="text-xs text-gray-500 font-bold bg-gray-100 px-2 py-1 rounded-full inline-block">
                           r/{donation.subreddit}
                         </div>
                       )}
