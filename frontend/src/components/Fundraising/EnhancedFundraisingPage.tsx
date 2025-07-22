@@ -117,40 +117,71 @@ const ProgressBar: React.FC<{
     const netPercentage = Math.min((Math.max(0, netAmount) / target) * 100, 100);
     
     return (
-      <div className={`relative bg-gray-200 rounded-full overflow-hidden ${className}`}>
-        {/* Community donations bar (full amount) */}
-        <div 
-          className={`h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-1000 ease-out ${
-            showGlow ? 'shadow-lg shadow-indigo-500/50' : ''
-          }`}
-          style={{ width: `${communityPercentage}%` }}
-        >
-          {showGlow && (
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+      <div className="relative">
+        <div className={`relative bg-gray-200 rounded-full overflow-hidden ${className}`}>
+          {/* Community donations bar (full amount) */}
+          <div 
+            className={`h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out ${
+              showGlow ? 'shadow-lg shadow-blue-500/50' : ''
+            }`}
+            style={{ width: `${communityPercentage}%` }}
+          >
+            {showGlow && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+            )}
+          </div>
+          
+          {/* Self-commission "subtraction" overlay */}
+          {selfCommissionAmount > 0 && netPercentage < communityPercentage && (
+            <div 
+              className="absolute top-0 h-full bg-rose-400 transition-all duration-1000 ease-out"
+              style={{ 
+                left: `${netPercentage}%`,
+                width: `${communityPercentage - netPercentage}%`,
+                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 6px)'
+              }}
+            />
+          )}
+          
+          {/* If net is negative, show the negative portion extending from 0 */}
+          {netAmount < 0 && (
+            <div 
+              className="absolute top-0 h-full bg-rose-500 rounded-l-full transition-all duration-1000 ease-out"
+              style={{ 
+                width: `${Math.min((Math.abs(netAmount) / target) * 100, 100)}%`
+              }}
+            />
           )}
         </div>
         
-        {/* Self-commission "subtraction" overlay */}
-        {selfCommissionAmount > 0 && netPercentage < communityPercentage && (
-          <div 
-            className="absolute top-0 h-full bg-rose-400/70 transition-all duration-1000 ease-out"
-            style={{ 
-              left: `${netPercentage}%`,
-              width: `${communityPercentage - netPercentage}%`,
-              backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.3) 4px, rgba(255,255,255,0.3) 8px)'
-            }}
-          />
-        )}
-        
-        {/* If net is negative, show the negative portion extending from 0 */}
-        {netAmount < 0 && (
-          <div 
-            className="absolute top-0 h-full bg-rose-500 rounded-l-full transition-all duration-1000 ease-out"
-            style={{ 
-              width: `${Math.min((Math.abs(netAmount) / target) * 100, 100)}%`
-            }}
-          />
-        )}
+        {/* Axis labels */}
+        <div className="relative mt-1 text-xs text-gray-500">
+          {/* Start label */}
+          <div className="absolute left-0 transform -translate-x-1/2">$0</div>
+          
+          {/* Net amount label */}
+          {netAmount >= 0 && (
+            <div 
+              className="absolute transform -translate-x-1/2"
+              style={{ left: `${netPercentage}%` }}
+            >
+              ${Math.round(netAmount)}
+            </div>
+          )}
+          
+          {/* Community amount label (only show if different from net) */}
+          {communityAmount > netAmount && (
+            <div 
+              className="absolute transform -translate-x-1/2"
+              style={{ left: `${communityPercentage}%` }}
+            >
+              ${Math.round(communityAmount)}
+            </div>
+          )}
+          
+          {/* Goal label */}
+          <div className="absolute right-0 transform translate-x-1/2">${target.toLocaleString()}</div>
+        </div>
       </div>
     );
   }
