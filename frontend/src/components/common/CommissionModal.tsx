@@ -163,13 +163,13 @@ const AgentRatingsDisplay: React.FC<{ agentRatings: NonNullable<ValidationResult
     <div className="mt-2 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
       <div className="text-sm font-medium text-gray-700 mb-2">✨ Clouvel muses...</div>
       <div className="flex flex-wrap gap-3 text-sm">
-        {hasMood && (
+        {hasMood && agentRatings.mood && (
           <div className="flex items-center gap-1">
             <span className="text-gray-600">Mood:</span>
             <span>{agentRatings.mood.join(' ')}</span>
           </div>
         )}
-        {hasTopic && (
+        {hasTopic && agentRatings.topic && (
           <div className="flex items-center gap-1">
             <span className="text-gray-600">Theme:</span>
             <span>{agentRatings.topic.join(' ')}</span>
@@ -183,9 +183,9 @@ const AgentRatingsDisplay: React.FC<{ agentRatings: NonNullable<ValidationResult
               title={`${level} (${agentRatings.illustration_potential}/10)`}
             >
               {/* Visual indicator */}
-              {agentRatings.illustration_potential >= 8 ? (
+              {(agentRatings.illustration_potential ?? 0) >= 8 ? (
                 <>⭐⭐⭐</>
-              ) : agentRatings.illustration_potential >= 7 ? (
+              ) : (agentRatings.illustration_potential ?? 0) >= 7 ? (
                 <>⭐⭐<span className="opacity-30">⭐</span></>
               ) : (
                 <>⭐<span className="opacity-30">⭐⭐</span></>
