@@ -106,42 +106,48 @@ const ProgressBar: React.FC<{
   negative?: number;
   positive?: number;
 }> = ({ current, target, className = '', showGlow = false, negative = 0, positive = 0 }) => {
-  // If we have negative and positive values, use the new dual bar
+  // If we have negative and positive values, use sequential bar logic
   if (negative !== 0 || positive !== 0) {
-    const zeroPoint = 33.33; // 1/3 from left
-    const maxNegative = Math.abs(negative);
-    const maxRange = Math.max(maxNegative, positive, target);
+    const communityAmount = positive;
+    const selfCommissionAmount = Math.abs(negative);
+    const netAmount = current; // This should be positive - selfCommission
     
-    // Calculate widths as percentages of available space
-    const negativeWidth = (maxNegative / maxRange) * zeroPoint;
-    const positiveWidth = (positive / maxRange) * (100 - zeroPoint);
+    // Calculate percentages relative to target
+    const communityPercentage = Math.min((communityAmount / target) * 100, 100);
+    const netPercentage = Math.min((Math.max(0, netAmount) / target) * 100, 100);
     
     return (
       <div className={`relative bg-gray-200 rounded-full overflow-hidden ${className}`}>
-        {/* Zero line indicator */}
+        {/* Community donations bar (full amount) */}
         <div 
-          className="absolute top-0 w-0.5 h-full bg-gray-400 z-10"
-          style={{ left: `${zeroPoint}%` }}
-        />
+          className={`h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-1000 ease-out ${
+            showGlow ? 'shadow-lg shadow-indigo-500/50' : ''
+          }`}
+          style={{ width: `${communityPercentage}%` }}
+        >
+          {showGlow && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+          )}
+        </div>
         
-        {/* Negative bar (red, extends left from zero) */}
-        {negative < 0 && (
+        {/* Self-commission "subtraction" overlay */}
+        {selfCommissionAmount > 0 && netPercentage < communityPercentage && (
           <div 
-            className="absolute top-0 h-full bg-rose-400 rounded-l-full transition-all duration-1000 ease-out"
+            className="absolute top-0 h-full bg-rose-400/70 transition-all duration-1000 ease-out"
             style={{ 
-              right: `${100 - zeroPoint}%`,
-              width: `${negativeWidth}%`
+              left: `${netPercentage}%`,
+              width: `${communityPercentage - netPercentage}%`,
+              backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.3) 4px, rgba(255,255,255,0.3) 8px)'
             }}
           />
         )}
         
-        {/* Positive bar (blue, extends right from zero) */}
-        {positive > 0 && (
+        {/* If net is negative, show the negative portion extending from 0 */}
+        {netAmount < 0 && (
           <div 
-            className="absolute top-0 h-full bg-blue-500 rounded-r-full transition-all duration-1000 ease-out"
+            className="absolute top-0 h-full bg-rose-500 rounded-l-full transition-all duration-1000 ease-out"
             style={{ 
-              left: `${zeroPoint}%`,
-              width: `${positiveWidth}%`
+              width: `${Math.min((Math.abs(netAmount) / target) * 100, 100)}%`
             }}
           />
         )}
