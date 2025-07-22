@@ -216,8 +216,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     )}
                   </div>
                 </div>
-                {/* Reddit Interaction Section */}
-                {hasInteraction && redditInteraction && (
+                {/* Reddit Interaction Section - Hidden in dry run mode */}
+                {hasInteraction && redditInteraction && !redditInteraction.dry_run && (
                   <div className="flex items-center gap-2 mt-2">
                     <a
                       href={interactionUrl}
@@ -233,7 +233,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     </span>
                     <span className="text-xs text-gray-600">
                       &nbsp;• {isComment(redditInteraction) ? 'Comment' : 'Post'}
-                      {redditInteraction.dry_run && <span className="text-orange-600"> (Dry Run)</span>}
                     </span>
                     {interactionDate && (
                       <span className="text-xs text-gray-600">
