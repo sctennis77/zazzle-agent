@@ -48,8 +48,8 @@ vi.mock('../../components/common/CommissionModal', () => ({
 }));
 
 // Mock other page components
-vi.mock('../../components/Fundraising/FundraisingPage', () => ({
-  default: () => <div data-testid="fundraising-page">Fundraising Page</div>
+vi.mock('../../components/Fundraising/EnhancedFundraisingPage', () => ({
+  default: () => <div data-testid="fundraising-page">Enhanced Fundraising Page</div>
 }));
 
 vi.mock('../../components/common/DonationSuccessPage', () => ({
