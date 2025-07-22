@@ -59,5 +59,8 @@ dist/
 *.rdb
 dump.rdb
 
+# Test databases
+test_reddit_interaction.db
+
 .env.production
 .env.production
