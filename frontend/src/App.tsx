@@ -6,7 +6,7 @@ import CommissionModal from './components/common/CommissionModal';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationSuccessPage from './components/common/DonationSuccessPage';
-import FundraisingPage from './components/Fundraising/FundraisingPage';
+import EnhancedFundraisingPage from './components/Fundraising/EnhancedFundraisingPage';
 import { CloudvelAgentView } from './components/CloudvelAgent/CloudvelAgentView';
 
 function App() {
@@ -45,7 +45,7 @@ function App() {
           <Route path="/" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
           <Route path="/tasks" element={<ProductGrid onCommissionProgressChange={setIsCommissionInProgress} onCommissionClick={handleCommissionClick} />} />
           <Route path="/clouvel-agent" element={<CloudvelAgentView onCommissionClick={handleCommissionClick} />} />
-          <Route path="/fundraising" element={<FundraisingPage />} />
+          <Route path="/fundraising" element={<EnhancedFundraisingPage />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
         </Routes>
         <CommissionModal 

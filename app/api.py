@@ -592,6 +592,7 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
                 "message": donation.message,
                 "created_at": donation.created_at.isoformat(),
                 "donation_id": donation.id,
+                "source": donation.source.value if donation.source else None,
             }
             if donation.donation_type == "commission":
                 donation_data.update(

@@ -11,6 +11,7 @@ interface DonationData {
   donation_id: number;
   commission_message?: string;
   commission_type?: string;
+  source?: string;
 }
 
 interface SubredditDonations {
@@ -51,8 +52,13 @@ interface TierSummary {
 interface LeaderboardRow {
   subreddit: string;
   tiers: { [tier: string]: TierSummary };
+  communityTiers: { [tier: string]: TierSummary };
   total: number;
   totalDonations: number;
+  communityTotal: number;
+  communityDonations: number;
+  selfCommissions: number;
+  selfCommissionTotal: number;
 }
 
 const TIER_ORDER = [
@@ -85,9 +91,18 @@ function summarizeLeaderboard(data: FundraisingData): LeaderboardRow[] {
       ...(donations.commission ? [donations.commission] : []),
       ...donations.support
     ];
+    
+    // Separate community and self-commissioned donations
+    const communityDonations = allDonations.filter(d => d.source === null || d.source === 'stripe');
+    const selfCommissionedDonations = allDonations.filter(d => d.source === 'manual');
+    
     const tiers: { [tier: string]: TierSummary } = {};
+    const communityTiers: { [tier: string]: TierSummary } = {};
     let total = 0;
-    const totalDonations = allDonations.length;
+    let communityTotal = 0;
+    let selfCommissionTotal = 0;
+    
+    // Process all donations for overall tier display
     allDonations.forEach(donation => {
       const tier = donation.tier_name.toLowerCase();
       if (!tiers[tier]) tiers[tier] = { count: 0, amount: 0 };
@@ -95,7 +110,30 @@ function summarizeLeaderboard(data: FundraisingData): LeaderboardRow[] {
       tiers[tier].amount += donation.donation_amount;
       total += donation.donation_amount;
     });
-    return { subreddit, tiers, total, totalDonations };
+    
+    // Process only community donations for community tier display
+    communityDonations.forEach(donation => {
+      const tier = donation.tier_name.toLowerCase();
+      if (!communityTiers[tier]) communityTiers[tier] = { count: 0, amount: 0 };
+      communityTiers[tier].count += 1;
+      communityTiers[tier].amount += donation.donation_amount;
+    });
+    
+    // Calculate community and self-commission totals
+    communityTotal = communityDonations.reduce((sum, d) => sum + d.donation_amount, 0);
+    selfCommissionTotal = selfCommissionedDonations.reduce((sum, d) => sum + d.donation_amount, 0);
+    
+    return { 
+      subreddit, 
+      tiers, 
+      communityTiers,
+      total, 
+      totalDonations: allDonations.length,
+      communityTotal,
+      communityDonations: communityDonations.length,
+      selfCommissions: selfCommissionedDonations.length,
+      selfCommissionTotal
+    };
   }).sort((a, b) => b.total - a.total);
 }
 
@@ -123,7 +161,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
       <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Community Fundraising Leaderboard</h3>
         <p className="text-sm text-gray-600">
-          Support your favorite subreddits to unlock custom banner art! When a community reaches its $1,000 goal, 
+          Support your favorite subreddits to unlock custom banner art! When a community reaches its $1,000 goal and the Banner Art Mastery fundraising goal has been achieved, 
           Clouvel will create beautiful, personalized banner artwork for that subreddit.
         </p>
       </div>
@@ -131,8 +169,9 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
         <thead>
           <tr className="border-b">
             <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50">Subreddit</th>
-            <th className="text-center px-3 py-3 font-semibold text-gray-700 bg-gray-50">Total Donations</th>
-            <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50" style={{ width: '50%' }}>Fundraising Progress</th>
+            <th className="text-center px-3 py-3 font-semibold text-gray-700 bg-gray-50">Community Donations</th>
+            <th className="text-center px-3 py-3 font-semibold text-rose-400 bg-rose-50">Self Commissions</th>
+            <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50" style={{ width: '40%' }}>Fundraising Progress</th>
             <th className="text-right px-3 py-3 font-semibold text-gray-700 bg-gray-50">Total ($)</th>
           </tr>
         </thead>
@@ -153,17 +192,23 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                 </td>
                 <td className="px-3 py-4 text-center">
                   <div className="flex flex-col items-center">
-                    <span className="font-bold text-xl text-gray-900">{row.totalDonations}</span>
+                    <span className="font-bold text-xl text-blue-600">{row.communityDonations}</span>
                     <span className="text-xs text-gray-500 font-medium">donations</span>
+                  </div>
+                </td>
+                <td className="px-3 py-4 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold text-xl text-rose-400">{row.selfCommissions}</span>
+                    <span className="text-xs text-gray-500 font-medium">commissions</span>
                   </div>
                 </td>
                 <td className="px-3 py-4">
                   <div className="space-y-2">
-                    {/* Fundraising Progress Bar */}
+                    {/* Community Fundraising Progress Bar */}
                     {(() => {
                       const goal = fundraisingProgress?.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
                       const goalAmount = Number(fundraisingProgress?.subreddit_goal_amount || 1000);
-                      const currentAmount = row.total;
+                      const currentAmount = row.communityTotal; // Only community donations count toward goal
                       const progressPercentage = Math.min((currentAmount / goalAmount) * 100, 100);
                       
                       return (
@@ -196,40 +241,61 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                         </div>
                       );
                     })()}
+
+                    {/* Self Commission Progress Bar */}
+                    {row.selfCommissionTotal > 0 && (() => {
+                      const selfCommissionPercentage = Math.min((row.selfCommissionTotal / 1000) * 100, 100);
+                      
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-rose-400">Self Commissions</span>
+                            <span className="font-medium text-rose-400">
+                              ${row.selfCommissionTotal.toFixed(0)}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="h-2 rounded-full transition-all duration-500 bg-rose-400"
+                              style={{ width: `${selfCommissionPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                     
-                    {/* Tier Distribution Bar */}
-                    <div
-                      className="relative rounded overflow-hidden border border-gray-200"
-                      style={{ width: `${MAX_BAR_WIDTH}px`, height: `${BAR_HEIGHT}px` }}
-                    >
-                      {/* Unfilled bar (track) */}
-                      <div
-                        className="absolute left-0 top-0 h-full w-full bg-gray-200"
-                        style={{ zIndex: 0 }}
-                      />
-                      {/* Filled stacked bar */}
-                      <div
-                        className="absolute left-0 top-0 h-full flex"
-                        style={{ width: `${barWidth}px`, zIndex: 1, transition: 'width 0.3s' }}
-                      >
-                      {presentTiers.map(tier => {
-                        const tierData = row.tiers[tier];
-                        if (!tierData) return null;
-                        const value = tierData.amount;
-                        const width = (value / totalValue) * 100;
-                        return (
-                          <div
-                            key={tier}
-                            style={{
-                              width: `${width}%`,
-                              background: TIER_COLORS[tier],
-                              borderRight: '1px solid #fff',
-                              transition: 'width 0.3s',
-                            }}
-                            title={`${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)} (${tierData.count} donation${tierData.count > 1 ? 's' : ''})`}
-                          />
-                        );
-                      })}
+                    {/* Community Donations Tier Distribution Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-blue-600">Community Donations</span>
+                        <span className="font-medium text-blue-600">
+                          ${row.communityTotal.toFixed(0)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="h-2 rounded-full transition-all duration-500 flex overflow-hidden"
+                          style={{ width: `${Math.min((row.communityTotal / Math.max(...rows.map(r => r.communityTotal), 1)) * 100, 100)}%` }}
+                        >
+                          {presentTiers.map(tier => {
+                            const tierData = row.communityTiers[tier];
+                            if (!tierData) return null;
+                            const value = tierData.amount;
+                            const width = row.communityTotal > 0 ? (value / row.communityTotal) * 100 : 0;
+                            return (
+                              <div
+                                key={tier}
+                                style={{
+                                  width: `${width}%`,
+                                  background: TIER_COLORS[tier],
+                                  borderRight: width > 0 ? '1px solid #fff' : 'none',
+                                  transition: 'width 0.3s',
+                                }}
+                                title={`${TIER_NAMES[tier]}: $${tierData.amount.toFixed(2)} (${tierData.count} community donation${tierData.count > 1 ? 's' : ''})`}
+                              />
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                     
@@ -237,7 +303,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                     {(() => {
                       const goal = fundraisingProgress?.subreddit_goals.find(g => g.subreddit_name === row.subreddit);
                       const goalAmount = Number(fundraisingProgress?.subreddit_goal_amount || 1000);
-                      const currentAmount = row.total;
+                      const currentAmount = row.communityTotal; // Only community donations count toward goal
                       
                       if (goal?.status === 'completed') {
                         return (
@@ -257,7 +323,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
                   </div>
                 </td>
                 <td className="text-right px-3 py-4 font-bold text-gray-900">
-                  ${totalDisplay.toFixed(2)}
+                  ${row.communityTotal.toFixed(2)}
                 </td>
               </tr>
             );
