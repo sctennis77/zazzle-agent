@@ -403,11 +403,28 @@ const EnhancedFundraisingPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="text-left">
-                  <div className="text-2xl font-bold text-blue-600">
-                    <AnimatedCounter value={communityRaised} prefix="$" />
+                <div className="text-left relative group">
+                  <div className="text-2xl font-bold text-rose-400">
+                    <AnimatedCounter value={selfCommissionedAmount} prefix="-$" />
                   </div>
-                  <div className="text-sm text-gray-600">Community Raised</div>
+                  <div className="text-sm text-gray-600 flex items-center gap-1">
+                    Self Commissioned
+                    <svg 
+                      className="w-3 h-3 text-gray-400 cursor-help" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                      <path d="M12 17h.01"/>
+                    </svg>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                    Clouvel incurs the cost of self commissioned works.
+                    <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                  </div>
                 </div>
                 
                 <div className="text-center relative group">
@@ -434,11 +451,28 @@ const EnhancedFundraisingPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-rose-400">
-                    <AnimatedCounter value={selfCommissionedAmount} prefix="$" />
+                <div className="text-right relative group">
+                  <div className="text-2xl font-bold text-blue-600">
+                    <AnimatedCounter value={communityRaised} prefix="$" />
                   </div>
-                  <div className="text-sm text-gray-600">Self Commissioned</div>
+                  <div className="text-sm text-gray-600 flex items-center justify-end gap-1">
+                    Community Raised
+                    <svg 
+                      className="w-3 h-3 text-gray-400 cursor-help" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                      <path d="M12 17h.01"/>
+                    </svg>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                    Community sponsored art that contributes towards fundraising progress
+                    <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                  </div>
                 </div>
               </div>
 

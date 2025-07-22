@@ -170,7 +170,7 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
           <tr className="border-b">
             <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50">Subreddit</th>
             <th className="text-center px-3 py-3 font-semibold text-gray-700 bg-gray-50">Community Donations</th>
-            <th className="text-center px-3 py-3 font-semibold text-rose-400 bg-rose-50">Self Commissions</th>
+            <th className="text-center px-3 py-3 font-semibold text-gray-700 bg-gray-50">Self Commissions</th>
             <th className="text-left px-3 py-3 font-semibold text-gray-700 bg-gray-50" style={{ width: '40%' }}>Fundraising Progress</th>
             <th className="text-right px-3 py-3 font-semibold text-gray-700 bg-gray-50">Total ($)</th>
           </tr>
