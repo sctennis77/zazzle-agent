@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useProducts } from '../../hooks/useProducts';
 import { ProductCard } from './ProductCard';
 import { ProductModal } from './ProductModal';
@@ -165,6 +165,25 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       }
     }
   }, [searchParams, products]);
+
+  // Handle cinema mode query parameters (from CinemaView redirect)
+  useEffect(() => {
+    const cinemaPostId = searchParams.get('cinema');
+    const cinemaIndex = searchParams.get('index');
+    
+    if (cinemaPostId && cinemaIndex && sortedAndFilteredProducts.length > 0) {
+      const index = parseInt(cinemaIndex, 10);
+      if (!isNaN(index) && index >= 0 && index < sortedAndFilteredProducts.length) {
+        setFullScreenIndex(index);
+        setShowFullScreen(true);
+        // Clean up URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('cinema');
+        newUrl.searchParams.delete('index');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+    }
+  }, [searchParams, sortedAndFilteredProducts]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -463,6 +482,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   // Full screen navigation handlers
   const handleFullScreenNavigate = (newIndex: number) => {
     setFullScreenIndex(newIndex);
+    // Update URL when navigating in full screen mode
+    if (showFullScreen && sortedAndFilteredProducts[newIndex]) {
+      const postId = sortedAndFilteredProducts[newIndex].reddit_post.post_id;
+      window.history.replaceState(null, '', `/cinema/${postId}`);
+    }
   };
 
   const handleOpenProductModal = (productId: string) => {
@@ -471,6 +495,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       setSelectedProduct(product as GeneratedProduct);
       setShowModal(true);
       setShowFullScreen(false);
+      // Return to main page URL when closing full screen
+      window.history.replaceState(null, '', '/');
     }
   };
 
@@ -593,6 +619,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
                 onClick={() => {
                   setFullScreenIndex(0);
                   setShowFullScreen(true);
+                  // Update URL when entering full screen mode
+                  const firstPostId = sortedAndFilteredProducts[0].reddit_post.post_id;
+                  window.history.pushState(null, '', `/cinema/${firstPostId}`);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
                 title="Enter full screen mode"
@@ -688,7 +717,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       {showFullScreen && (
         <ImageLightbox
           isOpen={showFullScreen}
-          onClose={() => setShowFullScreen(false)}
+          onClose={() => {
+            setShowFullScreen(false);
+            // Return to main page URL when closing full screen
+            window.history.pushState(null, '', '/');
+          }}
           images={sortedAndFilteredProducts.map(product => ({
             id: product.product_info.id.toString(),
             imageUrl: product.product_info.image_url,

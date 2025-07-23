@@ -8,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import DonationSuccessPage from './components/common/DonationSuccessPage';
 import EnhancedFundraisingPage from './components/Fundraising/EnhancedFundraisingPage';
 import { CloudvelAgentView } from './components/CloudvelAgent/CloudvelAgentView';
+import { CinemaView } from './components/Cinema/CinemaView';
 
 function App() {
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
@@ -47,6 +48,7 @@ function App() {
           <Route path="/clouvel-agent" element={<CloudvelAgentView onCommissionClick={handleCommissionClick} />} />
           <Route path="/fundraising" element={<EnhancedFundraisingPage />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
+          <Route path="/cinema/:postId" element={<CinemaView />} />
         </Routes>
         <CommissionModal 
           isOpen={isCommissionModalOpen} 
