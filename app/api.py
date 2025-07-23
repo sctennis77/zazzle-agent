@@ -83,10 +83,30 @@ from app.task_queue import TaskQueue
 from app.utils.logging_config import setup_logging
 from app.utils.reddit_utils import extract_post_id
 from app.websocket_manager import websocket_manager
+from app.affiliate_linker import ZazzleAffiliateLinker
+from app.models import AffiliateLinker
 
 # Setup logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Initialize affiliate linker for dynamic link generation
+_affiliate_linker = None
+
+def get_affiliate_linker():
+    """Get or create the affiliate linker instance."""
+    global _affiliate_linker
+    if _affiliate_linker is None:
+        zazzle_affiliate_id = os.getenv("ZAZZLE_AFFILIATE_ID", "")
+        zazzle_tracking_code = os.getenv("ZAZZLE_TRACKING_CODE", "")
+        if zazzle_affiliate_id and zazzle_tracking_code:
+            _affiliate_linker = ZazzleAffiliateLinker(
+                zazzle_affiliate_id=zazzle_affiliate_id,
+                zazzle_tracking_code=zazzle_tracking_code
+            )
+        else:
+            logger.warning("Zazzle affiliate credentials not configured")
+    return _affiliate_linker
 
 
 def get_image_quality_for_tier(tier: str) -> str:
@@ -200,7 +220,7 @@ def model_to_dict(obj):
     return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
 
 
-def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
+async def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
     """
     Fetch all successful pipeline runs and their related data from the database.
 
@@ -287,6 +307,22 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
 
                 # Convert to Pydantic schemas using model_validate
                 product_schema = ProductInfoSchema.model_validate(product_info)
+                
+                # Generate affiliate link dynamically if not present
+                if not product_schema.affiliate_link and product_schema.product_url:
+                    affiliate_linker = get_affiliate_linker()
+                    if affiliate_linker:
+                        try:
+                            # Generate affiliate link directly using the base AffiliateLinker
+                            affiliate_link = affiliate_linker.affiliate_linker.compose_affiliate_link(
+                                product_schema.product_url
+                            )
+                            product_schema.affiliate_link = affiliate_link
+                            logger.info(f"Generated affiliate link for product {product_schema.theme}")
+                        except Exception as e:
+                            logger.error(f"Failed to generate affiliate link for {product_schema.theme}: {e}")
+                            # Use product_url as fallback
+                            product_schema.affiliate_link = product_schema.product_url
                 pipeline_schema = PipelineRunSchema.model_validate(run)
                 reddit_post_dict = reddit_post.__dict__.copy()
                 reddit_post_dict["subreddit"] = (
@@ -346,7 +382,7 @@ async def get_generated_products():
     logger.info("Starting get_generated_products request")
     try:
         db = SessionLocal()
-        products = fetch_successful_pipeline_runs(db)
+        products = await fetch_successful_pipeline_runs(db)
         logger.info(f"Returning {len(products)} products.")
         logger.info("Successfully converted products to response format")
         return products
