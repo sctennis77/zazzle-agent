@@ -15,6 +15,7 @@ import { API_BASE, WS_BASE } from '../../utils/apiBase';
 import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '../../utils/productSorting';
 import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import { FaExpand } from 'react-icons/fa';
+import { ImageLightbox } from '../common/ImageLightbox';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
@@ -26,6 +27,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [searchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showFullScreen, setShowFullScreen] = useState(false);
+  const [fullScreenIndex, setFullScreenIndex] = useState(0);
   const [activeTasks, setActiveTasks] = useState<Task[]>([]);
   const [completingTasks, setCompletingTasks] = useState<Map<string, {
     task: Task;
@@ -457,6 +460,20 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     return Array.from(map.values());
   };
 
+  // Full screen navigation handlers
+  const handleFullScreenNavigate = (newIndex: number) => {
+    setFullScreenIndex(newIndex);
+  };
+
+  const handleOpenProductModal = (productId: string) => {
+    const product = sortedAndFilteredProducts.find(p => p.product_info.id.toString() === productId);
+    if (product) {
+      setSelectedProduct(product as GeneratedProduct);
+      setShowModal(true);
+      setShowFullScreen(false);
+    }
+  };
+
   // Function to trigger FAB animation
   const triggerFabAnimation = () => {
     setFabAnimation(true);
@@ -574,10 +591,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             {sortedAndFilteredProducts.length > 0 && (
               <button
                 onClick={() => {
-                  const firstProduct = sortedAndFilteredProducts[0];
-                  if (firstProduct) {
-                    navigate(`/cinema/${firstProduct.reddit_post.post_id}`);
-                  }
+                  setFullScreenIndex(0);
+                  setShowFullScreen(true);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
                 title="Enter full screen mode"
@@ -669,6 +684,25 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         />
       )}
 
+      {/* Full Screen Image Lightbox */}
+      {showFullScreen && (
+        <ImageLightbox
+          isOpen={showFullScreen}
+          onClose={() => setShowFullScreen(false)}
+          images={sortedAndFilteredProducts.map(product => ({
+            id: product.product_info.id.toString(),
+            imageUrl: product.product_info.image_url,
+            imageTitle: product.product_info.image_title || product.product_info.theme,
+            imageAlt: product.product_info.image_title || product.product_info.theme,
+            redditUsername: product.product_info.donation_info?.reddit_username,
+            tierName: product.product_info.donation_info?.tier_name,
+            isAnonymous: product.product_info.donation_info?.is_anonymous
+          }))}
+          currentIndex={fullScreenIndex}
+          onNavigate={handleFullScreenNavigate}
+          onOpenProductModal={handleOpenProductModal}
+        />
+      )}
 
     </div>
   );
