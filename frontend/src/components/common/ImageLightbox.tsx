@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard, FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
+import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard, FaCrown, FaStar, FaGem, FaHeart, FaDownload } from 'react-icons/fa';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 
 interface ImageLightboxProps {
@@ -17,10 +17,13 @@ interface ImageLightboxProps {
     redditUsername?: string;
     tierName?: string;
     isAnonymous?: boolean;
+    postId?: string;
+    subreddit?: string;
   }>;
   currentIndex?: number;
   onNavigate?: (index: number) => void;
   onOpenProductModal?: (productId: string) => void;
+  onDownload?: (imageUrl: string, imageTitle: string, postId: string, subreddit: string) => void;
 }
 
 export const ImageLightbox: React.FC<ImageLightboxProps> = ({ 
@@ -32,7 +35,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   images,
   currentIndex = 0,
   onNavigate,
-  onOpenProductModal
+  onOpenProductModal,
+  onDownload
 }) => {
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -249,6 +253,26 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             title="Open product details"
           >
             <FaIdCard size={20} />
+          </button>
+        )}
+        {isMultipleMode && onDownload && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const currentImageData = images?.[currentIndex];
+              if (currentImageData) {
+                onDownload(
+                  currentImageData.imageUrl,
+                  currentImageData.imageTitle || 'clouvel-image',
+                  currentImageData.postId || '',
+                  currentImageData.subreddit || ''
+                );
+              }
+            }}
+            className="p-3 bg-white/10 backdrop-blur-sm rounded-full text-white hover:bg-white/20 transition-colors"
+            title="Download image"
+          >
+            <FaDownload size={20} />
           </button>
         )}
         <div className="w-px h-8 bg-white/20" />

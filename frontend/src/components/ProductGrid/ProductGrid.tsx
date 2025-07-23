@@ -16,10 +16,12 @@ import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '.
 import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import { FaExpand } from 'react-icons/fa';
 import { ImageLightbox } from '../common/ImageLightbox';
+import { SupportPromptModal } from '../common/SupportPromptModal';
+import { downloadImage, generateImageFilename } from '../../utils/downloadImage';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
-  onCommissionClick?: () => void;
+  onCommissionClick?: (postId?: string) => void;
 }
 
 export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange, onCommissionClick }) => {
@@ -29,6 +31,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [showModal, setShowModal] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
+  const [showSupportPrompt, setShowSupportPrompt] = useState(false);
+  const [downloadContext, setDownloadContext] = useState<{postId: string, subreddit: string} | null>(null);
   const [activeTasks, setActiveTasks] = useState<Task[]>([]);
   const [completingTasks, setCompletingTasks] = useState<Map<string, {
     task: Task;
@@ -482,6 +486,40 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     }
   };
 
+  const handleDownload = async (imageUrl: string, imageTitle: string, postId: string, subreddit: string) => {
+    try {
+      // Start download immediately
+      const filename = generateImageFilename(imageTitle, postId);
+      await downloadImage(imageUrl, filename);
+      
+      // Show support prompt
+      setDownloadContext({ postId, subreddit });
+      setShowSupportPrompt(true);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error('Failed to download image');
+    }
+  };
+
+  const handleSupportYes = () => {
+    setShowSupportPrompt(false);
+    if (downloadContext && onCommissionClick) {
+      // Open donation modal with context
+      onCommissionClick(downloadContext.postId);
+    }
+    setDownloadContext(null);
+  };
+
+  const handleSupportNo = () => {
+    // Modal will handle showing the "woof" message and closing
+    setDownloadContext(null);
+  };
+
+  const handleSupportPromptClose = () => {
+    setShowSupportPrompt(false);
+    setDownloadContext(null);
+  };
+
   // Function to trigger FAB animation
   const triggerFabAnimation = () => {
     setFabAnimation(true);
@@ -711,13 +749,24 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             imageAlt: product.product_info.image_title || product.product_info.theme,
             redditUsername: product.product_info.donation_info?.reddit_username,
             tierName: product.product_info.donation_info?.tier_name,
-            isAnonymous: product.product_info.donation_info?.is_anonymous
+            isAnonymous: product.product_info.donation_info?.is_anonymous,
+            postId: product.reddit_post.post_id,
+            subreddit: product.reddit_post.subreddit
           }))}
           currentIndex={fullScreenIndex}
           onNavigate={handleFullScreenNavigate}
           onOpenProductModal={handleOpenProductModal}
+          onDownload={handleDownload}
         />
       )}
+
+      {/* Support Prompt Modal */}
+      <SupportPromptModal
+        isOpen={showSupportPrompt}
+        onClose={handleSupportPromptClose}
+        onSupport={handleSupportYes}
+        onNoSupport={handleSupportNo}
+      />
 
     </div>
   );

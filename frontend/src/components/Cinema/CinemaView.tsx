@@ -4,6 +4,9 @@ import { useProducts } from '../../hooks/useProducts';
 import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import { ImageLightbox } from '../common/ImageLightbox';
 import { ProductModal } from '../ProductGrid/ProductModal';
+import { SupportPromptModal } from '../common/SupportPromptModal';
+import { downloadImage, generateImageFilename } from '../../utils/downloadImage';
+import { toast } from 'react-toastify';
 import type { GeneratedProduct } from '../../types/productTypes';
 
 export const CinemaView: React.FC = () => {
@@ -14,6 +17,8 @@ export const CinemaView: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showSupportPrompt, setShowSupportPrompt] = useState(false);
+  const [downloadContext, setDownloadContext] = useState<{postId: string, subreddit: string} | null>(null);
 
   // Find the product index based on postId
   useEffect(() => {
@@ -53,6 +58,41 @@ export const CinemaView: React.FC = () => {
     }
   };
 
+  const handleDownload = async (imageUrl: string, imageTitle: string, postId: string, subreddit: string) => {
+    try {
+      // Start download immediately
+      const filename = generateImageFilename(imageTitle, postId);
+      await downloadImage(imageUrl, filename);
+      
+      // Show support prompt
+      setDownloadContext({ postId, subreddit });
+      setShowSupportPrompt(true);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error('Failed to download image');
+    }
+  };
+
+  const handleSupportYes = () => {
+    setShowSupportPrompt(false);
+    if (downloadContext) {
+      // For now, just close - we'd need access to the commission modal
+      // This could be enhanced to open donation modal with context
+      console.log('Support clicked for:', downloadContext);
+    }
+    setDownloadContext(null);
+  };
+
+  const handleSupportNo = () => {
+    // Modal will handle showing the "woof" message and closing
+    setDownloadContext(null);
+  };
+
+  const handleSupportPromptClose = () => {
+    setShowSupportPrompt(false);
+    setDownloadContext(null);
+  };
+
   if (loading || currentIndex === null) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -81,11 +121,14 @@ export const CinemaView: React.FC = () => {
           imageAlt: product.product_info.image_title || product.product_info.theme,
           redditUsername: product.product_info.donation_info?.reddit_username,
           tierName: product.product_info.donation_info?.tier_name,
-          isAnonymous: product.product_info.donation_info?.is_anonymous
+          isAnonymous: product.product_info.donation_info?.is_anonymous,
+          postId: product.reddit_post.post_id,
+          subreddit: product.reddit_post.subreddit
         }))}
         currentIndex={currentIndex}
         onNavigate={handleNavigate}
         onOpenProductModal={handleOpenProductModal}
+        onDownload={handleDownload}
       />
 
       {/* Product Modal */}
@@ -96,6 +139,14 @@ export const CinemaView: React.FC = () => {
           onClose={() => setShowModal(false)}
         />
       )}
+
+      {/* Support Prompt Modal */}
+      <SupportPromptModal
+        isOpen={showSupportPrompt}
+        onClose={handleSupportPromptClose}
+        onSupport={handleSupportYes}
+        onNoSupport={handleSupportNo}
+      />
     </>
   );
 };
