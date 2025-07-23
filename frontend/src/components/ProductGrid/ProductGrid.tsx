@@ -678,7 +678,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           id: product.product_info.id.toString(),
           imageUrl: product.product_info.image_url,
           imageTitle: product.product_info.image_title || product.product_info.theme,
-          imageAlt: product.product_info.image_title || product.product_info.theme
+          imageAlt: product.product_info.image_title || product.product_info.theme,
+          redditUsername: product.product_info.donation_info?.reddit_username,
+          tierName: product.product_info.donation_info?.tier_name,
+          isAnonymous: product.product_info.donation_info?.is_anonymous
         }))}
         currentIndex={fullScreenIndex}
         onNavigate={setFullScreenIndex}

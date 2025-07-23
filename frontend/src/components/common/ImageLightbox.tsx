@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard } from 'react-icons/fa';
+import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard, FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
 
 interface ImageLightboxProps {
   isOpen: boolean;
@@ -13,6 +13,9 @@ interface ImageLightboxProps {
     imageUrl: string;
     imageTitle?: string;
     imageAlt?: string;
+    redditUsername?: string;
+    tierName?: string;
+    isAnonymous?: boolean;
   }>;
   currentIndex?: number;
   onNavigate?: (index: number) => void;
@@ -38,12 +41,28 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // Map tier names to icons and colors
+  const getTierDisplay = (tierName: string) => {
+    const tierMappings: Record<string, { icon: any; color: string }> = {
+      'diamond': { icon: FaGem, color: 'text-cyan-400' },
+      'platinum': { icon: FaCrown, color: 'text-purple-400' },
+      'gold': { icon: FaCrown, color: 'text-yellow-400' },
+      'silver': { icon: FaStar, color: 'text-gray-300' },
+      'bronze': { icon: FaHeart, color: 'text-orange-400' },
+      'sapphire': { icon: FaGem, color: 'text-blue-400' },
+    };
+    return tierMappings[tierName?.toLowerCase()] || { icon: FaHeart, color: 'text-gray-400' };
+  };
+
   // Determine current image data
   const isMultipleMode = images && images.length > 0;
   const currentImage = isMultipleMode ? images[currentIndex] : {
     imageUrl: imageUrl || '',
     imageAlt: imageAlt,
-    imageTitle: imageTitle
+    imageTitle: imageTitle,
+    redditUsername: undefined,
+    tierName: undefined,
+    isAnonymous: undefined
   };
 
   // Reset state when opening or changing images
@@ -274,6 +293,20 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           <h3 className="text-white text-lg font-semibold drop-shadow-lg">
             {currentImage.imageTitle}
           </h3>
+        )}
+        {isMultipleMode && currentImage.redditUsername && !currentImage.isAnonymous && (
+          <div className="flex items-center gap-2 mt-2">
+            {currentImage.tierName && (() => {
+              const tierDisplay = getTierDisplay(currentImage.tierName);
+              const TierIcon = tierDisplay.icon;
+              return (
+                <TierIcon className={`${tierDisplay.color} drop-shadow-lg`} size={16} />
+              );
+            })()}
+            <span className="text-white/80 text-sm drop-shadow-lg">
+              u/{currentImage.redditUsername}
+            </span>
+          </div>
         )}
         {isMultipleMode && images && (
           <p className="text-white/70 text-sm mt-1">
