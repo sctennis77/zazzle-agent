@@ -11,9 +11,10 @@ import type { GeneratedProduct } from '../../types/productTypes';
 
 interface CinemaViewProps {
   onCommissionClick?: (postId?: string) => void;
+  onDonationClick?: (postId: string, subreddit: string) => void;
 }
 
-export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick }) => {
+export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick, onDonationClick }) => {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
   const { products, loading, error } = useProducts();
@@ -79,13 +80,12 @@ export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick }) => 
 
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
-    if (downloadContext && onCommissionClick) {
+    if (downloadContext && onDonationClick) {
       // Close cinema mode and return to gallery
       navigate('/');
       
-      // Construct Reddit URL from postId and subreddit
-      const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
-      onCommissionClick(redditUrl);
+      // Open support donation modal via parent handler
+      onDonationClick(downloadContext.postId, downloadContext.subreddit);
     }
     setDownloadContext(null);
   };

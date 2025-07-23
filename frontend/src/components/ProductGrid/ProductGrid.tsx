@@ -22,9 +22,10 @@ import { downloadImage, generateImageFilename } from '../../utils/downloadImage'
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
   onCommissionClick?: (postId?: string) => void;
+  onDonationClick?: (postId: string, subreddit: string) => void;
 }
 
-export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange, onCommissionClick }) => {
+export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange, onCommissionClick, onDonationClick }) => {
   const { products, loading, error, refresh: refreshProducts } = useProducts();
   const [searchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
@@ -503,14 +504,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
-    if (downloadContext && onCommissionClick) {
+    if (downloadContext && onDonationClick) {
       // Close full screen mode and return to gallery URL
       setShowFullScreen(false);
       window.history.pushState(null, '', '/');
       
-      // Construct Reddit URL from postId and subreddit
-      const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
-      onCommissionClick(redditUrl);
+      // Open support donation modal via parent handler
+      onDonationClick(downloadContext.postId, downloadContext.subreddit);
     }
     setDownloadContext(null);
   };
@@ -772,6 +772,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         onSupport={handleSupportYes}
         onNoSupport={handleSupportNo}
       />
+
 
     </div>
   );
