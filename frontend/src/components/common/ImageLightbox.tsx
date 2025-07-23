@@ -39,6 +39,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [loadingImageUrl, setLoadingImageUrl] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const { getTierDisplay } = useDonationTiers();
@@ -54,7 +55,15 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
     isAnonymous: undefined
   };
 
-  // No need to reset state via useEffect since we use key prop for remounting
+  // Reset loading state when image URL changes
+  useEffect(() => {
+    if (currentImage.imageUrl !== loadingImageUrl) {
+      setImageLoaded(false);
+      setLoadingImageUrl(currentImage.imageUrl);
+      setZoom(1);
+      setPosition({ x: 0, y: 0 });
+    }
+  }, [currentImage.imageUrl, loadingImageUrl]);
 
   // Handle keyboard events
   useEffect(() => {

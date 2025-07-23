@@ -72,7 +72,6 @@ export const CinemaView: React.FC = () => {
   return (
     <>
       <ImageLightbox
-        key={`lightbox-${currentIndex}`}
         isOpen={true}
         onClose={handleClose}
         images={productsWithDonations.map(product => ({
