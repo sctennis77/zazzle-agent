@@ -8,12 +8,14 @@ import { InProgressProductCard } from './InProgressProductCard';
 import { CompletedProductCard } from './CompletedProductCard';
 import { SortingControls } from './SortingControls';
 import CommissionModal from '../common/CommissionModal';
+import { ImageLightbox } from '../common/ImageLightbox';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
 import { API_BASE, WS_BASE } from '../../utils/apiBase';
 import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '../../utils/productSorting';
 import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
+import { FaFilm } from 'react-icons/fa';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
@@ -42,6 +44,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
   const [sortedAndFilteredProducts, setSortedAndFilteredProducts] = useState<ProductWithFullDonationData[]>([]);
   const { productsWithDonations, loading: donationsLoading } = useProductsWithDonations(products);
+  const [cinematicMode, setCinematicMode] = useState(false);
+  const [cinematicIndex, setCinematicIndex] = useState(0);
   
   // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {
@@ -562,13 +566,28 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
         {/* Sorting Controls */}
         {(products.length > 0 || inProgressTasks.length > 0) && (
-          <SortingControls
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            selectedSubreddits={selectedSubreddits}
-            onSubredditChange={setSelectedSubreddits}
-            availableSubreddits={getUniqueSubreddits(products)}
-          />
+          <div className="flex items-center justify-between mb-6">
+            <SortingControls
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              selectedSubreddits={selectedSubreddits}
+              onSubredditChange={setSelectedSubreddits}
+              availableSubreddits={getUniqueSubreddits(products)}
+            />
+            {sortedAndFilteredProducts.length > 0 && (
+              <button
+                onClick={() => {
+                  setCinematicMode(true);
+                  setCinematicIndex(0);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
+                title="Enter cinematic mode"
+              >
+                <FaFilm size={16} />
+                <span className="hidden sm:inline">Cinematic Mode</span>
+              </button>
+            )}
+          </div>
         )}
 
         {/* Product Grid */}
@@ -650,6 +669,20 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
           onClose={() => setShowModal(false)}
         />
       )}
+
+      {/* Cinematic Mode Lightbox */}
+      <ImageLightbox
+        isOpen={cinematicMode}
+        onClose={() => setCinematicMode(false)}
+        images={sortedAndFilteredProducts.map(product => ({
+          id: product.product_info.id.toString(),
+          imageUrl: product.product_info.image_url,
+          imageTitle: product.product_info.image_title || product.product_info.theme,
+          imageAlt: product.product_info.image_title || product.product_info.theme
+        }))}
+        currentIndex={cinematicIndex}
+        onNavigate={setCinematicIndex}
+      />
 
     </div>
   );
