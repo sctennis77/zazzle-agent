@@ -277,9 +277,10 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
       </div>
 
       {/* Image title and counter */}
-      <div className="absolute top-4 left-4 max-w-md pr-4">
+      {/* TODO: Fix title wrapping on larger screens - titles get truncated when controls overlap */}
+      <div className="absolute top-4 left-4 max-w-lg">
         {currentImage.imageTitle && (
-          <h3 className="text-white text-lg font-semibold drop-shadow-lg leading-tight">
+          <h3 className="text-white text-lg font-semibold drop-shadow-lg">
             {currentImage.imageTitle}
           </h3>
         )}
