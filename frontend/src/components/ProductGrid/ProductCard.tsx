@@ -7,7 +7,6 @@ import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
-import { ImageLightbox } from '../common/ImageLightbox';
 import { API_BASE } from '../../utils/apiBase';
 import logo from '../../assets/logo.png';
 
@@ -28,7 +27,6 @@ const iconMap = {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [], justPublished, justCompleted }) => {
   const [showModal, setShowModal] = useState(false);
-  const [showLightbox, setShowLightbox] = useState(false);
   const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
   const [supportDonations, setSupportDonations] = useState<any[]>([]);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -49,7 +47,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const showTaskStatus = associatedTask && (associatedTask.status === 'in_progress' || associatedTask.status === 'pending');
 
   const handleImageClick = () => {
-    setShowLightbox(true);
+    setShowModal(true);
   };
 
   const handleDonationClick = () => {
@@ -272,14 +270,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
         onClose={() => setShowModal(false)}
       />
       
-      {/* Image Lightbox */}
-      <ImageLightbox
-        isOpen={showLightbox}
-        onClose={() => setShowLightbox(false)}
-        imageUrl={product.product_info.image_url}
-        imageAlt={product.product_info.image_title || product.product_info.theme}
-        imageTitle={product.product_info.image_title || product.product_info.theme}
-      />
     </>
   );
 }; 
