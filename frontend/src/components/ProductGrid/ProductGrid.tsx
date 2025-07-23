@@ -15,7 +15,7 @@ import { toast } from 'react-toastify';
 import { API_BASE, WS_BASE } from '../../utils/apiBase';
 import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '../../utils/productSorting';
 import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
-import { FaFilm } from 'react-icons/fa';
+import { FaExpand } from 'react-icons/fa';
 
 interface ProductGridProps {
   onCommissionProgressChange?: (inProgress: boolean) => void;
@@ -44,8 +44,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
   const [sortedAndFilteredProducts, setSortedAndFilteredProducts] = useState<ProductWithFullDonationData[]>([]);
   const { productsWithDonations, loading: donationsLoading } = useProductsWithDonations(products);
-  const [cinematicMode, setCinematicMode] = useState(false);
-  const [cinematicIndex, setCinematicIndex] = useState(0);
+  const [fullScreenMode, setFullScreenMode] = useState(false);
+  const [fullScreenIndex, setFullScreenIndex] = useState(0);
   
   // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {
@@ -577,14 +577,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             {sortedAndFilteredProducts.length > 0 && (
               <button
                 onClick={() => {
-                  setCinematicMode(true);
-                  setCinematicIndex(0);
+                  setFullScreenMode(true);
+                  setFullScreenIndex(0);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
-                title="Enter cinematic mode"
+                title="Enter full screen mode"
               >
-                <FaFilm size={16} />
-                <span className="hidden sm:inline">Cinematic Mode</span>
+                <FaExpand size={16} />
+                <span className="hidden sm:inline">Full Screen</span>
               </button>
             )}
           </div>
@@ -670,18 +670,18 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         />
       )}
 
-      {/* Cinematic Mode Lightbox */}
+      {/* Full Screen Mode Lightbox */}
       <ImageLightbox
-        isOpen={cinematicMode}
-        onClose={() => setCinematicMode(false)}
+        isOpen={fullScreenMode}
+        onClose={() => setFullScreenMode(false)}
         images={sortedAndFilteredProducts.map(product => ({
           id: product.product_info.id.toString(),
           imageUrl: product.product_info.image_url,
           imageTitle: product.product_info.image_title || product.product_info.theme,
           imageAlt: product.product_info.image_title || product.product_info.theme
         }))}
-        currentIndex={cinematicIndex}
-        onNavigate={setCinematicIndex}
+        currentIndex={fullScreenIndex}
+        onNavigate={setFullScreenIndex}
       />
 
     </div>
