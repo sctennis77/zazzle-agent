@@ -108,6 +108,8 @@ vi.mock('react-icons/fa', () => ({
   FaUser: () => null,
   FaThumbsUp: () => null,
   FaComment: () => null,
+  FaSearchPlus: () => null,
+  FaSearchMinus: () => null,
 }));
 
 // Setup window.location mock

@@ -18,6 +18,8 @@ export default {
         'twinkle': 'twinkle 4s linear infinite',
         'success-pop': 'success-pop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
         'paint-reveal': 'paint-reveal 1.8s cubic-bezier(0.77,0,0.175,1) forwards',
+        'zoom-in': 'zoom-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        'zoom-out': 'zoom-out 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       },
       keyframes: {
         'fade-in': {
@@ -80,6 +82,26 @@ export default {
           '0%': { width: '0%' },
           '100%': { width: '100%' },
         },
+        'zoom-in': {
+          '0%': { 
+            transform: 'scale(0.95)',
+            opacity: '0',
+          },
+          '100%': { 
+            transform: 'scale(1)',
+            opacity: '1',
+          },
+        },
+        'zoom-out': {
+          '0%': { 
+            transform: 'scale(1)',
+            opacity: '1',
+          },
+          '100%': { 
+            transform: 'scale(0.95)',
+            opacity: '0',
+          },
+        },
       },
       backgroundImage: {
         'star-bg': `
@@ -99,6 +121,13 @@ export default {
         '150': '150ms',
         '200': '200ms',
         '250': '250ms',
+      },
+      cursor: {
+        'zoom-in': 'zoom-in',
+        'zoom-out': 'zoom-out',
+        'move': 'move',
+        'grab': 'grab',
+        'grabbing': 'grabbing',
       },
     },
   },
