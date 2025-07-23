@@ -183,7 +183,7 @@ const ProgressBar: React.FC<{
 
 const MilestoneCard: React.FC<{ milestone: Milestone; isNext?: boolean }> = ({ milestone, isNext = false }) => {
   return (
-    <div className={`relative p-4 rounded-xl transition-all duration-300 ${
+    <div className={`relative p-3 sm:p-4 rounded-xl transition-all duration-300 ${
       milestone.achieved 
         ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 shadow-lg' 
         : isNext
@@ -201,7 +201,7 @@ const MilestoneCard: React.FC<{ milestone: Milestone; isNext?: boolean }> = ({ m
           {milestone.icon}
         </div>
         <div>
-          <div className={`font-bold text-lg ${
+          <div className={`font-bold text-base sm:text-lg ${
             milestone.achieved ? 'text-green-800' : isNext ? 'text-blue-800' : 'text-gray-600'
           }`}>
             ${milestone.amount.toLocaleString()}
@@ -403,20 +403,20 @@ const EnhancedFundraisingPage: React.FC = () => {
   return (
     <div className="space-y-8">
         {/* Main Progress Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100">
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 border border-gray-100">
             <div className="mb-8">
               {/* Section Header */}
-              <div className="text-center mb-6">
-                <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+              <div className="text-center mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
                   Clouvel's Requisition
                 </h2>
-                <p className="text-xs md:text-sm text-gray-600 leading-relaxed">
+                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed px-2 sm:px-0">
                   Every contribution supports Clouvel's dream to illustrate the wonderful stories and community of Reddit.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="text-left relative group">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                <div className="text-center sm:text-left relative group">
                   <div className="text-2xl font-bold text-rose-400">
                     <AnimatedCounter value={selfCommissionedAmount} prefix="-$" />
                   </div>
@@ -464,7 +464,7 @@ const EnhancedFundraisingPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="text-right relative group">
+                <div className="text-center sm:text-right relative group">
                   <div className="text-2xl font-bold text-blue-600">
                     <AnimatedCounter value={communityRaised} prefix="$" />
                   </div>
@@ -519,25 +519,25 @@ const EnhancedFundraisingPage: React.FC = () => {
         </div>
 
         {/* Stats Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100">
-            <div className="text-4xl font-bold text-indigo-600 mb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center border border-gray-100">
+            <div className="text-3xl sm:text-4xl font-bold text-indigo-600 mb-2">
               <AnimatedCounter value={activeCommunities} decimals={0} />
             </div>
             <div className="text-gray-600 font-medium">Active Communities</div>
             <div className="text-sm text-gray-500 mt-1">Growing strong! 🌱</div>
           </div>
           
-          <div className="bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100">
-            <div className="text-4xl font-bold text-rose-400 mb-2">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center border border-gray-100">
+            <div className="text-3xl sm:text-4xl font-bold text-rose-400 mb-2">
               <AnimatedCounter value={selfCommissionedDonations.length} decimals={0} />
             </div>
             <div className="text-gray-600 font-medium">Self Commissions</div>
             <div className="text-sm text-gray-500 mt-1">Creator funded 🎨</div>
           </div>
           
-          <div className="bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100">
-            <div className="text-4xl font-bold text-blue-600 mb-2">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center border border-gray-100">
+            <div className="text-3xl sm:text-4xl font-bold text-blue-600 mb-2">
               <AnimatedCounter value={communityDonations.length} decimals={0} />
             </div>
             <div className="text-gray-600 font-medium">Community Contributions</div>
@@ -547,10 +547,10 @@ const EnhancedFundraisingPage: React.FC = () => {
 
         {/* Milestones Grid */}
         <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
             🎯 Funding Milestones & Rewards
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {milestones.map((milestone, index) => (
               <MilestoneCard 
                 key={milestone.amount} 
@@ -564,7 +564,7 @@ const EnhancedFundraisingPage: React.FC = () => {
 
         {/* Community Leaderboard */}
         <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
             🏆 Community Leaderboard
           </h3>
           <DonationsLeaderboardTable data={data} fundraisingProgress={fundraisingProgress} />
@@ -572,42 +572,42 @@ const EnhancedFundraisingPage: React.FC = () => {
 
         {/* Recent Activity Feed */}
         <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
             🔥 Recent Activity
           </h3>
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
+            <div className="space-y-3 sm:space-y-4">
               {allDonations.slice(0, 5).map((donation, index) => (
-                <div key={donation.donation_id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-start justify-between gap-2">
+                <div key={donation.donation_id} className="p-3 sm:p-4 bg-gray-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-2">
                     {/* Left: User info */}
-                    <div className="flex items-center space-x-3 flex-1">
-                      <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
                         {donation.reddit_username?.charAt(0).toUpperCase() || 'A'}
                       </div>
-                      <div className="min-w-0">
-                        <div className="font-medium text-gray-900">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-gray-900 text-sm">
                           {donation.is_anonymous ? 'Anonymous' : donation.reddit_username}
                           {donation.source === 'manual' && (
-                            <span className="ml-2 px-2 py-1 bg-rose-100 text-rose-400 text-xs rounded-full">
+                            <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-rose-100 text-rose-400 text-xs rounded-full">
                               Self Commissioned
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-xs sm:text-sm text-gray-500">
                           {new Date(donation.created_at).toLocaleDateString()}
                         </div>
-                        {/* Commission or donation message below user info */}
+                        {/* Message below user info on mobile */}
                         {(donation.message || donation.commission_message) && (
-                          <div className="mt-1 text-xs text-gray-600 truncate max-w-xs">
+                          <div className="mt-1 text-xs text-gray-600 truncate sm:hidden">
                             <span className="font-medium">Message:</span> {donation.message || donation.commission_message}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Center: Post title and subreddit */}
-                    <div className="flex-1 px-4 text-center min-w-0">
+                    {/* Center: Post title and subreddit - only on desktop */}
+                    <div className="hidden sm:flex sm:flex-1 sm:px-3 sm:text-center sm:min-w-0 flex-col">
                       {donation.post_title && (
                         <div className="text-xs text-gray-700 font-medium break-words line-clamp-2 leading-tight mb-1">
                           "{donation.post_title}"
@@ -618,10 +618,30 @@ const EnhancedFundraisingPage: React.FC = () => {
                           r/{donation.subreddit}
                         </div>
                       )}
+                      {/* Message on desktop */}
+                      {(donation.message || donation.commission_message) && (
+                        <div className="mt-2 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded italic">
+                          <span className="font-medium">Message:</span> {donation.message || donation.commission_message}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mobile: Post title and subreddit row */}
+                    <div className="sm:hidden">
+                      {donation.post_title && (
+                        <div className="text-sm text-gray-700 font-medium break-words leading-tight mb-2">
+                          "{donation.post_title}"
+                        </div>
+                      )}
+                      {donation.subreddit && (
+                        <div className="text-xs text-gray-500 font-bold bg-gray-100 px-2 py-1 rounded-full inline-block mb-2">
+                          r/{donation.subreddit}
+                        </div>
+                      )}
                     </div>
 
                     {/* Right: Amount and gallery link */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
                       {donation.post_id && (
                         <button
                           onClick={() => window.location.href = `/?product=${donation.post_id}`}
@@ -632,7 +652,7 @@ const EnhancedFundraisingPage: React.FC = () => {
                         </button>
                       )}
                       <div className="text-right">
-                        <div className={`font-bold ${
+                        <div className={`font-bold text-sm sm:text-base ${
                           donation.source === 'manual' ? 'text-rose-400' : 'text-green-600'
                         }`}>
                           ${donation.donation_amount.toFixed(2)}
@@ -656,9 +676,9 @@ const EnhancedFundraisingPage: React.FC = () => {
         </div>
 
         {/* Call to Action */}
-        <div className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 md:p-8 text-white shadow-xl">
-          <h3 className="text-2xl md:text-3xl font-bold mb-4">Ready to Join Our Mission?</h3>
-          <p className="text-lg md:text-xl mb-6 opacity-90">
+        <div className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Ready to Join Our Mission?</h3>
+          <p className="text-base sm:text-lg md:text-xl mb-4 sm:mb-6 opacity-90">
             Every contribution brings us closer to revolutionary AI capabilities
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
