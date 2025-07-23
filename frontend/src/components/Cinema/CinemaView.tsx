@@ -80,6 +80,9 @@ export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick }) => 
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
     if (downloadContext && onCommissionClick) {
+      // Close cinema mode and return to gallery
+      navigate('/');
+      
       // Construct Reddit URL from postId and subreddit
       const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
       onCommissionClick(redditUrl);

@@ -504,6 +504,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
     if (downloadContext && onCommissionClick) {
+      // Close full screen mode and return to gallery URL
+      setShowFullScreen(false);
+      window.history.pushState(null, '', '/');
+      
       // Construct Reddit URL from postId and subreddit
       const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
       onCommissionClick(redditUrl);
