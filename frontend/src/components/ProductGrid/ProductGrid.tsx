@@ -166,21 +166,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
     }
   }, [searchParams, products]);
 
-  // Handle cinema mode query parameters (from CinemaView redirect)
-  useEffect(() => {
-    const cinemaPostId = searchParams.get('cinema');
-    const cinemaIndex = searchParams.get('index');
-    
-    if (cinemaPostId && cinemaIndex && sortedAndFilteredProducts.length > 0) {
-      const index = parseInt(cinemaIndex, 10);
-      if (!isNaN(index) && index >= 0 && index < sortedAndFilteredProducts.length) {
-        setFullScreenIndex(index);
-        setShowFullScreen(true);
-        // Update URL to cinema format and clean up query params
-        window.history.replaceState({}, '', `/cinema/${cinemaPostId}`);
-      }
-    }
-  }, [searchParams, sortedAndFilteredProducts]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
