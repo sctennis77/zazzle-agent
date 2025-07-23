@@ -236,16 +236,6 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         >
           <FaSearchMinus size={20} />
         </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleResetZoom();
-          }}
-          className="p-3 bg-white/10 backdrop-blur-sm rounded-full text-white hover:bg-white/20 transition-colors"
-          title="Reset zoom (0)"
-        >
-          <FaExpand size={20} />
-        </button>
         {isMultipleMode && onOpenProductModal && (
           <button
             onClick={(e) => {
