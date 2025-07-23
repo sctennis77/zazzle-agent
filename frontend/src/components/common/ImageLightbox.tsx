@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard, FaCrown, FaStar, FaGem, FaHeart } from 'react-icons/fa';
+import { useDonationTiers } from '../../hooks/useDonationTiers';
 
 interface ImageLightboxProps {
   isOpen: boolean;
@@ -40,19 +41,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-
-  // Map tier names to icons and colors
-  const getTierDisplay = (tierName: string) => {
-    const tierMappings: Record<string, { icon: any; color: string }> = {
-      'diamond': { icon: FaGem, color: 'text-cyan-400' },
-      'platinum': { icon: FaCrown, color: 'text-purple-400' },
-      'gold': { icon: FaCrown, color: 'text-yellow-400' },
-      'silver': { icon: FaStar, color: 'text-gray-300' },
-      'bronze': { icon: FaHeart, color: 'text-orange-400' },
-      'sapphire': { icon: FaGem, color: 'text-blue-400' },
-    };
-    return tierMappings[tierName?.toLowerCase()] || { icon: FaHeart, color: 'text-gray-400' };
-  };
+  const { getTierDisplay } = useDonationTiers();
 
   // Determine current image data
   const isMultipleMode = images && images.length > 0;
@@ -298,7 +287,14 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           <div className="flex items-center gap-2 mt-2">
             {currentImage.tierName && (() => {
               const tierDisplay = getTierDisplay(currentImage.tierName);
-              const TierIcon = tierDisplay.icon;
+              // Map icon string to actual icon component
+              const iconMap = {
+                crown: FaCrown,
+                star: FaStar,
+                gem: FaGem,
+                heart: FaHeart,
+              };
+              const TierIcon = iconMap[tierDisplay.icon.replace('Fa', '').toLowerCase() as keyof typeof iconMap] || FaHeart;
               return (
                 <TierIcon className={`${tierDisplay.color} drop-shadow-lg`} size={16} />
               );
