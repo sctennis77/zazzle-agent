@@ -176,11 +176,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
       if (!isNaN(index) && index >= 0 && index < sortedAndFilteredProducts.length) {
         setFullScreenIndex(index);
         setShowFullScreen(true);
-        // Clean up URL
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('cinema');
-        newUrl.searchParams.delete('index');
-        window.history.replaceState({}, '', newUrl.toString());
+        // Update URL to cinema format and clean up query params
+        window.history.replaceState({}, '', `/cinema/${cinemaPostId}`);
       }
     }
   }, [searchParams, sortedAndFilteredProducts]);
@@ -483,7 +480,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const handleFullScreenNavigate = (newIndex: number) => {
     setFullScreenIndex(newIndex);
     // Update URL when navigating in full screen mode
-    if (showFullScreen && sortedAndFilteredProducts[newIndex]) {
+    if (sortedAndFilteredProducts[newIndex]) {
       const postId = sortedAndFilteredProducts[newIndex].reddit_post.post_id;
       window.history.replaceState(null, '', `/cinema/${postId}`);
     }
