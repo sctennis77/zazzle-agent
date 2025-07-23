@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand } from 'react-icons/fa';
+import { FaTimes, FaSearchPlus, FaSearchMinus, FaExpand, FaIdCard } from 'react-icons/fa';
 
 interface ImageLightboxProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ interface ImageLightboxProps {
   }>;
   currentIndex?: number;
   onNavigate?: (index: number) => void;
+  onOpenProductModal?: (productId: string) => void;
 }
 
 export const ImageLightbox: React.FC<ImageLightboxProps> = ({ 
@@ -26,7 +27,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   imageTitle,
   images,
   currentIndex = 0,
-  onNavigate
+  onNavigate,
+  onOpenProductModal
 }) => {
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -238,6 +240,21 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         >
           <FaExpand size={20} />
         </button>
+        {isMultipleMode && onOpenProductModal && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const currentImageId = images?.[currentIndex]?.id;
+              if (currentImageId) {
+                onOpenProductModal(currentImageId);
+              }
+            }}
+            className="p-3 bg-white/10 backdrop-blur-sm rounded-full text-white hover:bg-white/20 transition-colors"
+            title="Open product details"
+          >
+            <FaIdCard size={20} />
+          </button>
+        )}
         <div className="w-px h-8 bg-white/20" />
         <button
           onClick={(e) => {

@@ -682,6 +682,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         }))}
         currentIndex={fullScreenIndex}
         onNavigate={setFullScreenIndex}
+        onOpenProductModal={(productId) => {
+          const product = sortedAndFilteredProducts.find(p => p.product_info.id.toString() === productId);
+          if (product) {
+            setSelectedProduct(product as GeneratedProduct);
+            setShowModal(true);
+            setFullScreenMode(false);
+          }
+        }}
       />
 
     </div>
