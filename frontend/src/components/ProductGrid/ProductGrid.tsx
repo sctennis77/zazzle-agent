@@ -8,7 +8,6 @@ import { InProgressProductCard } from './InProgressProductCard';
 import { CompletedProductCard } from './CompletedProductCard';
 import { SortingControls } from './SortingControls';
 import CommissionModal from '../common/CommissionModal';
-import { ImageLightbox } from '../common/ImageLightbox';
 import type { GeneratedProduct } from '../../types/productTypes';
 import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
@@ -44,8 +43,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
   const [sortedAndFilteredProducts, setSortedAndFilteredProducts] = useState<ProductWithFullDonationData[]>([]);
   const { productsWithDonations, loading: donationsLoading } = useProductsWithDonations(products);
-  const [fullScreenMode, setFullScreenMode] = useState(false);
-  const [fullScreenIndex, setFullScreenIndex] = useState(0);
   
   // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {
@@ -577,8 +574,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             {sortedAndFilteredProducts.length > 0 && (
               <button
                 onClick={() => {
-                  setFullScreenMode(true);
-                  setFullScreenIndex(0);
+                  const firstProduct = sortedAndFilteredProducts[0];
+                  if (firstProduct) {
+                    navigate(`/cinema/${firstProduct.reddit_post.post_id}`);
+                  }
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
                 title="Enter full screen mode"
@@ -670,30 +669,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         />
       )}
 
-      {/* Full Screen Mode Lightbox */}
-      <ImageLightbox
-        isOpen={fullScreenMode}
-        onClose={() => setFullScreenMode(false)}
-        images={sortedAndFilteredProducts.map(product => ({
-          id: product.product_info.id.toString(),
-          imageUrl: product.product_info.image_url,
-          imageTitle: product.product_info.image_title || product.product_info.theme,
-          imageAlt: product.product_info.image_title || product.product_info.theme,
-          redditUsername: product.product_info.donation_info?.reddit_username,
-          tierName: product.product_info.donation_info?.tier_name,
-          isAnonymous: product.product_info.donation_info?.is_anonymous
-        }))}
-        currentIndex={fullScreenIndex}
-        onNavigate={setFullScreenIndex}
-        onOpenProductModal={(productId) => {
-          const product = sortedAndFilteredProducts.find(p => p.product_info.id.toString() === productId);
-          if (product) {
-            setSelectedProduct(product as GeneratedProduct);
-            setShowModal(true);
-            setFullScreenMode(false);
-          }
-        }}
-      />
 
     </div>
   );

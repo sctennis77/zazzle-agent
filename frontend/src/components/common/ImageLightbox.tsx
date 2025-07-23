@@ -54,14 +54,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
     isAnonymous: undefined
   };
 
-  // Reset state when opening or changing images
-  useEffect(() => {
-    if (isOpen) {
-      setZoom(1);
-      setPosition({ x: 0, y: 0 });
-      setImageLoaded(false);
-    }
-  }, [isOpen, currentIndex]);
+  // No need to reset state via useEffect since we use key prop for remounting
 
   // Handle keyboard events
   useEffect(() => {
