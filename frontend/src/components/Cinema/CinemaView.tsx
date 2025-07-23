@@ -9,7 +9,11 @@ import { downloadImage, generateImageFilename } from '../../utils/downloadImage'
 import { toast } from 'react-toastify';
 import type { GeneratedProduct } from '../../types/productTypes';
 
-export const CinemaView: React.FC = () => {
+interface CinemaViewProps {
+  onCommissionClick?: (postId?: string) => void;
+}
+
+export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick }) => {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
   const { products, loading, error } = useProducts();
@@ -75,10 +79,10 @@ export const CinemaView: React.FC = () => {
 
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
-    if (downloadContext) {
-      // For now, just close - we'd need access to the commission modal
-      // This could be enhanced to open donation modal with context
-      console.log('Support clicked for:', downloadContext);
+    if (downloadContext && onCommissionClick) {
+      // Construct Reddit URL from postId and subreddit
+      const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
+      onCommissionClick(redditUrl);
     }
     setDownloadContext(null);
   };

@@ -504,8 +504,9 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const handleSupportYes = () => {
     setShowSupportPrompt(false);
     if (downloadContext && onCommissionClick) {
-      // Open donation modal with context
-      onCommissionClick(downloadContext.postId);
+      // Construct Reddit URL from postId and subreddit
+      const redditUrl = `https://www.reddit.com/r/${downloadContext.subreddit}/comments/${downloadContext.postId}/`;
+      onCommissionClick(redditUrl);
     }
     setDownloadContext(null);
   };

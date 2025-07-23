@@ -48,7 +48,7 @@ function App() {
           <Route path="/clouvel-agent" element={<CloudvelAgentView onCommissionClick={handleCommissionClick} />} />
           <Route path="/fundraising" element={<EnhancedFundraisingPage />} />
           <Route path="/donation/success" element={<DonationSuccessPage />} />
-          <Route path="/cinema/:postId" element={<CinemaView />} />
+          <Route path="/cinema/:postId" element={<CinemaView onCommissionClick={handleCommissionClick} />} />
         </Routes>
         <CommissionModal 
           isOpen={isCommissionModalOpen} 
