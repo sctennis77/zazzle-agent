@@ -4,12 +4,12 @@
 services:
   community-agent:
     # Override for development with dry-run mode
-    command: ["python", "run_community_agent.py", "--dry-run", "--log-level", "DEBUG"]
+    command: ["python", "./run_community_agent.py", "--dry-run", "--log-level", "DEBUG"]
     environment:
       # Add any dev-specific environment variables
       - COMMUNITY_AGENT_DRY_RUN=true
     # Mount source code for live development
     volumes:
       - ./app:/app/app
-      - ./run_community_agent.py:/app/run_community_agent.py
+      - ./scripts/run_community_agent.py:/app/run_community_agent.py
       - ./data:/app/data

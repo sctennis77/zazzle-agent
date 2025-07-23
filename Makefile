@@ -844,10 +844,10 @@ run-community-agent:
 	@echo "👑 Starting Clouvel Community Agent..."
 	@if [ -z "$(SUBREDDITS)" ]; then \
 		echo "Starting with default subreddit: clouvel"; \
-		$(POETRY) run python run_community_agent.py; \
+		$(POETRY) run python scripts/run_community_agent.py; \
 	else \
 		echo "Starting with subreddits: $(SUBREDDITS)"; \
-		$(POETRY) run python run_community_agent.py --subreddits $(SUBREDDITS); \
+		$(POETRY) run python scripts/run_community_agent.py --subreddits $(SUBREDDITS); \
 	fi
 
 # =====================
@@ -920,10 +920,10 @@ run-community-agent-dry:
 	@echo "👑 Starting Clouvel Community Agent (DRY RUN)..."
 	@if [ -z "$(SUBREDDITS)" ]; then \
 		echo "Starting with default subreddit: clouvel (DRY RUN)"; \
-		$(POETRY) run python run_community_agent.py --dry-run; \
+		$(POETRY) run python scripts/run_community_agent.py --dry-run; \
 	else \
 		echo "Starting with subreddits: $(SUBREDDITS) (DRY RUN)"; \
-		$(POETRY) run python run_community_agent.py --subreddits $(SUBREDDITS) --dry-run; \
+		$(POETRY) run python scripts/run_community_agent.py --subreddits $(SUBREDDITS) --dry-run; \
 	fi
 
 run-community-agent-docker:
@@ -932,7 +932,7 @@ run-community-agent-docker:
 
 run-community-agent-docker-dry:
 	@echo "👑 Starting Clouvel Community Agent in Docker (DRY RUN)..."
-	@docker-compose run --rm community-agent python run_community_agent.py --dry-run
+	@docker-compose run --rm community-agent python ./run_community_agent.py --dry-run
 
 build-community-agent:
 	@echo "🐳 Building Community Agent Docker image..."

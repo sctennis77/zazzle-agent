@@ -21,7 +21,7 @@ RUN poetry config virtualenvs.create false && \
 
 # Copy application code
 COPY app/ ./app/
-COPY run_community_agent.py ./
+COPY scripts/run_community_agent.py ./
 
 # Create logs directory
 RUN mkdir -p /app/logs
@@ -31,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import json; data=json.load(open('/tmp/community_agent_health.json')); exit(0 if data['status']=='healthy' else 1)" || exit 1
 
 # Run the community agent
-CMD ["python", "run_community_agent.py", "--log-level", "INFO"]
+CMD ["python", "./run_community_agent.py", "--log-level", "INFO"]

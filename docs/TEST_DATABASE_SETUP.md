@@ -23,11 +23,11 @@ The project uses SQLite databases for both production and testing. Test database
 
 ### Method 1: Using the Test Data Creation Script
 
-The `create_test_data.py` script creates a comprehensive test database with sample data:
+The `scripts/create_test_data.py` script creates a comprehensive test database with sample data:
 
 ```bash
 # Create test data for interaction agent
-python3 create_test_data.py
+python3 scripts/create_test_data.py
 ```
 
 This script will:
@@ -44,7 +44,7 @@ This script will:
 make alembic-upgrade
 
 # Create test data
-python3 create_test_data.py
+python3 scripts/create_test_data.py
 
 # Check database contents
 make check-db
@@ -63,7 +63,7 @@ make reset-db
 make alembic-upgrade
 
 # Create test data
-python3 create_test_data.py
+python3 scripts/create_test_data.py
 ```
 
 ## Test Database Schema
@@ -99,7 +99,7 @@ The test database includes the following tables:
 
 ## Sample Test Data
 
-The `create_test_data.py` script creates the following sample data:
+The `scripts/create_test_data.py` script creates the following sample data:
 
 ### Pipeline Run
 - Status: COMPLETED
@@ -124,7 +124,7 @@ The `create_test_data.py` script creates the following sample data:
 
 ### 1. Adding New Test Scenarios
 
-To add new test scenarios, modify `create_test_data.py`:
+To add new test scenarios, modify `scripts/create_test_data.py`:
 
 ```python
 # Add new pipeline run with different status
@@ -160,7 +160,7 @@ make alembic-revision
 make alembic-upgrade
 
 # Recreate test data with new schema
-python3 create_test_data.py
+python3 scripts/create_test_data.py
 ```
 
 ### 3. Testing Database Changes
@@ -222,7 +222,7 @@ make check-db
 3. **Test Data Not Found**
    ```bash
    # Recreate test data
-   python3 create_test_data.py
+   python3 scripts/create_test_data.py
    # Check database contents
    make check-db
    ```
@@ -252,13 +252,13 @@ For continuous integration, the test database setup should be automated:
 - name: Setup Test Database
   run: |
     make alembic-upgrade
-    python3 create_test_data.py
+    python3 scripts/create_test_data.py
     make test
 ```
 
 ## Related Files
 
-- `create_test_data.py` - Main test data creation script
+- `scripts/create_test_data.py` - Main test data creation script
 - `scripts/init_db.py` - Database initialization script
 - `scripts/check_db.py` - Database inspection script
 - `tests/conftest.py` - Pytest configuration with database fixtures

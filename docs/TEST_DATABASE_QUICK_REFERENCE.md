@@ -63,7 +63,7 @@ make test
 
 ### Adding New Test Data
 ```bash
-# 1. Modify create_test_data.py or scripts/create_test_db.py
+# 1. Modify scripts/create_test_data.py or scripts/create_test_db.py
 # 2. Create new test database
 make create-test-db
 
@@ -120,7 +120,7 @@ make check-db
 - **Test Database**: `test_interaction_agent.db`
 - **Production Database**: `zazzle_pipeline.db`
 - **Test Data Script**: `scripts/create_test_db.py`
-- **Legacy Test Script**: `create_test_data.py`
+- **Legacy Test Script**: `scripts/create_test_data.py`
 - **Database Scripts**: `scripts/` directory
 - **Migrations**: `alembic/` directory
 
