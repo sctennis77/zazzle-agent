@@ -744,16 +744,23 @@ class AffiliateLinker:
         Returns:
             str: Complete affiliate link with tracking code and affiliate ID
         """
-        # Add tracking code if not present
+        # Check if tc parameter already exists to avoid duplication
+        has_tc = "tc=" in product_url
+        
+        # Add parameters if URL doesn't have query string
         if "?" not in product_url:
             product_url += "?"
         elif not product_url.endswith("&"):
             product_url += "&"
 
-        # Add tracking code and affiliate ID
-        return (
-            f"{product_url}rf={self.zazzle_affiliate_id}&tc={self.zazzle_tracking_code}"
-        )
+        # Add affiliate ID (rf parameter is required for crediting)
+        affiliate_url = f"{product_url}rf={self.zazzle_affiliate_id}"
+        
+        # Add tracking code only if not already present
+        if not has_tc:
+            affiliate_url += f"&tc={self.zazzle_tracking_code}"
+            
+        return affiliate_url
 
 
 class InteractionActionType(str, Enum):
