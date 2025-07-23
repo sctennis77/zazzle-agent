@@ -114,11 +114,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
             <div className="space-y-4">
               {/* Image Section */}
               <div className="space-y-3">
-                <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 relative group">
+                <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100">
                   <img
                     src={product.product_info.image_url}
                     alt={product.product_info.image_title || product.product_info.theme}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-cover"
                   />
                 </div>
                 {/* Theme Caption */}
