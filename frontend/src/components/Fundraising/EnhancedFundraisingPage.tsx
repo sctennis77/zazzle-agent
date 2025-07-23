@@ -595,7 +595,13 @@ const EnhancedFundraisingPage: React.FC = () => {
                           )}
                         </div>
                         <div className="text-xs sm:text-sm text-gray-500">
-                          {new Date(donation.created_at).toLocaleDateString()}
+                          {new Date(donation.created_at).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'numeric', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </div>
                         {/* Message below user info on mobile */}
                         {(donation.message || donation.commission_message) && (
