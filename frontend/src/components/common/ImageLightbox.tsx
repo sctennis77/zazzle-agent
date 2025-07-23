@@ -277,9 +277,9 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
       </div>
 
       {/* Image title and counter */}
-      <div className="absolute top-4 left-4 max-w-lg">
+      <div className="absolute top-4 left-4 max-w-md pr-4">
         {currentImage.imageTitle && (
-          <h3 className="text-white text-lg font-semibold drop-shadow-lg">
+          <h3 className="text-white text-lg font-semibold drop-shadow-lg leading-tight">
             {currentImage.imageTitle}
           </h3>
         )}
