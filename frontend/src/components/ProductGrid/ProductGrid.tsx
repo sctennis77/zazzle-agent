@@ -13,7 +13,7 @@ import type { Task, WebSocketMessage } from '../../types/taskTypes';
 import { toast } from 'react-toastify';
 import { API_BASE, WS_BASE } from '../../utils/apiBase';
 import { sortProducts, filterProductsBySubreddits, getUniqueSubreddits } from '../../utils/productSorting';
-import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
+import { useProductsWithDonationsBulk, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonationsBulk';
 import { FaExpand } from 'react-icons/fa';
 import { ImageLightbox } from '../common/ImageLightbox';
 import { SupportPromptModal } from '../common/SupportPromptModal';
@@ -50,7 +50,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const [sortBy, setSortBy] = useState('time-desc');
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
   const [sortedAndFilteredProducts, setSortedAndFilteredProducts] = useState<ProductWithFullDonationData[]>([]);
-  const { productsWithDonations, loading: donationsLoading } = useProductsWithDonations(products);
+  const { productsWithDonations, loading: donationsLoading } = useProductsWithDonationsBulk(products);
   
   // Cleanup completing tasks and clear timeouts on unmount
   useEffect(() => {

@@ -101,7 +101,7 @@ export const useProductsWithDonationsBulk = (
               'Content-Type': 'application/json',
               'Cache-Control': 'max-age=300',
             },
-            body: JSON.stringify(chunk),
+            body: JSON.stringify({ product_ids: chunk }),
           });
 
           if (response.ok) {

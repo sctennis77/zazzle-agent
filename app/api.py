@@ -1299,9 +1299,12 @@ def get_donations_by_post_id(post_id: str, db: Session):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+class BulkDonationRequest(BaseModel):
+    product_ids: List[int]
+
 @app.post("/api/products/donations/bulk")
 async def get_bulk_product_donations(
-    product_ids: List[int],
+    request: BulkDonationRequest,
     response: Response,
     type: str = Query("all", pattern="^(all|commission|support)$"),
     db: Session = Depends(get_db),
@@ -1310,7 +1313,7 @@ async def get_bulk_product_donations(
     Get donation information for multiple products in a single request.
     
     Args:
-        product_ids: List of pipeline run IDs (max 100)
+        request: Request body containing product_ids (max 100)
         type: Filter for 'commission', 'support', or 'all' (default: all)
         response: Response object for cache headers
         db: Database session
@@ -1318,6 +1321,8 @@ async def get_bulk_product_donations(
     Returns:
         Dict: Mapping of pipeline_run_id to donation information
     """
+    product_ids = request.product_ids
+    
     if len(product_ids) > 100:
         raise HTTPException(status_code=400, detail="Maximum 100 product IDs allowed")
     
