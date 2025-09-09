@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProductCard } from '../../../components/ProductGrid/ProductCard';
 import { DonationTierProvider } from '../../../hooks/useDonationTiers';
 import type { GeneratedProduct } from '../../../types/productTypes';
+import type { ProductWithFullDonationData } from '../../../hooks/useProductsWithDonations';
 
 // Helper to render component with provider
 const renderWithProvider = (component: React.ReactElement) => {
@@ -13,7 +14,7 @@ const renderWithProvider = (component: React.ReactElement) => {
   );
 };
 
-const mockProduct: GeneratedProduct = {
+const mockProduct: ProductWithFullDonationData = {
   product_info: {
     id: 1,
     pipeline_run_id: 1,
@@ -47,7 +48,10 @@ const mockProduct: GeneratedProduct = {
     permalink: '/r/testsubreddit/test123',
     score: 150,
     num_comments: 10
-  }
+  },
+  totalDonationAmount: 0,
+  commissionInfo: undefined,
+  supportDonations: []
 };
 
 // Mock the DonationCard component

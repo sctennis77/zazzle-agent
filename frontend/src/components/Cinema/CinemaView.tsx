@@ -20,7 +20,7 @@ export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick, onDon
   const { products, loading, error } = useProducts();
   const { productsWithDonations } = useProductsWithDonations(products);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductWithFullDonationData | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showSupportPrompt, setShowSupportPrompt] = useState(false);
   const [downloadContext, setDownloadContext] = useState<{postId: string, subreddit: string} | null>(null);
@@ -58,7 +58,7 @@ export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick, onDon
   const handleOpenProductModal = (productId: string) => {
     const product = productsWithDonations.find(p => p.product_info.id.toString() === productId);
     if (product) {
-      setSelectedProduct(product as GeneratedProduct);
+      setSelectedProduct(product);
       setShowModal(true);
     }
   };

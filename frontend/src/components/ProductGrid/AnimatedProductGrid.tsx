@@ -22,7 +22,7 @@ export const AnimatedProductGrid: React.FC<AnimatedProductGridProps> = ({
       {products.map((product, index) => (
         <div key={product.product_info.id}>
           <ProductCard
-            product={product as GeneratedProduct}
+            product={product}
             activeTasks={activeTasks}
             justPublished={justPublishedId === product.product_info.id}
             justCompleted={isProductJustCompleted(product)}

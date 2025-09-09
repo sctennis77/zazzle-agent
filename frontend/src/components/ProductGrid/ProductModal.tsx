@@ -269,7 +269,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     <span className="text-xs text-gray-400 font-medium">Commission</span>
                   </div>
                   {/* Commission message centered */}
-                  {commissionInfo.commission_message && (
+                  {typeof commissionInfo.commission_message === 'string' && commissionInfo.commission_message && (
                     <span className="flex-1 text-center text-xs text-gray-600 italic px-2">
                       "{commissionInfo.commission_message}"
                     </span>
