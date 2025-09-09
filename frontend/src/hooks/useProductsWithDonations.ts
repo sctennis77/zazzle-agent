@@ -42,40 +42,34 @@ export const useProductsWithDonations = (
   const [productsWithDonations, setProductsWithDonations] = useState<ProductWithFullDonationData[]>([]);
   const [loading, setLoading] = useState(false);
   const fetchingRef = useRef(false);
-
-  // Memoize products to prevent unnecessary re-renders from array reference changes
-  const memoizedProducts = useMemo(() => products, [JSON.stringify(products.map(p => ({ 
-    id: p.pipeline_run.id, 
-    donationAmount: p.product_info.donation_info?.donation_amount 
-  })))]);
+  const loadedProductIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     console.log('useProductsWithDonations effect triggered', { 
-      productsLength: memoizedProducts.length, 
+      productsLength: products.length, 
       lazy,
       fetchingRef: fetchingRef.current,
-      loading 
+      loading,
+      loadedCount: loadedProductIds.current.size
     });
     
-    if (memoizedProducts.length === 0) {
+    if (products.length === 0) {
       setProductsWithDonations([]);
       return;
     }
 
-    // Check if we already have donation data loaded for these products to prevent re-fetching
-    const currentProductIds = new Set(memoizedProducts.map(p => p.pipeline_run.id));
-    const existingProductIds = new Set(productsWithDonations.map(p => p.pipeline_run.id));
-    const hasAllProducts = currentProductIds.size === existingProductIds.size && 
-      Array.from(currentProductIds).every(id => existingProductIds.has(id));
+    // Check if all products have already been loaded successfully
+    const currentProductIds = products.map(p => p.pipeline_run.id);
+    const allAlreadyLoaded = currentProductIds.every(id => loadedProductIds.current.has(id));
     
-    if (hasAllProducts && productsWithDonations.some(p => p.donationDataLoaded !== false)) {
-      console.log('useProductsWithDonations: skipping fetch - data already loaded');
+    if (allAlreadyLoaded) {
+      console.log('useProductsWithDonations: all products already loaded, skipping fetch');
       return;
     }
 
     if (lazy) {
       // In lazy mode, just return products with fallback donation amounts
-      const productsWithFallback = memoizedProducts.map(product => ({
+      const productsWithFallback = products.map(product => ({
         ...product,
         totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
         commissionInfo: undefined,
@@ -101,8 +95,18 @@ export const useProductsWithDonations = (
         const results: ProductWithFullDonationData[] = [];
         const BATCH_SIZE = 3; // Max concurrent requests (reduced from 5)
         
-        for (let i = 0; i < memoizedProducts.length; i += BATCH_SIZE) {
-          const batch = memoizedProducts.slice(i, i + BATCH_SIZE);
+        // Only fetch products that haven't been loaded yet
+        const productsToFetch = products.filter(p => !loadedProductIds.current.has(p.pipeline_run.id));
+        
+        if (productsToFetch.length === 0) {
+          console.log('useProductsWithDonations: no new products to fetch');
+          return;
+        }
+        
+        console.log(`useProductsWithDonations: fetching ${productsToFetch.length} new products`);
+        
+        for (let i = 0; i < productsToFetch.length; i += BATCH_SIZE) {
+          const batch = productsToFetch.slice(i, i + BATCH_SIZE);
           
           const batchPromises = batch.map(async (product) => {
             const productId = product.pipeline_run.id;
@@ -142,6 +146,9 @@ export const useProductsWithDonations = (
                   const data: DonationData = await response.json();
                   const commissionAmount = data.commission?.donation_amount || 0;
                   const supportAmount = data.support?.reduce((sum, d) => sum + (d.donation_amount || 0), 0) || 0;
+                  
+                  // Mark this product as successfully loaded
+                  loadedProductIds.current.add(productId);
                   
                   return {
                     ...product,
@@ -194,7 +201,7 @@ export const useProductsWithDonations = (
           results.push(...batchResults);
           
           // Longer delay between batches to be gentle on the server
-          if (i + BATCH_SIZE < memoizedProducts.length) {
+          if (i + BATCH_SIZE < productsToFetch.length) {
             await new Promise(resolve => setTimeout(resolve, 500)); // Increased from 100ms to 500ms
           }
         }
@@ -203,7 +210,7 @@ export const useProductsWithDonations = (
       } catch (error) {
         console.error('Error fetching donation data:', error);
         // Fallback to products without donation data
-        const fallbackProducts = memoizedProducts.map(product => ({
+        const fallbackProducts = products.map(product => ({
           ...product,
           totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
           commissionInfo: undefined,
@@ -218,7 +225,7 @@ export const useProductsWithDonations = (
     };
 
     fetchDonationData();
-  }, [memoizedProducts, lazy]);
+  }, [products, lazy]);
 
   // Function to load donation data for a specific product (for lazy loading)
   const loadProductDonation = async (pipelineRunId: number): Promise<void> => {
