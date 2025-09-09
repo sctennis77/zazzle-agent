@@ -290,7 +290,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 {supportDonations.length > 0 ? (
                   <div className="flex flex-col gap-2">
                     {supportDonations.map((donation, index) => {
-                      const tierName = typeof donation.tier_name === 'string' ? donation.tier_name : '';\n                      const tierDisplay = getTierDisplay(tierName);
+                      const tierName = typeof donation.tier_name === 'string' ? donation.tier_name : '';
+                      const tierDisplay = getTierDisplay(tierName);
                       const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
                       return (
                         <div key={index} className="flex items-center bg-green-50 border border-green-100 rounded-xl px-4 py-2 shadow-sm">
