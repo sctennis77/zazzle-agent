@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProducts } from '../../hooks/useProducts';
-import { useProductsWithDonationsBulk, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonationsBulk';
+import { useProductsWithDonations, type ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import { ImageLightbox } from '../common/ImageLightbox';
 import { ProductModal } from '../ProductGrid/ProductModal';
 import { SupportPromptModal } from '../common/SupportPromptModal';
@@ -18,7 +18,7 @@ export const CinemaView: React.FC<CinemaViewProps> = ({ onCommissionClick, onDon
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
   const { products, loading, error } = useProducts();
-  const { productsWithDonations } = useProductsWithDonationsBulk(products);
+  const { productsWithDonations } = useProductsWithDonations(products);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
