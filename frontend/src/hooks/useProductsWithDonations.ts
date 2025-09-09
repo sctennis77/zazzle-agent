@@ -43,29 +43,38 @@ export const useProductsWithDonations = (
   const [loading, setLoading] = useState(false);
   const fetchingRef = useRef(false);
   const loadedProductIds = useRef<Set<number>>(new Set());
+  const hookId = useRef(Math.random().toString(36).substr(2, 9));
 
   useEffect(() => {
-    console.log('useProductsWithDonations effect triggered', { 
-      productsLength: products.length, 
+    const currentProductIds = products.map(p => p.pipeline_run.id);
+    const loadedIds = Array.from(loadedProductIds.current);
+    
+    console.log(`🔄 [${hookId.current}] useProductsWithDonations effect triggered`, { 
+      productsLength: products.length,
+      currentProductIds: currentProductIds.slice(0, 3),
+      loadedIds: loadedIds.slice(0, 3),
       lazy,
       fetchingRef: fetchingRef.current,
       loading,
-      loadedCount: loadedProductIds.current.size
+      loadedCount: loadedProductIds.current.size,
+      allAlreadyLoaded: currentProductIds.every(id => loadedProductIds.current.has(id))
     });
     
     if (products.length === 0) {
+      console.log('❌ No products, clearing state');
       setProductsWithDonations([]);
       return;
     }
 
     // Check if all products have already been loaded successfully
-    const currentProductIds = products.map(p => p.pipeline_run.id);
     const allAlreadyLoaded = currentProductIds.every(id => loadedProductIds.current.has(id));
     
     if (allAlreadyLoaded) {
-      console.log('useProductsWithDonations: all products already loaded, skipping fetch');
+      console.log('✅ useProductsWithDonations: all products already loaded, skipping fetch');
       return;
     }
+    
+    console.log('🚨 useProductsWithDonations: proceeding with fetch logic');
 
     if (lazy) {
       // In lazy mode, just return products with fallback donation amounts
@@ -98,12 +107,21 @@ export const useProductsWithDonations = (
         // Only fetch products that haven't been loaded yet
         const productsToFetch = products.filter(p => !loadedProductIds.current.has(p.pipeline_run.id));
         
+        console.log('🔍 Filtering products:', {
+          totalProducts: products.length,
+          productsToFetch: productsToFetch.length,
+          productsToFetchIds: productsToFetch.map(p => p.pipeline_run.id).slice(0, 5),
+          loadedIds: Array.from(loadedProductIds.current).slice(0, 5)
+        });
+        
         if (productsToFetch.length === 0) {
-          console.log('useProductsWithDonations: no new products to fetch');
+          console.log('✅ useProductsWithDonations: no new products to fetch, stopping here');
+          fetchingRef.current = false;
+          setLoading(false);
           return;
         }
         
-        console.log(`useProductsWithDonations: fetching ${productsToFetch.length} new products`);
+        console.log(`🚀 useProductsWithDonations: fetching ${productsToFetch.length} new products`);
         
         for (let i = 0; i < productsToFetch.length; i += BATCH_SIZE) {
           const batch = productsToFetch.slice(i, i + BATCH_SIZE);
@@ -149,6 +167,7 @@ export const useProductsWithDonations = (
                   
                   // Mark this product as successfully loaded
                   loadedProductIds.current.add(productId);
+                  console.log(`✅ Marked product ${productId} as loaded. Total loaded: ${loadedProductIds.current.size}`);
                   
                   return {
                     ...product,
