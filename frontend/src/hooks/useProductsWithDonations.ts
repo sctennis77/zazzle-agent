@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { GeneratedProduct } from '../types/productTypes';
 import { API_BASE } from '../utils/apiBase';
+import { donationApiRateLimiter } from '../utils/rateLimiter';
 
 interface CommissionInfo {
   donation_amount: number;
@@ -60,9 +61,9 @@ export const useProductsWithDonations = (
     const fetchDonationData = async () => {
       setLoading(true);
       try {
-        // Fetch donation data with connection throttling (max 5 concurrent)
+        // Fetch donation data with conservative connection throttling 
         const results: ProductWithFullDonationData[] = [];
-        const BATCH_SIZE = 5; // Max concurrent requests
+        const BATCH_SIZE = 3; // Max concurrent requests (reduced from 5)
         
         for (let i = 0; i < products.length; i += BATCH_SIZE) {
           const batch = products.slice(i, i + BATCH_SIZE);
@@ -74,12 +75,14 @@ export const useProductsWithDonations = (
             
             while (retryCount < maxRetries) {
               try {
-                const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
-                  headers: {
-                    'Accept': 'application/json',
-                    'Cache-Control': 'max-age=300', // Use cache if available
-                  },
-                });
+                const response = await donationApiRateLimiter.execute(() =>
+                  fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
+                    headers: {
+                      'Accept': 'application/json',
+                      'Cache-Control': 'max-age=300', // Use cache if available
+                    },
+                  })
+                );
                 
                 if (response.ok) {
                   const data: DonationData = await response.json();
@@ -132,9 +135,9 @@ export const useProductsWithDonations = (
           const batchResults = await Promise.all(batchPromises);
           results.push(...batchResults);
           
-          // Small delay between batches to be gentle on the server
+          // Longer delay between batches to be gentle on the server
           if (i + BATCH_SIZE < products.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 500)); // Increased from 100ms to 500ms
           }
         }
         setProductsWithDonations(results);
@@ -171,12 +174,14 @@ export const useProductsWithDonations = (
       
       while (retryCount < maxRetries) {
         try {
-          const response = await fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
-            headers: {
-              'Accept': 'application/json',
-              'Cache-Control': 'max-age=300',
-            },
-          });
+          const response = await donationApiRateLimiter.execute(() =>
+            fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
+              headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'max-age=300',
+              },
+            })
+          );
           
           if (response.ok) {
             const data: DonationData = await response.json();
