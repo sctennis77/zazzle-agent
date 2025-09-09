@@ -1299,6 +1299,132 @@ def get_donations_by_post_id(post_id: str, db: Session):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.post("/api/products/donations/bulk")
+async def get_bulk_product_donations(
+    product_ids: List[int],
+    response: Response,
+    type: str = Query("all", pattern="^(all|commission|support)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get donation information for multiple products in a single request.
+    
+    Args:
+        product_ids: List of pipeline run IDs (max 100)
+        type: Filter for 'commission', 'support', or 'all' (default: all)
+        response: Response object for cache headers
+        db: Database session
+        
+    Returns:
+        Dict: Mapping of pipeline_run_id to donation information
+    """
+    if len(product_ids) > 100:
+        raise HTTPException(status_code=400, detail="Maximum 100 product IDs allowed")
+    
+    if not product_ids:
+        return {}
+    
+    try:
+        from sqlalchemy.orm import joinedload
+        
+        # Get all pipeline tasks with donations eagerly loaded
+        pipeline_tasks = (
+            db.query(PipelineTask)
+            .options(joinedload(PipelineTask.donation))
+            .filter(PipelineTask.pipeline_run_id.in_(product_ids))
+            .all()
+        )
+        
+        # Create a mapping of pipeline_run_id to task
+        tasks_by_run_id = {task.pipeline_run_id: task for task in pipeline_tasks}
+        
+        # Get all reddit posts for these pipeline runs
+        reddit_posts = (
+            db.query(RedditPost)
+            .filter(RedditPost.pipeline_run_id.in_(product_ids))
+            .all()
+        )
+        posts_by_run_id = {post.pipeline_run_id: post for post in reddit_posts}
+        
+        # Get all support donations for these products
+        support_donations_query = (
+            db.query(Donation)
+            .filter(
+                Donation.post_id.in_([
+                    post.post_id for post in reddit_posts if post.post_id
+                ]),
+                Donation.donation_type == "support",
+                Donation.status == DonationStatus.SUCCEEDED.value
+            )
+            .all()
+        )
+        
+        # Group support donations by post_id (which maps to reddit posts)
+        support_by_post_id = {}
+        for donation in support_donations_query:
+            if donation.post_id not in support_by_post_id:
+                support_by_post_id[donation.post_id] = []
+            support_by_post_id[donation.post_id].append({
+                "reddit_username": donation.reddit_username if not donation.is_anonymous else "Anonymous",
+                "donation_amount": float(donation.amount_usd),
+                "tier": donation.tier,
+                "is_anonymous": donation.is_anonymous,
+                "donation_id": donation.id,
+            })
+        
+        # Build result for each requested product
+        result = {}
+        for pipeline_run_id in product_ids:
+            commission_info = None
+            support_donations = []
+            
+            # Get commission info from pipeline task donation
+            task = tasks_by_run_id.get(pipeline_run_id)
+            if task and task.donation_id and task.donation:
+                donation = task.donation
+                if donation.donation_type == "commission":
+                    commission_info = {
+                        "reddit_username": (
+                            donation.reddit_username
+                            if not donation.is_anonymous
+                            else "Anonymous"
+                        ),
+                        "tier_name": donation.tier,
+                        "tier_min_amount": float(donation.amount_usd),
+                        "donation_amount": float(donation.amount_usd),
+                        "is_anonymous": donation.is_anonymous,
+                        "commission_message": donation.commission_message,
+                        "commission_type": donation.commission_type,
+                    }
+            
+            # Get support donations from reddit post
+            reddit_post = posts_by_run_id.get(pipeline_run_id)
+            if reddit_post and reddit_post.post_id:
+                support_donations = support_by_post_id.get(reddit_post.post_id, [])
+            
+            # Filter by type param
+            if type == "commission":
+                result[pipeline_run_id] = {"commission": commission_info}
+            elif type == "support":
+                result[pipeline_run_id] = {"support": support_donations}
+            else:
+                result[pipeline_run_id] = {
+                    "commission": commission_info, 
+                    "support": support_donations
+                }
+        
+        # Set cache headers - 5 minute cache to reduce DB load
+        response.headers["Cache-Control"] = "public, max-age=300"
+        response.headers["ETag"] = f'"{"-".join(map(str, sorted(product_ids)))}-{type}"'
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting bulk donations for products {product_ids}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/api/products/{pipeline_run_id}/donations")
 async def get_product_donations(
     pipeline_run_id: int,
