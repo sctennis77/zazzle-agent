@@ -38,7 +38,31 @@ def create_database_engine(database_url=None):
     if database_url is None:
         database_url = get_database_url()
 
-    engine = create_engine(database_url, echo=False, future=True)
+    # Get pool settings from environment variables
+    pool_size = int(os.getenv("DB_POOL_SIZE", "20"))  # Increased from default 5
+    max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "30"))  # Increased from default 10
+    pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "60"))  # Connection timeout
+    pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))  # Recycle after 1 hour
+
+    # Configure engine with pool settings
+    engine_kwargs = {
+        "echo": False,
+        "future": True,
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+        "pool_timeout": pool_timeout,
+        "pool_recycle": pool_recycle,
+    }
+    
+    # SQLite doesn't support connection pooling the same way
+    if database_url.startswith("sqlite"):
+        # For SQLite, we still want some pool settings but remove the problematic ones
+        engine_kwargs = {"echo": False, "future": True}
+        logger.info("Using SQLite - connection pooling disabled")
+    else:
+        logger.info(f"Configuring connection pool: size={pool_size}, max_overflow={max_overflow}")
+
+    engine = create_engine(database_url, **engine_kwargs)
 
     # Enable foreign key support for SQLite
     def _fk_pragma_on_connect(dbapi_con, con_record):
