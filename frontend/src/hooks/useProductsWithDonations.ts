@@ -3,6 +3,9 @@ import type { GeneratedProduct } from '../types/productTypes';
 import { API_BASE } from '../utils/apiBase';
 import { donationApiRateLimiter } from '../utils/rateLimiter';
 
+// Global set to track products being fetched across all hook instances
+const globalFetchingIds = new Set<number>();
+
 interface CommissionInfo {
   donation_amount: number;
   reddit_username: string;
@@ -102,18 +105,38 @@ export const useProductsWithDonations = (
           const batch = memoizedProducts.slice(i, i + BATCH_SIZE);
           
           const batchPromises = batch.map(async (product) => {
-            // Retry logic with exponential backoff
-            const maxRetries = 3;
-            let retryCount = 0;
+            const productId = product.pipeline_run.id;
+            
+            // Skip if this product is already being fetched by another hook instance
+            if (globalFetchingIds.has(productId)) {
+              console.log(`Product ${productId} already being fetched by another instance`);
+              return {
+                ...product,
+                totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
+                commissionInfo: undefined,
+                supportDonations: [],
+                donationDataLoaded: false,
+              };
+            }
+            
+            // Mark this product as being fetched
+            globalFetchingIds.add(productId);
+            
+            try {
+              // Retry logic with exponential backoff
+              const maxRetries = 3;
+              let retryCount = 0;
             
             while (retryCount < maxRetries) {
               try {
-                const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
-                  headers: {
-                    'Accept': 'application/json',
-                    'Cache-Control': 'max-age=300', // Use cache if available
-                  },
-                });
+                const response = await donationApiRateLimiter.execute(() =>
+                  fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
+                    headers: {
+                      'Accept': 'application/json',
+                      'Cache-Control': 'max-age=300', // Use cache if available
+                    },
+                  })
+                );
                 
                 if (response.ok) {
                   const data: DonationData = await response.json();
@@ -151,6 +174,10 @@ export const useProductsWithDonations = (
                 await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
                 retryCount++;
               }
+            }
+            } finally {
+              // Always clean up the global fetching marker
+              globalFetchingIds.delete(productId);
             }
             
             // Fallback to commission amount from product data
@@ -200,6 +227,14 @@ export const useProductsWithDonations = (
       return;
     }
 
+    // Skip if already being fetched globally
+    if (globalFetchingIds.has(pipelineRunId)) {
+      console.log(`Product ${pipelineRunId} already being fetched globally`);
+      return;
+    }
+
+    globalFetchingIds.add(pipelineRunId);
+
     try {
       // Retry logic with exponential backoff
       const maxRetries = 3;
@@ -207,12 +242,14 @@ export const useProductsWithDonations = (
       
       while (retryCount < maxRetries) {
         try {
-          const response = await fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
-            headers: {
-              'Accept': 'application/json',
-              'Cache-Control': 'max-age=300',
-            },
-          });
+          const response = await donationApiRateLimiter.execute(() =>
+            fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
+              headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'max-age=300',
+              },
+            })
+          );
           
           if (response.ok) {
             const data: DonationData = await response.json();
@@ -253,6 +290,8 @@ export const useProductsWithDonations = (
       }
     } catch (error) {
       console.error(`Error loading donation data for product ${pipelineRunId}:`, error);
+    } finally {
+      globalFetchingIds.delete(pipelineRunId);
     }
   };
 

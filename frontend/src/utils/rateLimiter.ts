@@ -48,5 +48,5 @@ class RateLimiter {
   }
 }
 
-// Global rate limiter instance - 2 requests per second max
-export const donationApiRateLimiter = new RateLimiter(2);
+// Global rate limiter instance - 1 request per second max (very conservative)
+export const donationApiRateLimiter = new RateLimiter(1);
