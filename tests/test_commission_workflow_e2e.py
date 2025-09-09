@@ -100,7 +100,8 @@ class TestCommissionWorkflowE2E:
 
             # Simulate the webhook handler
             with patch("app.api.stripe_service", mock_stripe_service):
-                result = await handle_payment_intent_succeeded(mock_payment_intent, db_session)
+                with patch("app.api.SessionLocal", return_value=db_session):
+                    result = await handle_payment_intent_succeeded(mock_payment_intent)
 
             # Verify donation was created
             donation = (

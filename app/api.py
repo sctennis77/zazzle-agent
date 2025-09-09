@@ -220,7 +220,7 @@ def model_to_dict(obj):
     return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
 
 
-def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
+async def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
     """
     Fetch all successful pipeline runs and their related data from the database.
 
@@ -229,55 +229,18 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
         pipeline run details, and associated Reddit post data.
     """
     try:
-        from sqlalchemy.orm import joinedload, selectinload
-        
         logger.info("Fetching successful pipeline runs...")
-        
-        # Single query with eager loading for all relationships
         pipeline_runs = (
-            db.query(PipelineRun)
-            .options(
-                joinedload(PipelineRun.reddit_posts).joinedload(RedditPost.subreddit),
-                joinedload(PipelineRun.products),
-            )
-            .filter_by(status=PipelineStatus.COMPLETED.value)
-            .all()
+            db.query(PipelineRun).filter_by(status=PipelineStatus.COMPLETED.value).all()
         )
-        
         logger.info(f"Found {len(pipeline_runs)} completed pipeline runs.")
-        
-        # Batch load all pipeline tasks and donations
-        pipeline_run_ids = [run.id for run in pipeline_runs]
-        pipeline_tasks = {}
-        donations = {}
-        usage_data_map = {}
-        
-        if pipeline_run_ids:
-            # Load pipeline tasks
-            tasks = (
-                db.query(PipelineTask)
-                .options(joinedload(PipelineTask.donation))
-                .filter(PipelineTask.pipeline_run_id.in_(pipeline_run_ids))
-                .all()
-            )
-            pipeline_tasks = {task.pipeline_run_id: task for task in tasks}
-            
-            # Load usage data
-            usage_data_items = (
-                db.query(PipelineRunUsage)
-                .filter(PipelineRunUsage.pipeline_run_id.in_(pipeline_run_ids))
-                .all()
-            )
-            usage_data_map = {u.pipeline_run_id: u for u in usage_data_items}
-        
         products = []
-        
         for run in pipeline_runs:
             try:
                 logger.info(f"Processing pipeline run {run.id}")
-                
-                # Access pre-loaded data (no additional queries)
-                product_info = run.products[0] if run.products else None
+                product_info = (
+                    db.query(ProductInfo).filter_by(pipeline_run_id=run.id).first()
+                )
                 if not product_info:
                     logger.warning(f"No product info found for pipeline run {run.id}")
                     continue
@@ -289,29 +252,38 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                     continue
                 logger.info(f"Found reddit post: {reddit_post.post_id}")
 
-                # Get donation info from pre-loaded data
+                # Fetch donation information if available
                 donation_info = None
-                pipeline_task = pipeline_tasks.get(run.id)
-                if pipeline_task and pipeline_task.donation:
-                    donation = pipeline_task.donation
-                    donation_info = {
-                        "reddit_username": (
-                            donation.reddit_username
-                            if not donation.is_anonymous
-                            else "Anonymous"
-                        ),
-                        "tier_name": donation.tier,
-                        "tier_min_amount": float(donation.amount_usd),
-                        "donation_amount": float(donation.amount_usd),
-                        "is_anonymous": donation.is_anonymous,
-                        "donation_type": donation.donation_type,
-                        "commission_type": donation.commission_type,
-                        "source": (
-                            donation.source.value if donation.source else None
-                        ),
-                    }
+                pipeline_task = (
+                    db.query(PipelineTask).filter_by(pipeline_run_id=run.id).first()
+                )
+                if pipeline_task and pipeline_task.donation_id:
+                    donation = (
+                        db.query(Donation)
+                        .filter_by(id=pipeline_task.donation_id)
+                        .first()
+                    )
+                    if donation:
+                        donation_info = {
+                            "reddit_username": (
+                                donation.reddit_username
+                                if not donation.is_anonymous
+                                else "Anonymous"
+                            ),
+                            "tier_name": donation.tier,
+                            "tier_min_amount": float(
+                                donation.amount_usd
+                            ),  # Use actual donation amount
+                            "donation_amount": float(donation.amount_usd),
+                            "is_anonymous": donation.is_anonymous,
+                            "donation_type": donation.donation_type,
+                            "commission_type": donation.commission_type,
+                            "source": (
+                                donation.source.value if donation.source else None
+                            ),
+                        }
 
-                # Get subreddit name from pre-loaded data
+                # Get subreddit name for reddit context
                 subreddit_name = (
                     reddit_post.subreddit.subreddit_name
                     if reddit_post.subreddit
@@ -351,14 +323,19 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                             logger.error(f"Failed to generate affiliate link for {product_schema.theme}: {e}")
                             # Use product_url as fallback
                             product_schema.affiliate_link = product_schema.product_url
-                            
                 pipeline_schema = PipelineRunSchema.model_validate(run)
                 reddit_post_dict = reddit_post.__dict__.copy()
-                reddit_post_dict["subreddit"] = subreddit_name
+                reddit_post_dict["subreddit"] = (
+                    reddit_post.subreddit.subreddit_name
+                    if reddit_post.subreddit
+                    else None
+                )
                 reddit_schema = RedditPostSchema.model_validate(reddit_post_dict)
 
-                # Get usage data from pre-loaded data
-                usage_data = usage_data_map.get(run.id)
+                # Fetch usage data
+                usage_data = (
+                    db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
+                )
                 usage_schema = (
                     PipelineRunUsageSchema.model_validate(usage_data)
                     if usage_data
@@ -386,10 +363,8 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
                 )
                 logger.error(traceback.format_exc())
                 continue
-                
         logger.info(f"Returning {len(products)} products.")
         return products
-        
     except Exception as e:
         logger.error(f"Error in fetch_successful_pipeline_runs: {str(e)}")
         logger.error(traceback.format_exc())
@@ -397,7 +372,7 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
 
 
 @app.get("/api/generated_products", response_model=List[GeneratedProductSchema])
-async def get_generated_products(db: Session = Depends(get_db)):
+async def get_generated_products():
     """
     API endpoint to retrieve all successful pipeline runs and their related data.
 
@@ -406,7 +381,8 @@ async def get_generated_products(db: Session = Depends(get_db)):
     """
     logger.info("Starting get_generated_products request")
     try:
-        products = fetch_successful_pipeline_runs(db)
+        db = SessionLocal()
+        products = await fetch_successful_pipeline_runs(db)
         logger.info(f"Returning {len(products)} products.")
         logger.info("Successfully converted products to response format")
         return products
@@ -414,21 +390,24 @@ async def get_generated_products(db: Session = Depends(get_db)):
         logger.error(f"Error in get_generated_products: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        db.close()
 
 
 @app.get("/redirect/{image_name}")
-async def redirect_to_product(image_name: str, db: Session = Depends(get_db)):
+async def redirect_to_product(image_name: str):
     """
     Redirect to a product based on the image name.
 
     Args:
         image_name: The name of the image file
-        db: Database session
 
     Returns:
         RedirectResponse: Redirect to the gallery with product parameter
     """
     try:
+        db = SessionLocal()
+
         # Find the product info by image name
         product_info = (
             db.query(ProductInfo)
@@ -460,21 +439,24 @@ async def redirect_to_product(image_name: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error redirecting to product: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        db.close()
 
 
 @app.get("/api/product/{image_name}")
-async def get_product_by_image(image_name: str, db: Session = Depends(get_db)):
+async def get_product_by_image(image_name: str):
     """
     Get product information by image name.
 
     Args:
         image_name: The name of the image file
-        db: Database session
 
     Returns:
         Dict: Product information
     """
     try:
+        db = SessionLocal()
+
         # Find the product info by image name
         product_info = (
             db.query(ProductInfo)
@@ -500,6 +482,8 @@ async def get_product_by_image(image_name: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error getting product by image: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        db.close()
 
 
 @app.post("/api/donations/create-payment-intent")
@@ -603,56 +587,34 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
     """
     try:
         from app.db.models import RedditPost
-        from sqlalchemy.orm import joinedload, selectinload
 
         subreddit_donations = {}
-        
-        # Single query with eager loading to prevent N+1
         donations = (
             db.query(Donation)
-            .options(
-                joinedload(Donation.subreddit),  # Eager load subreddit relationship
-            )
             .filter_by(status=DonationStatus.SUCCEEDED.value)
             .order_by(Donation.created_at.desc())
             .all()
         )
-        
-        # Collect all post_ids that we need to fetch
-        post_ids = [d.post_id for d in donations if d.post_id]
-        
-        # Fetch all reddit posts in a single query
-        reddit_posts = {}
-        if post_ids:
-            posts = (
-                db.query(RedditPost)
-                .options(joinedload(RedditPost.subreddit))  # Eager load subreddit
-                .filter(RedditPost.post_id.in_(post_ids))
-                .all()
-            )
-            reddit_posts = {post.post_id: post for post in posts}
-        
-        # Now process donations without any additional queries
         for donation in donations:
-            # Get reddit post from our pre-fetched dictionary
-            reddit_post = reddit_posts.get(donation.post_id) if donation.post_id else None
-            
-            # Determine subreddit name
-            if reddit_post and reddit_post.subreddit:
-                subreddit_name = reddit_post.subreddit.subreddit_name
-            elif donation.subreddit:
-                subreddit_name = donation.subreddit.subreddit_name
-            else:
-                subreddit_name = "unknown"
-            
-            # Initialize subreddit entry if needed
+            # Prefer the subreddit of the associated RedditPost if post_id is present
+            subreddit_name = None
+            if donation.post_id:
+                reddit_post = (
+                    db.query(RedditPost).filter_by(post_id=donation.post_id).first()
+                )
+                if reddit_post and reddit_post.subreddit:
+                    subreddit_name = reddit_post.subreddit.subreddit_name
+            if not subreddit_name:
+                subreddit_name = (
+                    donation.subreddit.subreddit_name
+                    if donation.subreddit
+                    else "unknown"
+                )
             if subreddit_name not in subreddit_donations:
                 subreddit_donations[subreddit_name] = {
                     "commission": None,
                     "support": [],
                 }
-            
-            # Build donation data
             donation_data = {
                 "reddit_username": (
                     donation.reddit_username
@@ -668,22 +630,28 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
                 "donation_id": donation.id,
                 "source": donation.source.value if donation.source else None,
                 "post_id": donation.post_id,
-                "post_title": reddit_post.title if reddit_post else None,
+                "post_title": None,  # Will be populated below if post exists
             }
             
-            # Add commission-specific fields
+            # If there's a post_id, fetch the post title
+            if donation.post_id:
+                reddit_post = (
+                    db.query(RedditPost).filter_by(post_id=donation.post_id).first()
+                )
+                if reddit_post:
+                    donation_data["post_title"] = reddit_post.title
             if donation.donation_type == "commission":
-                donation_data.update({
-                    "commission_message": donation.commission_message,
-                    "commission_type": donation.commission_type,
-                })
+                donation_data.update(
+                    {
+                        "commission_message": donation.commission_message,
+                        "commission_type": donation.commission_type,
+                    }
+                )
                 if not subreddit_donations[subreddit_name]["commission"]:
                     subreddit_donations[subreddit_name]["commission"] = donation_data
             else:
                 subreddit_donations[subreddit_name]["support"].append(donation_data)
-        
         return subreddit_donations
-        
     except Exception as e:
         logger.error(f"Error getting donations by subreddit: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1465,7 +1433,7 @@ async def update_payment_intent(
 
 
 @app.post("/api/donations/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+async def stripe_webhook(request: Request):
     """Handle Stripe webhook events."""
     try:
         body = await request.body()
@@ -1515,10 +1483,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         # Handle the event
         if event["type"] == "payment_intent.succeeded":
             payment_intent = event["data"]["object"]
-            await handle_payment_intent_succeeded(payment_intent, db)
+            await handle_payment_intent_succeeded(payment_intent)
         elif event["type"] == "payment_intent.payment_failed":
             payment_intent = event["data"]["object"]
-            await handle_payment_intent_failed(payment_intent, db)
+            await handle_payment_intent_failed(payment_intent)
         else:
             logger.info(f"Unhandled event type: {event['type']}")
 
@@ -1532,104 +1500,107 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 
-async def handle_payment_intent_succeeded(payment_intent, db: Session):
+async def handle_payment_intent_succeeded(payment_intent):
     """Handle successful payment intent."""
     try:
         logger.info(f"Processing successful payment intent: {payment_intent.id}")
-        # Check if this payment intent has already been processed
-        existing_donation = (
-            db.query(Donation)
-            .filter_by(
-                stripe_payment_intent_id=payment_intent.id,
-                status=DonationStatus.SUCCEEDED.value,
-            )
-            .first()
-        )
 
-        if existing_donation:
+        # Get database session
+        db = SessionLocal()
+        try:
+            # Check if this payment intent has already been processed
+            existing_donation = (
+                db.query(Donation)
+                .filter_by(
+                    stripe_payment_intent_id=payment_intent.id,
+                    status=DonationStatus.SUCCEEDED.value,
+                )
+                .first()
+            )
+
+            if existing_donation:
+                logger.info(
+                    f"Payment intent {payment_intent.id} already processed for donation {existing_donation.id}, skipping"
+                )
+                return
+
+            # Extract metadata
+            metadata = payment_intent.metadata
+
+            logger.debug(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
+
+            # Create donation request from metadata
+            donation_request = DonationRequest(
+                amount_usd=Decimal(payment_intent.amount / 100),
+                customer_email=payment_intent.receipt_email,
+                customer_name=metadata.get("customer_name"),
+                message=metadata.get("message"),
+                subreddit=metadata.get("subreddit"),
+                reddit_username=metadata.get("reddit_username"),
+                is_anonymous=metadata.get("is_anonymous", "false").lower() == "true",
+                donation_type=metadata.get("donation_type"),
+                post_id=metadata.get("post_id") if metadata.get("post_id") else None,
+                commission_message=metadata.get("commission_message"),
+                commission_type=metadata.get("commission_type"),
+            )
+
+            logger.debug(
+                f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}"
+            )
+
+            # Process the donation
+            donation = stripe_service.save_donation_to_db(
+                db,
+                {
+                    "payment_intent_id": payment_intent.id,
+                    "amount_cents": payment_intent.amount,
+                    "amount_usd": Decimal(payment_intent.amount / 100),
+                    "currency": payment_intent.currency,
+                    "status": payment_intent.status,
+                    "metadata": payment_intent.metadata,
+                    "receipt_email": getattr(payment_intent, "receipt_email", None),
+                    "created": payment_intent.created,
+                },
+                donation_request,
+            )
+
             logger.info(
-                f"Payment intent {payment_intent.id} already processed for donation {existing_donation.id}, skipping"
+                f"Created donation {donation.id} for payment intent {payment_intent.id} "
+                f"(user: {donation.customer_name}, amount: {donation.amount_usd}, type: {donation.donation_type}, tier: {donation.tier})"
             )
-            return
 
-        # Extract metadata
-        metadata = payment_intent.metadata
-
-        logger.debug(f"Payment intent metadata: {json.dumps(metadata, indent=2)}")
-
-        # Create donation request from metadata
-        donation_request = DonationRequest(
-            amount_usd=Decimal(payment_intent.amount / 100),
-            customer_email=payment_intent.receipt_email,
-            customer_name=metadata.get("customer_name"),
-            message=metadata.get("message"),
-            subreddit=metadata.get("subreddit"),
-            reddit_username=metadata.get("reddit_username"),
-            is_anonymous=metadata.get("is_anonymous", "false").lower() == "true",
-            donation_type=metadata.get("donation_type"),
-            post_id=metadata.get("post_id") if metadata.get("post_id") else None,
-            commission_message=metadata.get("commission_message"),
-            commission_type=metadata.get("commission_type"),
-        )
-
-        logger.debug(
-            f"Extracted donation request: reddit_username='{donation_request.reddit_username}', is_anonymous={donation_request.is_anonymous}"
-        )
-        
-        # Initialize stripe service
-        stripe_service = StripeService()
-
-        # Process the donation
-        donation = stripe_service.save_donation_to_db(
-            db,
-            {
-                "payment_intent_id": payment_intent.id,
-                "amount_cents": payment_intent.amount,
-                "amount_usd": Decimal(payment_intent.amount / 100),
-                "currency": payment_intent.currency,
-                "status": payment_intent.status,
-                "metadata": payment_intent.metadata,
-                "receipt_email": getattr(payment_intent, "receipt_email", None),
-                "created": payment_intent.created,
-            },
-            donation_request,
-        )
-
-        logger.info(
-            f"Created donation {donation.id} for payment intent {payment_intent.id} "
-            f"(user: {donation.customer_name}, amount: {donation.amount_usd}, type: {donation.donation_type}, tier: {donation.tier})"
-        )
-
-        # Update donation status to succeeded
-        stripe_service.update_donation_status(
-            db, payment_intent.id, DonationStatus.SUCCEEDED
-        )
-
-        # Process subreddit tiers if applicable
-        stripe_service.process_subreddit_tiers(db, donation)
-
-        # Create commission task if this is a commission donation
-        if donation.donation_type == "commission":
-            # Prepare task data for TaskManager
-            task_data = {
-                "donation_id": donation.id,
-                "donation_amount": float(donation.amount_usd),
-                "tier": donation.tier,
-                "customer_name": donation.customer_name,
-                "reddit_username": donation.reddit_username,
-                "is_anonymous": donation.is_anonymous,
-                "donation_type": donation.donation_type,
-                "commission_type": donation.commission_type,
-                "commission_message": donation.commission_message,
-                "post_id": donation.post_id,
-                "image_quality": get_image_quality_for_tier(donation.tier),
-            }
-            # Create task using TaskManager (this will automatically run in background thread if K8s not available)
-            task_id = task_manager.create_commission_task(donation.id, task_data)
-            logger.info(
-                f"Commission task {task_id} created for donation {donation.id} "
-                f"(user: {donation.customer_name}, type: {donation.commission_type}, tier: {donation.tier})"
+            # Update donation status to succeeded
+            stripe_service.update_donation_status(
+                db, payment_intent.id, DonationStatus.SUCCEEDED
             )
+
+            # Process subreddit tiers if applicable
+            stripe_service.process_subreddit_tiers(db, donation)
+
+            # Create commission task if this is a commission donation
+            if donation.donation_type == "commission":
+                # Prepare task data for TaskManager
+                task_data = {
+                    "donation_id": donation.id,
+                    "donation_amount": float(donation.amount_usd),
+                    "tier": donation.tier,
+                    "customer_name": donation.customer_name,
+                    "reddit_username": donation.reddit_username,
+                    "is_anonymous": donation.is_anonymous,
+                    "donation_type": donation.donation_type,
+                    "commission_type": donation.commission_type,
+                    "commission_message": donation.commission_message,
+                    "post_id": donation.post_id,
+                    "image_quality": get_image_quality_for_tier(donation.tier),
+                }
+                # Create task using TaskManager (this will automatically run in background thread if K8s not available)
+                task_id = task_manager.create_commission_task(donation.id, task_data)
+                logger.info(
+                    f"Commission task {task_id} created for donation {donation.id} "
+                    f"(user: {donation.customer_name}, type: {donation.commission_type}, tier: {donation.tier})"
+                )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(
@@ -1638,14 +1609,20 @@ async def handle_payment_intent_succeeded(payment_intent, db: Session):
         raise
 
 
-async def handle_payment_intent_failed(payment_intent, db: Session):
+async def handle_payment_intent_failed(payment_intent):
     """Handle failed payment intent."""
     try:
         logger.info(f"Processing failed payment intent: {payment_intent.id}")
-        stripe_service = StripeService()
-        stripe_service.update_donation_status(
-            db, payment_intent.id, DonationStatus.FAILED
-        )
+
+        # Get database session
+        db = SessionLocal()
+        try:
+            stripe_service = StripeService()
+            stripe_service.update_donation_status(
+                db, payment_intent.id, DonationStatus.FAILED
+            )
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(
