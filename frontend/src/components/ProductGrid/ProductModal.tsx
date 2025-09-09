@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import type { GeneratedProduct, CommissionInfo, RedditInteraction } from '../../types/productTypes';
+import type { ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { useRedditInteraction } from '../../hooks/useRedditInteraction';
 import { redditConfig } from '../../utils/redditConfig';
-import { API_BASE } from '../../utils/apiBase';
 
 interface ProductModalProps {
-  product: GeneratedProduct | null;
+  product: ProductWithFullDonationData | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -28,12 +28,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   // Expand/collapse state for post content
   const [showFullPost, setShowFullPost] = useState(false);
   const [showDonation, setShowDonation] = useState(false);
-  const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const [supportDonations, setSupportDonations] = useState<any[]>([]);
   const postContent = product.reddit_post.content || '';
   const previewLength = 200;
   const isLong = postContent.length > previewLength;
   const previewContent = isLong ? postContent.slice(0, previewLength) + '…' : postContent;
+  
+  // Get donation data from props (already fetched via bulk API)
+  const commissionInfo = product.commissionInfo;
+  const supportDonations = product.supportDonations || [];
 
   const { getTierDisplay } = useDonationTiers();
   const { 
@@ -51,26 +53,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
     autoSubmit: true 
   });
 
-  // Fetch donation information when modal opens
+  // Handle Reddit interaction when modal opens
   useEffect(() => {
     if (isOpen) {
-      const fetchDonationInfo = async () => {
-        try {
-          const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.commission) {
-              setCommissionInfo(data.commission);
-            }
-            if (data.support) {
-              setSupportDonations(data.support);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching donation info:', error);
-        }
-      };
-
       const autoSubmitRedditInteraction = async () => {
         try {
           const productId = product.product_info.id.toString();
@@ -85,10 +70,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
         }
       };
 
-      fetchDonationInfo();
       autoSubmitRedditInteraction();
     }
-  }, [isOpen, product.pipeline_run.id, product.product_info.id, autoSubmitIfNeeded]);
+  }, [isOpen, product.product_info.id, autoSubmitIfNeeded]);
 
   // Create custom title with HD badge
   const modalTitle = (
@@ -306,7 +290,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                 {supportDonations.length > 0 ? (
                   <div className="flex flex-col gap-2">
                     {supportDonations.map((donation, index) => {
-                      const tierDisplay = getTierDisplay(donation.tier_name);
+                      const tierName = typeof donation.tier_name === 'string' ? donation.tier_name : '';\n                      const tierDisplay = getTierDisplay(tierName);
                       const IconComponent = iconMap[tierDisplay.icon as keyof typeof iconMap] || FaHeart;
                       return (
                         <div key={index} className="flex items-center bg-green-50 border border-green-100 rounded-xl px-4 py-2 shadow-sm">
@@ -317,12 +301,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                           {/* Username and subtext */}
                           <div className="flex flex-col min-w-0">
                             <span className="font-semibold text-gray-900 text-sm truncate">
-                              {donation.reddit_username}
+                              {typeof donation.reddit_username === 'string' ? donation.reddit_username : 'Anonymous'}
                             </span>
                             <span className="text-xs text-gray-400 font-medium">Supported</span>
                           </div>
                           {/* Message centered if present */}
-                          {donation.message && (
+                          {typeof donation.message === 'string' && donation.message && (
                             <span className="flex-1 text-center text-xs text-gray-600 italic px-2">
                               "{donation.message}"
                             </span>
@@ -331,7 +315,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                           <div className="flex flex-col items-end ml-auto">
                             <span className="font-mono text-gray-700 text-base font-semibold">${donation.donation_amount?.toFixed(2)}</span>
                             <span className="text-xs text-gray-400 leading-tight">
-                              {donation.created_at ?
+                              {typeof donation.created_at === 'string' && donation.created_at ?
                                 new Date(donation.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
                             </span>
                           </div>

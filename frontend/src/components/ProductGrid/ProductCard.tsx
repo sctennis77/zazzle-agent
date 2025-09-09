@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { GeneratedProduct, CommissionInfo } from '../../types/productTypes';
+import type { ProductWithFullDonationData } from '../../hooks/useProductsWithDonations';
 import type { Task } from '../../types/taskTypes';
 import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaClock, FaReddit, FaFilm } from 'react-icons/fa';
 import { ProductModal } from './ProductModal';
@@ -7,11 +8,10 @@ import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
 import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
-import { API_BASE } from '../../utils/apiBase';
 import logo from '../../assets/logo.png';
 
 interface ProductCardProps {
-  product: GeneratedProduct;
+  product: ProductWithFullDonationData;
   activeTasks?: Task[];
   justPublished?: boolean;
   justCompleted?: boolean;
@@ -27,8 +27,6 @@ const iconMap = {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks = [], justPublished, justCompleted }) => {
   const [showModal, setShowModal] = useState(false);
-  const [commissionInfo, setCommissionInfo] = useState<CommissionInfo | null>(null);
-  const [supportDonations, setSupportDonations] = useState<any[]>([]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [showPublishAnimation, setShowPublishAnimation] = useState(false);
@@ -36,6 +34,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const [imageError, setImageError] = useState(false);
   const { getTierDisplay, tiers } = useDonationTiers();
   const { publishing, publishedPost, publishProduct, getPublishedPost } = usePublishProduct();
+  
+  // Get donation data from props (already fetched via bulk API)
+  const commissionInfo = product.commissionInfo || null;
+  const supportDonations = product.supportDonations || [];
 
   // Find associated task for this product by checking if it's a commission product
   // and matching with active tasks
@@ -84,26 +86,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
     }
   };
 
-  // Fetch donation information when component mounts
-  useEffect(() => {
-    const fetchDonationInfo = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.commission) {
-            setCommissionInfo(data.commission);
-          }
-          if (data.support) {
-            setSupportDonations(data.support);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching donation info:', error);
-      }
-    };
-    fetchDonationInfo();
-  }, [product.pipeline_run.id]);
+  // No longer need to fetch donation info - it's provided via props from bulk API
 
   // For commission products, use commissionInfo and donation_info for tier
   let tierName = '';
@@ -118,7 +101,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   // Calculate total donation amount and count
   const commissionAmount = commissionInfo?.donation_amount || 0;
   const supportAmount = supportDonations.reduce((sum, d) => sum + (d.donation_amount || 0), 0);
-  const totalDonationAmount = commissionAmount + supportAmount;
+  const totalDonationAmount = product.totalDonationAmount; // Use pre-calculated value from bulk API
   const totalDonationCount = (commissionInfo ? 1 : 0) + supportDonations.length;
   
   // Get tier based on total amount

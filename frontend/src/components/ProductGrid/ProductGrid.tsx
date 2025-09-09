@@ -28,7 +28,7 @@ interface ProductGridProps {
 export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressChange, onCommissionClick, onDonationClick }) => {
   const { products, loading, error, refresh: refreshProducts } = useProducts();
   const [searchParams] = useSearchParams();
-  const [selectedProduct, setSelectedProduct] = useState<GeneratedProduct | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductWithFullDonationData | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
@@ -158,8 +158,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   // Handle query parameter for opening specific product
   useEffect(() => {
     const productPostId = searchParams.get('product');
-    if (productPostId && products.length > 0) {
-      const product = products.find(p => p.reddit_post.post_id === productPostId);
+    if (productPostId && productsWithDonations.length > 0) {
+      const product = productsWithDonations.find(p => p.reddit_post.post_id === productPostId);
       if (product) {
         setSelectedProduct(product);
         setShowModal(true);
@@ -169,7 +169,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
         window.history.replaceState({}, '', newUrl.toString());
       }
     }
-  }, [searchParams, products]);
+  }, [searchParams, productsWithDonations]);
 
 
   useEffect(() => {
@@ -425,7 +425,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
 
   const handleViewProduct = (task: Task) => {
     // Find the product that was just completed
-    const completedProduct = products.find(product => 
+    const completedProduct = productsWithDonations.find(product => 
       product.reddit_post && product.reddit_post.post_id === task.task_id
     );
     
@@ -479,7 +479,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
   const handleOpenProductModal = (productId: string) => {
     const product = sortedAndFilteredProducts.find(p => p.product_info.id.toString() === productId);
     if (product) {
-      setSelectedProduct(product as GeneratedProduct);
+      setSelectedProduct(product);
       setShowModal(true);
       setShowFullScreen(false);
       // Return to main page URL when closing full screen
@@ -687,7 +687,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
             {sortedAndFilteredProducts.map((product) => (
               <ProductCard
                 key={product.product_info.id}
-                product={product as GeneratedProduct}
+                product={product}
                 activeTasks={activeTasks}
                 justPublished={justPublishedId === product.product_info.id}
                 justCompleted={isProductJustCompleted(product)}
