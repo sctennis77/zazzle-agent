@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { GeneratedProduct } from '../types/productTypes';
 import { API_BASE } from '../utils/apiBase';
 import { donationApiRateLimiter } from '../utils/rateLimiter';
@@ -38,10 +38,22 @@ export const useProductsWithDonations = (
   const { lazy = false } = options;
   const [productsWithDonations, setProductsWithDonations] = useState<ProductWithFullDonationData[]>([]);
   const [loading, setLoading] = useState(false);
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     if (products.length === 0) {
       setProductsWithDonations([]);
+      return;
+    }
+
+    // Check if we already have donation data loaded for these products to prevent re-fetching
+    const currentProductIds = new Set(products.map(p => p.pipeline_run.id));
+    const existingProductIds = new Set(productsWithDonations.map(p => p.pipeline_run.id));
+    const hasAllProducts = currentProductIds.size === existingProductIds.size && 
+      Array.from(currentProductIds).every(id => existingProductIds.has(id));
+    
+    if (hasAllProducts && productsWithDonations.some(p => p.donationDataLoaded !== false)) {
+      // We already have donation data for these products, don't re-fetch
       return;
     }
 
@@ -59,6 +71,12 @@ export const useProductsWithDonations = (
     }
 
     const fetchDonationData = async () => {
+      // Prevent multiple simultaneous fetches
+      if (fetchingRef.current || loading) {
+        return;
+      }
+      
+      fetchingRef.current = true;
       setLoading(true);
       try {
         // Fetch donation data with conservative connection throttling 
@@ -141,6 +159,7 @@ export const useProductsWithDonations = (
           }
         }
         setProductsWithDonations(results);
+        fetchingRef.current = false;
       } catch (error) {
         console.error('Error fetching donation data:', error);
         // Fallback to products without donation data
@@ -154,6 +173,7 @@ export const useProductsWithDonations = (
         setProductsWithDonations(fallbackProducts);
       } finally {
         setLoading(false);
+        fetchingRef.current = false;
       }
     };
 
