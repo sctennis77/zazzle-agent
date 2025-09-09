@@ -17,6 +17,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -575,7 +576,7 @@ async def get_donation_summary(db: Session = Depends(get_db)):
 
 
 @app.get("/api/donations/by-subreddit")
-async def get_donations_by_subreddit(db: Session = Depends(get_db)):
+async def get_donations_by_subreddit(response: Response, db: Session = Depends(get_db)):
     """
     Get donations grouped by subreddit for the fundraising/leaderboard page.
 
@@ -665,6 +666,10 @@ async def get_donations_by_subreddit(db: Session = Depends(get_db)):
                     subreddit_donations[subreddit_name]["commission"] = donation_data
             else:
                 subreddit_donations[subreddit_name]["support"].append(donation_data)
+        
+        # Set cache headers - 5 minute cache for leaderboard data
+        response.headers["Cache-Control"] = "public, max-age=300"
+        response.headers["ETag"] = f'"donations-by-subreddit-{len(donations)}"'
         
         return subreddit_donations
     except Exception as e:
@@ -1297,6 +1302,7 @@ def get_donations_by_post_id(post_id: str, db: Session):
 @app.get("/api/products/{pipeline_run_id}/donations")
 async def get_product_donations(
     pipeline_run_id: int,
+    response: Response,
     type: str = Query("all", pattern="^(all|commission|support)$"),
     db: Session = Depends(get_db),
 ):
@@ -1377,6 +1383,10 @@ async def get_product_donations(
                     }
                 )
 
+        # Set cache headers - 5 minute cache to reduce DB load
+        response.headers["Cache-Control"] = "public, max-age=300"
+        response.headers["ETag"] = f'"{pipeline_run_id}-{type}"'
+        
         # Filter by type param
         if type == "commission":
             return {"commission": commission_info}
