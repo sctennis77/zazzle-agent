@@ -1310,9 +1310,14 @@ async def get_product_donations(
         Dict: Donation information
     """
     try:
-        # Get the pipeline task for this run
+        from sqlalchemy.orm import joinedload
+        
+        # Get the pipeline task with donation eagerly loaded
         pipeline_task = (
-            db.query(PipelineTask).filter_by(pipeline_run_id=pipeline_run_id).first()
+            db.query(PipelineTask)
+            .options(joinedload(PipelineTask.donation))
+            .filter_by(pipeline_run_id=pipeline_run_id)
+            .first()
         )
         if not pipeline_task:
             return {"commission": None, "support": []}
@@ -1322,13 +1327,10 @@ async def get_product_donations(
             db.query(RedditPost).filter_by(pipeline_run_id=pipeline_run_id).first()
         )
 
-        # Get commission info from donation
+        # Get commission info from pre-loaded donation
         commission_info = None
-
-        if pipeline_task.donation_id:
-            donation = (
-                db.query(Donation).filter_by(id=pipeline_task.donation_id).first()
-            )
+        if pipeline_task.donation_id and pipeline_task.donation:
+            donation = pipeline_task.donation
             if donation and donation.donation_type == "commission":
                 commission_info = {
                     "reddit_username": (
