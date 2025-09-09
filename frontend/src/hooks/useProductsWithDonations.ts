@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { GeneratedProduct } from '../types/productTypes';
 import { API_BASE } from '../utils/apiBase';
 import { donationApiRateLimiter } from '../utils/rateLimiter';
@@ -40,26 +40,39 @@ export const useProductsWithDonations = (
   const [loading, setLoading] = useState(false);
   const fetchingRef = useRef(false);
 
+  // Memoize products to prevent unnecessary re-renders from array reference changes
+  const memoizedProducts = useMemo(() => products, [JSON.stringify(products.map(p => ({ 
+    id: p.pipeline_run.id, 
+    donationAmount: p.product_info.donation_info?.donation_amount 
+  })))]);
+
   useEffect(() => {
-    if (products.length === 0) {
+    console.log('useProductsWithDonations effect triggered', { 
+      productsLength: memoizedProducts.length, 
+      lazy,
+      fetchingRef: fetchingRef.current,
+      loading 
+    });
+    
+    if (memoizedProducts.length === 0) {
       setProductsWithDonations([]);
       return;
     }
 
     // Check if we already have donation data loaded for these products to prevent re-fetching
-    const currentProductIds = new Set(products.map(p => p.pipeline_run.id));
+    const currentProductIds = new Set(memoizedProducts.map(p => p.pipeline_run.id));
     const existingProductIds = new Set(productsWithDonations.map(p => p.pipeline_run.id));
     const hasAllProducts = currentProductIds.size === existingProductIds.size && 
       Array.from(currentProductIds).every(id => existingProductIds.has(id));
     
     if (hasAllProducts && productsWithDonations.some(p => p.donationDataLoaded !== false)) {
-      // We already have donation data for these products, don't re-fetch
+      console.log('useProductsWithDonations: skipping fetch - data already loaded');
       return;
     }
 
     if (lazy) {
       // In lazy mode, just return products with fallback donation amounts
-      const productsWithFallback = products.map(product => ({
+      const productsWithFallback = memoizedProducts.map(product => ({
         ...product,
         totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
         commissionInfo: undefined,
@@ -71,8 +84,10 @@ export const useProductsWithDonations = (
     }
 
     const fetchDonationData = async () => {
+      console.log('fetchDonationData called', { fetchingRef: fetchingRef.current, loading });
       // Prevent multiple simultaneous fetches
       if (fetchingRef.current || loading) {
+        console.log('fetchDonationData: skipping - already fetching or loading');
         return;
       }
       
@@ -83,8 +98,8 @@ export const useProductsWithDonations = (
         const results: ProductWithFullDonationData[] = [];
         const BATCH_SIZE = 3; // Max concurrent requests (reduced from 5)
         
-        for (let i = 0; i < products.length; i += BATCH_SIZE) {
-          const batch = products.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < memoizedProducts.length; i += BATCH_SIZE) {
+          const batch = memoizedProducts.slice(i, i + BATCH_SIZE);
           
           const batchPromises = batch.map(async (product) => {
             // Retry logic with exponential backoff
@@ -93,14 +108,12 @@ export const useProductsWithDonations = (
             
             while (retryCount < maxRetries) {
               try {
-                const response = await donationApiRateLimiter.execute(() =>
-                  fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
-                    headers: {
-                      'Accept': 'application/json',
-                      'Cache-Control': 'max-age=300', // Use cache if available
-                    },
-                  })
-                );
+                const response = await fetch(`${API_BASE}/api/products/${product.pipeline_run.id}/donations`, {
+                  headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'max-age=300', // Use cache if available
+                  },
+                });
                 
                 if (response.ok) {
                   const data: DonationData = await response.json();
@@ -154,7 +167,7 @@ export const useProductsWithDonations = (
           results.push(...batchResults);
           
           // Longer delay between batches to be gentle on the server
-          if (i + BATCH_SIZE < products.length) {
+          if (i + BATCH_SIZE < memoizedProducts.length) {
             await new Promise(resolve => setTimeout(resolve, 500)); // Increased from 100ms to 500ms
           }
         }
@@ -163,7 +176,7 @@ export const useProductsWithDonations = (
       } catch (error) {
         console.error('Error fetching donation data:', error);
         // Fallback to products without donation data
-        const fallbackProducts = products.map(product => ({
+        const fallbackProducts = memoizedProducts.map(product => ({
           ...product,
           totalDonationAmount: product.product_info.donation_info?.donation_amount || 0,
           commissionInfo: undefined,
@@ -178,7 +191,7 @@ export const useProductsWithDonations = (
     };
 
     fetchDonationData();
-  }, [products, lazy]);
+  }, [memoizedProducts, lazy]);
 
   // Function to load donation data for a specific product (for lazy loading)
   const loadProductDonation = async (pipelineRunId: number): Promise<void> => {
@@ -194,14 +207,12 @@ export const useProductsWithDonations = (
       
       while (retryCount < maxRetries) {
         try {
-          const response = await donationApiRateLimiter.execute(() =>
-            fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
-              headers: {
-                'Accept': 'application/json',
-                'Cache-Control': 'max-age=300',
-              },
-            })
-          );
+          const response = await fetch(`${API_BASE}/api/products/${pipelineRunId}/donations`, {
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'max-age=300',
+            },
+          });
           
           if (response.ok) {
             const data: DonationData = await response.json();
