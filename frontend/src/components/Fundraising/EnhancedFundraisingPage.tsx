@@ -415,7 +415,7 @@ const EnhancedFundraisingPage: React.FC = () => {
     <div className="space-y-8">
         {/* Call to Action Header with Integrated Progress Bar */}
         <div className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
-          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Ready to Join Our Mission?</h3>
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Community Support</h3>
           <p className="text-base sm:text-lg md:text-xl mb-6 opacity-90">
             Every contribution helps sustain and improve Clouvel
           </p>

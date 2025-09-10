@@ -138,7 +138,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onCommissionClick, isC
                     : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50/80'
                 }`}
               >
-                Fundraising
+                Community
               </Link>
               <Link
                 to="/clouvel-agent"
