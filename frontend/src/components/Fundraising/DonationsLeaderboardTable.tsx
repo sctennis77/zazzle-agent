@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DonationData {
   reddit_username: string;
@@ -144,6 +145,7 @@ interface Props {
 
 const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress }) => {
   const [showAll, setShowAll] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const rows = summarizeLeaderboard(data);
   // Find which tiers are present in the data
   const presentTiers = TIER_ORDER.filter(tier => rows.some(row => row.tiers[tier]));
@@ -161,15 +163,39 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
   const BAR_HEIGHT = 16; // px
 
   return (
-    <div className="overflow-x-auto bg-white rounded-xl shadow-lg p-6">
-      {/* Header with description */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Community Fundraising Leaderboard</h3>
-        <p className="text-sm text-gray-600">
-          Support your favorite subreddits to unlock custom banner art! When a community reaches its $1,000 goal and the Banner Art Mastery fundraising goal has been achieved, 
-          Clouvel will create beautiful, personalized banner artwork for that subreddit.
-        </p>
+    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+      {/* Header with description - always visible */}
+      <div className="p-6">
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">⭐ Community Fundraising Leaderboard</h3>
+              <p className="text-sm text-gray-600">
+                Support your favorite subreddits and help maintain Clouvel. 🤍
+              </p>
+            </div>
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="ml-4 p-2 hover:bg-blue-100 rounded-lg transition-colors duration-200 flex items-center justify-center"
+              aria-label={isExpanded ? 'Collapse leaderboard' : 'Expand leaderboard'}
+            >
+              {isExpanded ? (
+                <ChevronUp className="w-5 h-5 text-gray-600" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
+          </div>
+        </div>
       </div>
+      
+      {/* Collapsible content */}
+      <div 
+        className={`transition-all duration-300 ease-in-out ${
+          isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
+        }`}
+      >
+        <div className="p-6 pt-4 overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b">
@@ -381,6 +407,8 @@ const DonationsLeaderboardTable: React.FC<Props> = ({ data, fundraisingProgress 
           </button>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

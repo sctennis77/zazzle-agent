@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import DonationsLeaderboardTable from './DonationsLeaderboardTable';
 import { API_BASE } from '../../utils/apiBase';
 
@@ -182,6 +182,8 @@ const ProgressBar: React.FC<{
 };
 
 const MilestoneCard: React.FC<{ milestone: Milestone; isNext?: boolean }> = ({ milestone, isNext = false }) => {
+  const isLocked = !milestone.achieved && !isNext;
+  
   return (
     <div className={`relative p-3 sm:p-4 rounded-xl transition-all duration-300 ${
       milestone.achieved 
@@ -191,7 +193,7 @@ const MilestoneCard: React.FC<{ milestone: Milestone; isNext?: boolean }> = ({ m
           : 'bg-gray-50 border-2 border-gray-200'
     }`}>
       {milestone.achieved && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center z-10">
           <span className="text-white text-xs">✓</span>
         </div>
       )}
@@ -212,17 +214,25 @@ const MilestoneCard: React.FC<{ milestone: Milestone; isNext?: boolean }> = ({ m
         </div>
       </div>
       
-      <h4 className={`font-semibold mb-1 ${
+      <h4 className={`font-semibold ${
         milestone.achieved ? 'text-green-800' : isNext ? 'text-blue-800' : 'text-gray-700'
       }`}>
         {milestone.title}
       </h4>
       
-      <p className={`text-sm ${
-        milestone.achieved ? 'text-green-600' : isNext ? 'text-blue-600' : 'text-gray-500'
-      }`}>
-        {milestone.description}
-      </p>
+      {/* Only show description for Community Bootstrap milestone */}
+      {milestone.amount === 1000 && (
+        <p className={`text-sm mt-1 ${
+          milestone.achieved ? 'text-green-600' : isNext ? 'text-blue-600' : 'text-gray-500'
+        }`}>
+          Keep Clouvel running for a few more months.
+        </p>
+      )}
+      
+      {/* Locked overlay for future milestones */}
+      {isLocked && (
+        <div className="absolute inset-0 bg-gray-400 rounded-xl"></div>
+      )}
     </div>
   );
 };
@@ -276,6 +286,7 @@ const EnhancedFundraisingPage: React.FC = () => {
   const [fundraisingProgress, setFundraisingProgress] = useState<FundraisingProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -362,7 +373,7 @@ const EnhancedFundraisingPage: React.FC = () => {
       amount: 1000,
       title: 'Community Bootstrap',
       description: 'Keep Clouvel alive for a few months - she\'s running low on treats! 🍪',
-      icon: '💝',
+      icon: '🐕',
       achieved: communityRaised >= 1000
     },
     {
@@ -402,28 +413,24 @@ const EnhancedFundraisingPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
-        {/* Main Progress Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 border border-gray-100">
-            <div className="mb-8">
-              {/* Section Header */}
-              <div className="text-center mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-                  Clouvel's Requisition
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed px-2 sm:px-0">
-                  Every contribution supports Clouvel's dream to illustrate the wonderful stories and community of Reddit.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        {/* Call to Action Header with Integrated Progress Bar */}
+        <div className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Ready to Join Our Mission?</h3>
+          <p className="text-base sm:text-lg md:text-xl mb-6 opacity-90">
+            Every contribution helps sustain and improve Clouvel
+          </p>
+          
+          {/* Progress section integrated */}
+          <div className="mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
                 <div className="text-center sm:text-left relative group">
-                  <div className="text-2xl font-bold text-rose-400">
+                  <div className="text-2xl font-bold text-rose-300">
                     <AnimatedCounter value={selfCommissionedAmount} prefix="-$" />
                   </div>
-                  <div className="text-sm text-gray-600 flex items-center gap-1">
+                  <div className="text-sm text-white/80 flex items-center gap-1">
                     Self Commissioned
                     <svg 
-                      className="w-3 h-3 text-gray-400 cursor-help" 
+                      className="w-3 h-3 text-white/60 cursor-help" 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
@@ -434,20 +441,20 @@ const EnhancedFundraisingPage: React.FC = () => {
                     </svg>
                   </div>
                   {/* Tooltip */}
-                  <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                  <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                     Clouvel incurs the cost of self commissioned works.
-                    <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                    <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-700"></div>
                   </div>
                 </div>
                 
                 <div className="text-center relative group">
-                  <div className={`text-3xl font-bold bg-gradient-to-r ${totalValue >= 0 ? 'from-purple-600 to-pink-600' : 'from-rose-400 to-rose-500'} bg-clip-text text-transparent`}>
+                  <div className={`text-3xl font-bold ${totalValue >= 0 ? 'text-red-300' : 'text-red-400'}`}>
                     <AnimatedCounter value={totalValue} prefix="$" />
                   </div>
-                  <div className="text-sm text-gray-600 font-medium flex items-center justify-center gap-1">
+                  <div className="text-sm text-white/80 font-medium flex items-center justify-center gap-1">
                     Net Total
                     <svg 
-                      className="w-3 h-3 text-gray-400 cursor-help" 
+                      className="w-3 h-3 text-white/60 cursor-help" 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
@@ -458,20 +465,20 @@ const EnhancedFundraisingPage: React.FC = () => {
                     </svg>
                   </div>
                   {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                     🎨 Net total = Community support minus Clouvel's self-commissioned work
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-700"></div>
                   </div>
                 </div>
                 
                 <div className="text-center sm:text-right relative group">
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-2xl font-bold text-blue-200">
                     <AnimatedCounter value={communityRaised} prefix="$" />
                   </div>
-                  <div className="text-sm text-gray-600 flex items-center justify-end gap-1">
+                  <div className="text-sm text-white/80 flex items-center justify-end gap-1">
                     Community Raised
                     <svg 
-                      className="w-3 h-3 text-gray-400 cursor-help" 
+                      className="w-3 h-3 text-white/60 cursor-help" 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
@@ -482,9 +489,9 @@ const EnhancedFundraisingPage: React.FC = () => {
                     </svg>
                   </div>
                   {/* Tooltip */}
-                  <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                     Community sponsored art that contributes towards fundraising progress
-                    <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                    <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-700"></div>
                   </div>
                 </div>
               </div>
@@ -499,23 +506,52 @@ const EnhancedFundraisingPage: React.FC = () => {
               />
               
               <div className="flex justify-end">
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-700">
+                <div className="text-right relative group">
+                  <div className="text-2xl font-bold text-white/80">
                     ${(nextMilestone?.amount || 100000).toLocaleString()}
                   </div>
+                  <div className="text-sm text-white/80 flex items-center justify-end gap-1">
+                    Current Goal
+                    {nextMilestone && (
+                      <svg 
+                        className="w-3 h-3 text-white/60 cursor-help" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <path d="M12 17h.01"/>
+                      </svg>
+                    )}
+                  </div>
+                  {/* Tooltip */}
+                  {nextMilestone && (
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                      Current Goal: {nextMilestone.title}
+                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-700"></div>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {nextMilestone && (
-                <div className="text-center">
-                  <div className="inline-flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-200">
-                    <span className="text-blue-600 font-medium">Current Goal:</span>
-                    <span className="text-blue-800 font-bold">${nextMilestone.amount.toLocaleString()}</span>
-                    <span className="text-blue-600">- {nextMilestone.title}</span>
-                  </div>
-                </div>
-              )}
-            </div>
+              
+          </div>
+          
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <a 
+              href="/" 
+              className="bg-white text-indigo-600 px-6 md:px-8 py-3 rounded-lg font-bold hover:bg-gray-50 transition-all duration-200 transform hover:scale-105 shadow-lg inline-block"
+            >
+              Support Clouvel 💝
+            </a>
+            <a 
+              href="/" 
+              className="border-2 border-white text-white px-6 md:px-8 py-3 rounded-lg font-bold hover:bg-white hover:text-indigo-600 transition-all duration-200 inline-block"
+            >
+              View Gallery 🎨
+            </a>
+          </div>
         </div>
 
         {/* Stats Summary */}
@@ -545,38 +581,46 @@ const EnhancedFundraisingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Milestones Grid */}
-        <div>
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
-            🎯 Funding Milestones & Rewards
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {milestones.map((milestone, index) => (
-              <MilestoneCard 
-                key={milestone.amount} 
-                milestone={milestone}
-                isNext={milestone === nextMilestone}
-              />
-            ))}
-          </div>
-        </div>
-
-
         {/* Community Leaderboard */}
         <div>
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
-            🏆 Community Leaderboard
-          </h3>
           <DonationsLeaderboardTable data={data} fundraisingProgress={fundraisingProgress} />
         </div>
 
         {/* Recent Activity Feed */}
-        <div>
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
-            🔥 Recent Activity
-          </h3>
-          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
-            <div className="space-y-3 sm:space-y-4">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+          {/* Header with description - always visible */}
+          <div className="p-4 sm:p-6">
+            <div className="p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">🔥 Recent Activity</h3>
+                  <p className="text-sm text-gray-600">
+                    Latest contributions from our amazing community supporters
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsActivityExpanded(!isActivityExpanded)}
+                  className="ml-4 p-2 hover:bg-red-100 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                  aria-label={isActivityExpanded ? 'Collapse activity' : 'Expand activity'}
+                >
+                  {isActivityExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-600" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Collapsible content */}
+          <div 
+            className={`transition-all duration-300 ease-in-out ${
+              isActivityExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
+            }`}
+          >
+            <div className="p-4 sm:p-6 pt-0">
+              <div className="space-y-3 sm:space-y-4">
               {allDonations.slice(0, 5).map((donation, index) => (
                 <div key={donation.donation_id} className="p-3 sm:p-4 bg-gray-50 rounded-lg">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-2">
@@ -677,31 +721,27 @@ const EnhancedFundraisingPage: React.FC = () => {
                   <p>Be the first to support our mission!</p>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Call to Action */}
-        <div className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
-          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">Ready to Join Our Mission?</h3>
-          <p className="text-base sm:text-lg md:text-xl mb-4 sm:mb-6 opacity-90">
-            Every contribution brings us closer to revolutionary AI capabilities
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <a 
-              href="/" 
-              className="bg-white text-indigo-600 px-6 md:px-8 py-3 rounded-lg font-bold hover:bg-gray-50 transition-all duration-200 transform hover:scale-105 shadow-lg inline-block"
-            >
-              Support the Campaign 💝
-            </a>
-            <a 
-              href="/" 
-              className="border-2 border-white text-white px-6 md:px-8 py-3 rounded-lg font-bold hover:bg-white hover:text-indigo-600 transition-all duration-200 inline-block"
-            >
-              View Gallery 🎨
-            </a>
+        {/* Milestones Grid */}
+        <div>
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">
+            🎯 Funding Milestones & Rewards
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {milestones.map((milestone, index) => (
+              <MilestoneCard 
+                key={milestone.amount} 
+                milestone={milestone}
+                isNext={milestone === nextMilestone}
+              />
+            ))}
           </div>
         </div>
+
     </div>
   );
 };
