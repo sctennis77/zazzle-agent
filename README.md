@@ -381,3 +381,56 @@ This project is licensed under the MIT License.
 **Transform Reddit trends into custom products with AI-powered automation.**
 
 Built with ❤️ by the Clouvel team.
+
+## 🐛 Defect Recaps
+
+### Database Connection Pool Exhaustion and Performance Issues
+**Date:** January 2025
+
+#### Summary
+A critical performance issue was discovered where the product grid would load initially but subsequent navigation to the fundraising page would fail or take excessive time to load. Returning to the product grid after visiting the fundraising page also resulted in significant delays, indicating backend resource contention.
+
+#### Root Cause Analysis
+The issue stemmed from multiple interconnected problems in the data layer:
+
+1. **N+1 Query Pattern**: The `/api/generated_products/{id}/donations` endpoint was making individual database queries for each product when loading donation data, causing exponential growth in database connections as the number of products increased.
+
+2. **Connection Pool Exhaustion**: The default SQLite connection pool settings (5 connections with 10 overflow) were insufficient for handling the burst of concurrent requests from the frontend, especially when loading donation data for multiple products simultaneously.
+
+3. **Frontend Request Pattern**: The React frontend was making individual API calls for each product's donation data as components mounted, creating a thundering herd effect that overwhelmed the backend's connection pool.
+
+4. **Session Management Issues**: Improper session handling in SQLAlchemy was causing connections to remain open longer than necessary, further exacerbating the pool exhaustion.
+
+#### Solution Path
+
+1. **Initial Investigation** (commits bd4b0e9-03260b1): Identified N+1 query issue in the fundraising page and attempted to optimize individual queries with eager loading.
+
+2. **Connection Pool Configuration** (commit 52ee6b6): Added configurable database connection pool settings, increasing pool size to 20 with 40 overflow connections.
+
+3. **Rate Limiting Attempts** (commits ce4d98b-f5564af): Implemented aggressive rate limiting and throttling on the frontend to reduce concurrent API calls, but this only partially mitigated the issue.
+
+4. **Caching and Error Handling** (commits 9f78e83-b61974d): Added response caching and improved error handling to prevent connection failures from cascading.
+
+5. **Frontend State Management** (commits ec114b4-347012a): Attempted to prevent duplicate API calls by managing loaded state across components, with mixed success.
+
+6. **Final Solution - Bulk Endpoint** (commits ef08177-f09222a): Implemented a single `/api/generated_products/bulk_donations` endpoint that fetches all donation data in one optimized query, eliminating the N+1 pattern entirely.
+
+#### Final Implementation
+
+The solution that was initially suggested but deferred was ultimately the correct approach:
+- Created a bulk donations endpoint that returns all product donation data in a single, optimized database query
+- Modified the frontend to make one bulk request instead of individual requests per product
+- Removed complex state management and rate limiting code that was no longer necessary
+- Result: Page load times reduced from 10-30 seconds to under 1 second
+
+#### Lessons Learned
+
+1. **API Design**: When dealing with list views that require related data, always prefer bulk endpoints over individual resource endpoints to prevent N+1 patterns.
+
+2. **Connection Pool Sizing**: Default connection pool settings are often insufficient for production workloads. Monitor and adjust based on actual usage patterns.
+
+3. **Frontend-Backend Contract**: The API should guide the frontend toward efficient data access patterns. If the frontend needs to make many individual requests, consider if the API design could be improved.
+
+4. **Performance Testing**: Load testing with realistic data volumes would have caught this issue earlier in development.
+
+5. **Simple Solutions First**: The bulk endpoint approach was simpler and more effective than trying to optimize the existing pattern with caching, rate limiting, and connection pool tuning.
