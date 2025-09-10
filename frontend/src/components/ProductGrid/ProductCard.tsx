@@ -6,7 +6,6 @@ import { FaExpand, FaCrown, FaStar, FaGem, FaHeart, FaSpinner, FaCheckCircle, Fa
 import { ProductModal } from './ProductModal';
 import { DonationCard } from './DonationCard';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
-import { usePublishProduct } from '../../hooks/usePublishProduct';
 import DonationModal from '../common/DonationModal';
 import logo from '../../assets/logo.png';
 
@@ -29,11 +28,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
   const [showModal, setShowModal] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showDonationModal, setShowDonationModal] = useState(false);
-  const [showPublishAnimation, setShowPublishAnimation] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const { getTierDisplay, tiers } = useDonationTiers();
-  const { publishing, publishedPost, publishProduct, getPublishedPost } = usePublishProduct();
   
   // Get donation data from props (already fetched via bulk API)
   const commissionInfo = product.commissionInfo || null;

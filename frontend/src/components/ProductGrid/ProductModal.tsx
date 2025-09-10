@@ -5,8 +5,6 @@ import type { ProductWithFullDonationData } from '../../hooks/useProductsWithDon
 import { FaReddit, FaExternalLinkAlt, FaUser, FaThumbsUp, FaComment, FaHeart, FaCrown, FaStar, FaGem } from 'react-icons/fa';
 import DonationModal from '../common/DonationModal';
 import { useDonationTiers } from '../../hooks/useDonationTiers';
-import { useRedditInteraction } from '../../hooks/useRedditInteraction';
-import { redditConfig } from '../../utils/redditConfig';
 
 interface ProductModalProps {
   product: ProductWithFullDonationData | null;
@@ -38,41 +36,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
   const supportDonations = product.supportDonations || [];
 
   const { getTierDisplay } = useDonationTiers();
-  const { 
-    interaction: redditInteraction, 
-    autoSubmitIfNeeded, 
-    isComment,
-    isPost,
-    hasInteraction,
-    interactionUrl,
-    subredditName,
-    interactionDate,
-    submitting: submittingInteraction 
-  } = useRedditInteraction({ 
-    mode: redditConfig.interactionMode,
-    autoSubmit: true 
-  });
-
-  // Handle Reddit interaction when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      const autoSubmitRedditInteraction = async () => {
-        try {
-          const productId = product.product_info.id.toString();
-          const isDryRun = redditConfig.isDryRun;
-          
-          await autoSubmitIfNeeded(productId, { 
-            mode: redditConfig.interactionMode,
-            dryRun: isDryRun 
-          });
-        } catch (error) {
-          console.error(`Error in auto-submit ${redditConfig.interactionMode} logic:`, error);
-        }
-      };
-
-      autoSubmitRedditInteraction();
-    }
-  }, [isOpen, product.product_info.id, autoSubmitIfNeeded]);
 
   // Create custom title with HD badge
   const modalTitle = (
@@ -200,47 +163,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, isOpen, onC
                     )}
                   </div>
                 </div>
-                {/* Reddit Interaction Section - Hidden in dry run mode */}
-                {hasInteraction && redditInteraction && !redditInteraction.dry_run && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <a
-                      href={interactionUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 rounded-full bg-green-100 border border-green-300 hover:bg-green-200 transition-colors cursor-pointer"
-                      title={`View ${isComment(redditInteraction) ? 'Comment' : 'Post'} on Reddit`}
-                    >
-                      <FaReddit size={16} className="text-green-600" />
-                    </a>
-                    <span className="font-semibold text-gray-900 text-sm">
-                      r/{subredditName}
-                    </span>
-                    <span className="text-xs text-gray-600">
-                      &nbsp;• {isComment(redditInteraction) ? 'Comment' : 'Post'}
-                    </span>
-                    {interactionDate && (
-                      <span className="text-xs text-gray-600">
-                        &nbsp;• {new Date(interactionDate).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {submittingInteraction && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="p-1.5 rounded-full bg-blue-100 border border-blue-300">
-                      <FaReddit size={16} className="text-blue-600 animate-pulse" />
-                    </div>
-                    <span className="text-sm text-blue-600 italic">
-                      Submitting {redditConfig.interactionMode}...
-                    </span>
-                  </div>
-                )}
               </div>
               
               {/* Commissioned By - Now below original post, not full width */}
