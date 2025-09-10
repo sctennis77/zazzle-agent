@@ -155,7 +155,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, activeTasks =
               href={product.reddit_post.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute bottom-3 left-3 bg-gradient-to-r from-[#FF4500] to-[#FF6B35] text-white text-xs px-3 py-1.5 rounded-full hover:from-[#FF6B35] hover:to-[#FF4500] transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 touch-manipulation"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-3 left-3 bg-gradient-to-r from-[#FF4500] to-[#FF6B35] text-white text-xs px-3 py-1.5 rounded-full hover:from-[#FF6B35] hover:to-[#FF4500] transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 touch-manipulation z-20"
             >
               r/{product.reddit_post.subreddit}
             </a>
