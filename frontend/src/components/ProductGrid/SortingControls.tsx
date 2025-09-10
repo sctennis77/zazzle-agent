@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { FaChevronDown, FaFilter, FaClock, FaDollarSign, FaReddit, FaTimes, FaCheck } from 'react-icons/fa';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { FaChevronDown, FaFilter, FaClock, FaDollarSign, FaReddit, FaTimes, FaCheck, FaSearch } from 'react-icons/fa';
+import type { GeneratedProduct } from '../../types/productTypes';
 
 export interface SortOption {
   value: string;
@@ -13,6 +14,7 @@ export interface SortingControlsProps {
   selectedSubreddits: string[];
   onSubredditChange: (subreddits: string[]) => void;
   availableSubreddits: string[];
+  allProducts?: GeneratedProduct[];
 }
 
 const sortOptions: SortOption[] = [
@@ -25,9 +27,11 @@ export const SortingControls: React.FC<SortingControlsProps> = ({
   onSortChange,
   selectedSubreddits,
   onSubredditChange,
-  availableSubreddits
+  availableSubreddits,
+  allProducts = []
 }) => {
   const [showSubredditFilter, setShowSubredditFilter] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const filterRef = useRef<HTMLDivElement>(null);
   
   // Close dropdown when clicking outside
@@ -53,6 +57,26 @@ export const SortingControls: React.FC<SortingControlsProps> = ({
   const clearSubredditFilter = () => {
     onSubredditChange([]);
   };
+
+  // Calculate product counts per subreddit
+  const subredditCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allProducts.forEach(product => {
+      const subreddit = product.reddit_post.subreddit;
+      counts[subreddit] = (counts[subreddit] || 0) + 1;
+    });
+    return counts;
+  }, [allProducts]);
+
+  // Filter subreddits based on search term
+  const filteredSubreddits = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return availableSubreddits;
+    }
+    return availableSubreddits.filter(subreddit => 
+      subreddit.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [availableSubreddits, searchTerm]);
 
   const currentSortOption = sortOptions.find(option => option.value === sortBy) || sortOptions[0];
 
@@ -103,7 +127,7 @@ export const SortingControls: React.FC<SortingControlsProps> = ({
             {showSubredditFilter && (
               <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-lg border border-gray-200 z-20 max-h-80 overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-gray-50">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                       <FaReddit className="w-4 h-4 text-orange-500" />
                       Filter by Subreddit
@@ -117,27 +141,49 @@ export const SortingControls: React.FC<SortingControlsProps> = ({
                       </button>
                     )}
                   </div>
+                  {/* Search input */}
+                  <div className="relative">
+                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search subreddits..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {availableSubreddits.map((subreddit) => {
+                  {filteredSubreddits.map((subreddit) => {
                     const isSelected = selectedSubreddits.includes(subreddit);
+                    const count = subredditCounts[subreddit] || 0;
                     return (
                       <button
                         key={subreddit}
                         onClick={() => handleSubredditToggle(subreddit)}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
+                        className="w-full flex items-center justify-between gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
                       >
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-600 border-blue-600' 
-                            : 'border-gray-300'
-                        }`}>
-                          {isSelected && <FaCheck className="w-2 h-2 text-white" />}
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                            isSelected 
+                              ? 'bg-blue-600 border-blue-600' 
+                              : 'border-gray-300'
+                          }`}>
+                            {isSelected && <FaCheck className="w-2 h-2 text-white" />}
+                          </div>
+                          <span className="text-sm text-gray-700 font-medium">{subreddit}</span>
                         </div>
-                        <span className="text-sm text-gray-700 font-medium">r/{subreddit}</span>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                          {count}
+                        </span>
                       </button>
                     );
                   })}
+                  {filteredSubreddits.length === 0 && searchTerm && (
+                    <div className="text-sm text-gray-500 text-center py-8">
+                      No subreddits match "{searchTerm}"
+                    </div>
+                  )}
                   {availableSubreddits.length === 0 && (
                     <div className="text-sm text-gray-500 text-center py-8">
                       No subreddits available

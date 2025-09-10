@@ -638,6 +638,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({ onCommissionProgressCh
               selectedSubreddits={selectedSubreddits}
               onSubredditChange={setSelectedSubreddits}
               availableSubreddits={getUniqueSubreddits(products)}
+              allProducts={products}
             />
             {sortedAndFilteredProducts.length > 0 && (
               <button
