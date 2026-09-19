@@ -43,29 +43,21 @@ export const useProductsWithDonations = (products: GeneratedProduct[]) => {
       try {
         const productIds = products.map(p => p.pipeline_run.id);
 
-        // Split into chunks of 50 to stay within reasonable limits
-        const chunkSize = 50;
+        const response = await fetch(`${API_BASE}/api/products/donations/bulk`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Cache-Control': 'max-age=300',
+          },
+          body: JSON.stringify({ product_ids: productIds }),
+        });
+
         let allDonationData: BulkDonationResponse = {};
-
-        for (let i = 0; i < productIds.length; i += chunkSize) {
-          const chunk = productIds.slice(i, i + chunkSize);
-          
-          const response = await fetch(`${API_BASE}/api/products/donations/bulk`, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Cache-Control': 'max-age=300', // Use HTTP cache
-            },
-            body: JSON.stringify({ product_ids: chunk }),
-          });
-
-          if (response.ok) {
-            const chunkData: BulkDonationResponse = await response.json();
-            allDonationData = { ...allDonationData, ...chunkData };
-          } else {
-            console.error(`Failed to fetch bulk donations: ${response.status} ${response.statusText}`);
-          }
+        if (response.ok) {
+          allDonationData = await response.json();
+        } else {
+          console.error(`Failed to fetch bulk donations: ${response.status} ${response.statusText}`);
         }
 
         // Merge donation data with products

@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import os
+import threading
+import time
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -24,7 +26,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.database import SessionLocal, get_db, init_db
 from app.db.models import (
@@ -221,150 +223,142 @@ def model_to_dict(obj):
     return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
 
 
+_PRODUCTS_CACHE_TTL_SECONDS = 30
+_products_cache_lock = threading.Lock()
+_products_cache: Dict[str, Any] = {"at": 0.0, "body": None}
+
+
+def _donation_info_from_donation(donation: Donation) -> Dict[str, Any]:
+    return {
+        "reddit_username": (
+            donation.reddit_username if not donation.is_anonymous else "Anonymous"
+        ),
+        "tier_name": donation.tier,
+        "tier_min_amount": float(donation.amount_usd),
+        "donation_amount": float(donation.amount_usd),
+        "is_anonymous": donation.is_anonymous,
+        "donation_type": donation.donation_type,
+        "commission_type": donation.commission_type,
+        "source": donation.source.value if donation.source else None,
+    }
+
+
 def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
     """
-    Fetch all successful pipeline runs and their related data from the database.
-
-    Returns:
-        List[GeneratedProductSchema]: A list of Pydantic models containing product information,
-        pipeline run details, and associated Reddit post data.
+    Fetch completed products in a few batched queries instead of one query per run.
     """
     try:
-        logger.info("Fetching successful pipeline runs...")
-        pipeline_runs = (
-            db.query(PipelineRun).filter_by(status=PipelineStatus.COMPLETED.value).all()
+        started = time.monotonic()
+        product_rows = (
+            db.query(ProductInfo)
+            .join(PipelineRun, ProductInfo.pipeline_run_id == PipelineRun.id)
+            .filter(PipelineRun.status == PipelineStatus.COMPLETED.value)
+            .options(
+                joinedload(ProductInfo.pipeline_run),
+                joinedload(ProductInfo.reddit_post).joinedload(RedditPost.subreddit),
+            )
+            .order_by(PipelineRun.start_time.desc(), ProductInfo.id.desc())
+            .all()
         )
-        logger.info(f"Found {len(pipeline_runs)} completed pipeline runs.")
-        products = []
-        for run in pipeline_runs:
+
+        # Match previous behavior: one product per completed pipeline run.
+        products_by_run: Dict[int, ProductInfo] = {}
+        for product_info in product_rows:
+            products_by_run.setdefault(product_info.pipeline_run_id, product_info)
+        unique_products = list(products_by_run.values())
+        run_ids = list(products_by_run.keys())
+
+        task_by_run: Dict[int, PipelineTask] = {}
+        usage_by_run: Dict[int, PipelineRunUsage] = {}
+        if run_ids:
+            tasks = (
+                db.query(PipelineTask)
+                .options(joinedload(PipelineTask.donation))
+                .filter(
+                    PipelineTask.pipeline_run_id.in_(run_ids),
+                    PipelineTask.donation_id.isnot(None),
+                )
+                .all()
+            )
+            for task in tasks:
+                task_by_run.setdefault(task.pipeline_run_id, task)
+
+            usages = (
+                db.query(PipelineRunUsage)
+                .filter(PipelineRunUsage.pipeline_run_id.in_(run_ids))
+                .all()
+            )
+            usage_by_run = {usage.pipeline_run_id: usage for usage in usages}
+
+        affiliate_linker = get_affiliate_linker()
+        products: List[GeneratedProductSchema] = []
+        for product_info in unique_products:
             try:
-                logger.info(f"Processing pipeline run {run.id}")
-                product_info = (
-                    db.query(ProductInfo).filter_by(pipeline_run_id=run.id).first()
-                )
-                if not product_info:
-                    logger.warning(f"No product info found for pipeline run {run.id}")
-                    continue
-                logger.info(f"Found product info: {product_info.id}")
-
-                reddit_post = run.reddit_posts[0] if run.reddit_posts else None
+                run = product_info.pipeline_run
+                reddit_post = product_info.reddit_post
                 if not reddit_post:
-                    logger.warning(f"No reddit post found for pipeline run {run.id}")
                     continue
-                logger.info(f"Found reddit post: {reddit_post.post_id}")
 
-                # Fetch donation information if available
                 donation_info = None
-                pipeline_task = (
-                    db.query(PipelineTask).filter_by(pipeline_run_id=run.id).first()
-                )
-                if pipeline_task and pipeline_task.donation_id:
-                    donation = (
-                        db.query(Donation)
-                        .filter_by(id=pipeline_task.donation_id)
-                        .first()
-                    )
-                    if donation:
-                        donation_info = {
-                            "reddit_username": (
-                                donation.reddit_username
-                                if not donation.is_anonymous
-                                else "Anonymous"
-                            ),
-                            "tier_name": donation.tier,
-                            "tier_min_amount": float(
-                                donation.amount_usd
-                            ),  # Use actual donation amount
-                            "donation_amount": float(donation.amount_usd),
-                            "is_anonymous": donation.is_anonymous,
-                            "donation_type": donation.donation_type,
-                            "commission_type": donation.commission_type,
-                            "source": (
-                                donation.source.value if donation.source else None
-                            ),
-                        }
+                task = task_by_run.get(run.id)
+                if task and task.donation:
+                    donation_info = _donation_info_from_donation(task.donation)
 
-                # Get subreddit name for reddit context
-                subreddit_name = (
-                    reddit_post.subreddit.subreddit_name
-                    if reddit_post.subreddit
-                    else "unknown"
-                )
-
-                # Convert ORM models to in-memory models
-                reddit_context = RedditContext(
-                    post_id=reddit_post.post_id,
-                    post_title=reddit_post.title,
-                    post_url=reddit_post.url,
-                    subreddit=subreddit_name,
-                    post_content=reddit_post.content,
-                    permalink=reddit_post.permalink,
-                    comments=(
-                        [{"text": reddit_post.comment_summary}]
-                        if reddit_post.comment_summary
-                        else [] or []
-                    ),
-                )
-
-                # Convert to Pydantic schemas using model_validate
                 product_schema = ProductInfoSchema.model_validate(product_info)
-                
-                # Generate affiliate link dynamically if not present
                 if not product_schema.affiliate_link and product_schema.product_url:
-                    affiliate_linker = get_affiliate_linker()
                     if affiliate_linker:
                         try:
-                            # Generate affiliate link directly using the base AffiliateLinker
-                            affiliate_link = affiliate_linker.affiliate_linker.compose_affiliate_link(
-                                product_schema.product_url
+                            product_schema.affiliate_link = (
+                                affiliate_linker.affiliate_linker.compose_affiliate_link(
+                                    product_schema.product_url
+                                )
                             )
-                            product_schema.affiliate_link = affiliate_link
-                            logger.info(f"Generated affiliate link for product {product_schema.theme}")
                         except Exception as e:
-                            logger.error(f"Failed to generate affiliate link for {product_schema.theme}: {e}")
-                            # Use product_url as fallback
+                            logger.error(
+                                "Failed to generate affiliate link for %s: %s",
+                                product_schema.theme,
+                                e,
+                            )
                             product_schema.affiliate_link = product_schema.product_url
-                pipeline_schema = PipelineRunSchema.model_validate(run)
-                reddit_post_dict = reddit_post.__dict__.copy()
+                if donation_info:
+                    product_schema.donation_info = donation_info
+
+                reddit_post_dict = {
+                    column.name: getattr(reddit_post, column.name)
+                    for column in reddit_post.__table__.columns
+                }
                 reddit_post_dict["subreddit"] = (
                     reddit_post.subreddit.subreddit_name
                     if reddit_post.subreddit
                     else None
                 )
-                reddit_schema = RedditPostSchema.model_validate(reddit_post_dict)
-
-                # Fetch usage data
-                usage_data = (
-                    db.query(PipelineRunUsage).filter_by(pipeline_run_id=run.id).first()
-                )
-                usage_schema = (
-                    PipelineRunUsageSchema.model_validate(usage_data)
-                    if usage_data
-                    else None
-                )
-
-                # Add donation info to the schema if available
-                if donation_info:
-                    product_schema.donation_info = donation_info
-
+                usage_data = usage_by_run.get(run.id)
                 products.append(
                     GeneratedProductSchema(
                         product_info=product_schema,
-                        pipeline_run=pipeline_schema,
-                        reddit_post=reddit_schema,
-                        usage=usage_schema,
+                        pipeline_run=PipelineRunSchema.model_validate(run),
+                        reddit_post=RedditPostSchema.model_validate(reddit_post_dict),
+                        usage=(
+                            PipelineRunUsageSchema.model_validate(usage_data)
+                            if usage_data
+                            else None
+                        ),
                     )
-                )
-                logger.info(
-                    f"Successfully converted pipeline run {run.id} to schema with usage data"
                 )
             except Exception as e:
                 logger.error(
-                    f"Error converting pipeline run {run.id} to schema: {str(e)}"
+                    "Error converting pipeline run %s to schema: %s",
+                    getattr(product_info, "pipeline_run_id", "?"),
+                    e,
                 )
                 logger.error(traceback.format_exc())
                 continue
-        logger.info(f"Returning {len(products)} products.")
+
+        logger.info(
+            "Returning %s products in %.3fs",
+            len(products),
+            time.monotonic() - started,
+        )
         return products
     except Exception as e:
         logger.error(f"Error in fetch_successful_pipeline_runs: {str(e)}")
@@ -372,27 +366,53 @@ def fetch_successful_pipeline_runs(db: Session) -> List[GeneratedProductSchema]:
         raise
 
 
-@app.get("/api/generated_products", response_model=List[GeneratedProductSchema])
+@app.get("/api/generated_products")
 async def get_generated_products():
     """
     API endpoint to retrieve all successful pipeline runs and their related data.
-
-    Returns:
-        List[GeneratedProductSchema]: A list of generated products with their associated data.
     """
     logger.info("Starting get_generated_products request")
+    cache_enabled = os.getenv("TESTING") != "true"
+    now = time.monotonic()
+    if cache_enabled:
+        with _products_cache_lock:
+            cached_body = _products_cache["body"]
+            cached_at = _products_cache["at"]
+        if cached_body and now - cached_at < _PRODUCTS_CACHE_TTL_SECONDS:
+            return Response(
+                content=cached_body,
+                media_type="application/json",
+                headers={"Cache-Control": "public, max-age=30"},
+            )
+
+    db = None
     try:
         db = SessionLocal()
         products = fetch_successful_pipeline_runs(db)
-        logger.info(f"Returning {len(products)} products.")
+        payload = []
+        for product in products:
+            if hasattr(product, "model_dump"):
+                payload.append(product.model_dump(mode="json"))
+            else:
+                payload.append(product)
+        body = json.dumps(payload, separators=(",", ":"), default=str)
+        if cache_enabled:
+            with _products_cache_lock:
+                _products_cache["body"] = body
+                _products_cache["at"] = time.monotonic()
         logger.info("Successfully converted products to response format")
-        return products
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=30"},
+        )
     except Exception as e:
         logger.error(f"Error in get_generated_products: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 @app.get("/redirect/{image_name}")
@@ -1313,7 +1333,7 @@ async def get_bulk_product_donations(
     Get donation information for multiple products in a single request.
     
     Args:
-        request: Request body containing product_ids (max 100)
+        request: Request body containing product_ids (max 5000)
         type: Filter for 'commission', 'support', or 'all' (default: all)
         response: Response object for cache headers
         db: Database session
@@ -1323,8 +1343,8 @@ async def get_bulk_product_donations(
     """
     product_ids = request.product_ids
     
-    if len(product_ids) > 100:
-        raise HTTPException(status_code=400, detail="Maximum 100 product IDs allowed")
+    if len(product_ids) > 5000:
+        raise HTTPException(status_code=400, detail="Maximum 5000 product IDs allowed")
     
     if not product_ids:
         return {}
