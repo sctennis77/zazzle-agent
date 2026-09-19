@@ -1,6 +1,5 @@
 import base64
 import io
-import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
@@ -10,23 +9,144 @@ from openai.types.images_response import ImagesResponse
 from PIL import Image
 
 from app.clients.imgur_client import ImgurClient
-from app.models import ProductIdea, ProductInfo
 from app.services.image_processor import ImageProcessor
 from app.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Base prompts for different DALL-E models
+DEFAULT_IMAGE_MODEL = "gpt-image-2"
+LEGACY_DALLE_MODELS = {"dall-e-2", "dall-e-3"}
+# gpt-image-1 / 1.5 remain callable until their shutdown dates, but new
+# generations default to gpt-image-2.
+GPT_IMAGE_MODELS = {
+    "gpt-image-1",
+    "gpt-image-1-mini",
+    "gpt-image-1.5",
+    "gpt-image-2",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-flare",
+}
+
+# App-level quality values stored in the DB / shown in the UI.
+APP_QUALITY_STANDARD = "standard"
+APP_QUALITY_HD = "hd"
+
+# GPT Image models rejected DALL·E's quality, style, and response_format fields.
+QUALITY_TO_API = {
+    "standard": "medium",
+    "low": "low",
+    "medium": "medium",
+    "hd": "high",
+    "high": "high",
+    "xhigh": "high",
+    "max": "high",
+    "auto": "auto",
+}
+API_QUALITY_TO_APP = {
+    "low": APP_QUALITY_STANDARD,
+    "medium": APP_QUALITY_STANDARD,
+    "high": APP_QUALITY_HD,
+    "xhigh": APP_QUALITY_HD,
+    "max": APP_QUALITY_HD,
+    "auto": APP_QUALITY_STANDARD,
+    "standard": APP_QUALITY_STANDARD,
+    "hd": APP_QUALITY_HD,
+}
+SIZE_ALIASES = {
+    "256x256": "1024x1024",
+    "512x512": "1024x1024",
+    "1024x1792": "1024x1536",
+    "1792x1024": "1536x1024",
+}
+GPT_IMAGE_SIZES = {"1024x1024", "1024x1536", "1536x1024", "auto"}
+
+ILLUSTRATION_PROMPT = (
+    "Create a square (1:1) image designed for clear, engaging visual storytelling on a webpage. "
+    "and your 1024x1024 image size. Create a beautiful illustration based on the following scene "
+    "description. Use a combined impasto and pointillism style, inspired by painters like Van Gogh "
+    "and Seurat. Focus on visible brushstrokes, rich texture, and vibrant, light-filled color with "
+    "a strong emphasis on nature. Highlight mood, setting, and symbolic details rather than "
+    "realism. Do not include any text or representations of text."
+)
+
+# Base prompts for image models. Legacy DALL·E keys are kept so stored products
+# and existing tests still resolve prompt version metadata.
 IMAGE_GENERATION_BASE_PROMPTS = {
     "dall-e-2": {
         "prompt": "Create a square (1:1) image optimized for picture books and your 1024x1024 image size. Style and composition inspired by impressionist painters like Monet, Van Gogh, or Seurat, with precise brushwork and vibrant, light-filled colors. Emphasize nature. Text and any representations of text is not allowed. Craft a beautiful image based on the following description. ",
         "version": "1.0.1",
     },
     "dall-e-3": {
-        "prompt": "Create a square (1:1) image designed for clear, engaging visual storytelling on a webpage. and your 1024x1024 image size. Create a beautiful illustration based on the following scene description. Use a combined impasto and pointillism style, inspired by painters like Van Gogh and Seurat. Focus on visible brushstrokes, rich texture, and vibrant, light-filled color with a strong emphasis on nature. Highlight mood, setting, and symbolic details rather than realism. Do not include any text or representations of text.",
+        "prompt": ILLUSTRATION_PROMPT,
         "version": "1.0.1",
     },
+    "gpt-image-1": {
+        "prompt": ILLUSTRATION_PROMPT,
+        "version": "1.1.0",
+    },
+    "gpt-image-1.5": {
+        "prompt": ILLUSTRATION_PROMPT,
+        "version": "1.1.0",
+    },
+    "gpt-image-2": {
+        "prompt": ILLUSTRATION_PROMPT,
+        "version": "1.1.0",
+    },
 }
+
+
+def get_default_image_model() -> str:
+    """Return the configured GPT Image model, defaulting to gpt-image-2."""
+    return os.getenv("OPENAI_IMAGE_MODEL", DEFAULT_IMAGE_MODEL)
+
+
+def normalize_app_quality(quality: Optional[str]) -> str:
+    """Map caller quality values onto the stored standard/hd vocabulary."""
+    if not quality:
+        return APP_QUALITY_STANDARD
+    mapped = API_QUALITY_TO_APP.get(quality.lower())
+    if mapped is None:
+        raise ValueError(
+            f"Invalid quality '{quality}'. Must be one of: {', '.join(sorted(QUALITY_TO_API))}"
+        )
+    return mapped
+
+
+def to_api_quality(quality: str) -> str:
+    """Map stored or caller quality values onto the GPT Image API vocabulary."""
+    mapped = QUALITY_TO_API.get(quality.lower())
+    if mapped is None:
+        raise ValueError(
+            f"Invalid quality '{quality}'. Must be one of: {', '.join(sorted(QUALITY_TO_API))}"
+        )
+    return mapped
+
+
+def resolve_image_model(model: str) -> str:
+    """Map retired DALL·E model IDs onto the current GPT Image model."""
+    if model in LEGACY_DALLE_MODELS:
+        resolved = get_default_image_model()
+        logger.warning(
+            "Image model '%s' was retired from the OpenAI Images API; using '%s' instead",
+            model,
+            resolved,
+        )
+        return resolved
+    if model in GPT_IMAGE_MODELS or model.startswith("gpt-image-"):
+        return model
+    raise ValueError(
+        f"Invalid model '{model}'. Must be a GPT Image model or a legacy DALL·E alias"
+    )
+
+
+def resolve_image_size(size: str) -> str:
+    """Map DALL·E sizes onto GPT Image sizes."""
+    mapped = SIZE_ALIASES.get(size, size)
+    if mapped not in GPT_IMAGE_SIZES:
+        raise ValueError(
+            f"Invalid size '{size}'. Allowed: {', '.join(sorted(GPT_IMAGE_SIZES | set(SIZE_ALIASES)))}"
+        )
+    return mapped
 
 
 class ImageGenerationError(Exception):
@@ -37,58 +157,78 @@ class ImageGenerationError(Exception):
 
 class AsyncImageGenerator:
     """
-    Asynchronous image generator using DALL-E and Imgur, matching ImageGenerator's interface.
+    Asynchronous image generator using the OpenAI Images API and Imgur.
+
+    DALL·E 2/3 were removed from the API in May 2026. Requests now use GPT Image
+    models, which always return base64 (`b64_json`) and reject `response_format`
+    and `style`.
     """
 
     VALID_SIZES = {
         "dall-e-2": {"256x256", "512x512", "1024x1024"},
         "dall-e-3": {"1024x1024", "1024x1792", "1792x1024"},
+        **{model: set(GPT_IMAGE_SIZES) for model in GPT_IMAGE_MODELS},
     }
-    DEFAULT_SIZE = {"dall-e-2": "256x256", "dall-e-3": "1024x1024"}
-    VALID_MODELS = {"dall-e-2", "dall-e-3"}
-    DEFAULT_STYLES = {"dall-e-3": "vivid", "dall-e-2": "vivid"}
-    VALID_QUALITIES = {"standard", "hd"}
-    DEFAULT_QUALITY = "standard"
+    DEFAULT_SIZE = {
+        "dall-e-2": "1024x1024",
+        "dall-e-3": "1024x1024",
+        **{model: "1024x1024" for model in GPT_IMAGE_MODELS},
+    }
+    VALID_MODELS = LEGACY_DALLE_MODELS | GPT_IMAGE_MODELS
+    VALID_QUALITIES = set(QUALITY_TO_API)
+    DEFAULT_QUALITY = APP_QUALITY_STANDARD
 
     def __init__(
         self,
-        model: str = "dall-e-3",
+        model: Optional[str] = None,
         style: Optional[str] = None,
         quality: Optional[str] = None,
     ) -> None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY must be set")
-        if model not in self.VALID_MODELS:
-            raise ValueError(
-                f"Invalid model. Must be one of: {', '.join(self.VALID_MODELS)}"
-            )
+        requested_model = model or get_default_image_model()
+        self.requested_model = requested_model
+        self.model = resolve_image_model(requested_model)
         self.client = AsyncOpenAI(api_key=api_key)
         self.imgur_client = ImgurClient()
         self.image_processor = ImageProcessor()
-        self.model = model
-        if model == "dall-e-2":
-            self.style = style or self.DEFAULT_STYLES[model]
-        else:
-            self.style = None
-
-        # Quality is only supported for DALL-E 3
-        if quality and model == "dall-e-2":
-            logger.warning("Quality parameter is not supported for DALL-E 2, ignoring")
-            self.quality = self.DEFAULT_QUALITY
-        else:
-            self.quality = quality or self.DEFAULT_QUALITY
-            if self.quality not in self.VALID_QUALITIES:
-                raise ValueError(
-                    f"Invalid quality. Must be one of: {', '.join(self.VALID_QUALITIES)}"
-                )
+        # GPT Image models do not support DALL·E's style parameter.
+        if style:
+            logger.info(
+                "Ignoring unsupported style=%s for GPT Image model %s",
+                style,
+                self.model,
+            )
+        self.style = None
+        self.quality = normalize_app_quality(quality)
 
         logger.info(
-            f"Initialized AsyncImageGenerator with model: {model}, style: {self.style}, quality: {self.quality}"
+            "Initialized AsyncImageGenerator with model: %s (requested: %s), quality: %s",
+            self.model,
+            self.requested_model,
+            self.quality,
         )
 
     def get_prompt_info(self) -> Dict[str, str]:
-        return IMAGE_GENERATION_BASE_PROMPTS[self.model]
+        if self.requested_model in IMAGE_GENERATION_BASE_PROMPTS:
+            return IMAGE_GENERATION_BASE_PROMPTS[self.requested_model]
+        if self.model in IMAGE_GENERATION_BASE_PROMPTS:
+            return IMAGE_GENERATION_BASE_PROMPTS[self.model]
+        return IMAGE_GENERATION_BASE_PROMPTS["dall-e-3"]
+
+    def _build_generate_kwargs(
+        self, prompt: str, size: str, quality: str
+    ) -> Dict[str, Any]:
+        """Build Images API kwargs for the current GPT Image contract."""
+        return {
+            "model": self.model,
+            "prompt": prompt,
+            "size": resolve_image_size(size),
+            "n": 1,
+            "quality": to_api_quality(quality),
+            "output_format": "png",
+        }
 
     async def generate_image(
         self,
@@ -99,62 +239,50 @@ class AsyncImageGenerator:
         quality: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
-        Generate an image using DALL-E asynchronously and store it both locally and on Imgur.
+        Generate an image using the OpenAI Images API and store it locally and on Imgur.
         """
         if size is None:
-            size = self.DEFAULT_SIZE[self.model]
-        if size not in self.VALID_SIZES[self.model]:
-            raise ValueError(
-                f"Invalid size '{size}' for model '{self.model}'. Allowed: {', '.join(self.VALID_SIZES[self.model])}"
+            size = self.DEFAULT_SIZE.get(self.requested_model) or self.DEFAULT_SIZE.get(
+                self.model, "1024x1024"
             )
-        # Use quality parameter if provided, otherwise use instance default
-        image_quality = quality if quality is not None else self.quality
-
-        # Validate quality for the model
-        if image_quality not in self.VALID_QUALITIES:
-            raise ValueError(
-                f"Invalid quality '{image_quality}'. Must be one of: {', '.join(self.VALID_QUALITIES)}"
-            )
+        api_size = resolve_image_size(size)
+        image_quality = (
+            normalize_app_quality(quality) if quality is not None else self.quality
+        )
 
         try:
             logger.info(
-                f"[Async] Generating image for prompt: '{prompt}' with size: {size}, quality: {image_quality}, model: {self.model}"
+                "[Async] Generating image for prompt: '%s' with size: %s (api: %s), quality: %s, model: %s",
+                prompt,
+                size,
+                api_size,
+                image_quality,
+                self.model,
             )
-            base_prompt = IMAGE_GENERATION_BASE_PROMPTS[self.model]["prompt"]
+            base_prompt = self.get_prompt_info()["prompt"]
             full_prompt = f"{base_prompt} {prompt}"
-            if self.model == "dall-e-3":
-                response = await self.client.images.generate(
-                    model=self.model,
-                    prompt=full_prompt,
-                    size=size,
-                    n=1,
-                    style="vivid",
-                    quality=image_quality,
-                    response_format="b64_json",
-                )
-            else:
-                # DALL-E 2 doesn't support quality parameter
-                response = await self.client.images.generate(
-                    model=self.model,
-                    prompt=full_prompt,
-                    size=size,
-                    n=1,
-                    style=self.style,
-                    response_format="b64_json",
+            generate_kwargs = self._build_generate_kwargs(
+                full_prompt, size, image_quality
+            )
+            response = await self.client.images.generate(**generate_kwargs)
+            if not response.data:
+                raise ImageGenerationError(
+                    "Image API returned no data. GPT Image models reject response_format "
+                    "and always return b64_json."
                 )
             image_data_b64 = response.data[0].b64_json
             if not image_data_b64:
-                raise ImageGenerationError("DALL-E did not return base64 image data.")
-            logger.info(
-                "[Async] Image data successfully retrieved from DALL-E response."
-            )
+                raise ImageGenerationError("Image API did not return base64 image data.")
+            logger.info("[Async] Image data successfully retrieved from Image API response.")
             return await self._process_and_store_image(
                 response,
                 template_id,
-                size,
+                api_size,
                 stamp_image=stamp_image,
                 quality=image_quality,
             )
+        except ImageGenerationError:
+            raise
         except Exception as e:
             error_msg = f"[Async] Failed to generate or store image: {str(e)}"
             logger.error(error_msg)
@@ -171,20 +299,18 @@ class AsyncImageGenerator:
         quality: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
-        Process DALL-E response and store image locally and on Imgur.
+        Process Image API response and store image locally and on Imgur.
         """
         try:
             image_data_b64 = response.data[0].b64_json
             if not image_data_b64:
-                raise ImageGenerationError("DALL-E did not return base64 image data.")
+                raise ImageGenerationError("Image API did not return base64 image data.")
             image_data = base64.b64decode(image_data_b64)
-            logger.info(
-                "[Async] Image data successfully retrieved from DALL-E response."
-            )
+            logger.info("[Async] Image data successfully retrieved from Image API response.")
             image = Image.open(io.BytesIO(image_data))
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename_prefix = (
-                f"{template_id}_{timestamp}" if template_id else f"dalle_{timestamp}"
+                f"{template_id}_{timestamp}" if template_id else f"gptimage_{timestamp}"
             )
             filename = f"{filename_prefix}_{size}.png"
             if stamp_image:

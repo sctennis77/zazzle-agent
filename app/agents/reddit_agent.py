@@ -26,7 +26,11 @@ from app.affiliate_linker import ZazzleAffiliateLinker
 
 # Remove legacy distribution imports
 # from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
-from app.async_image_generator import IMAGE_GENERATION_BASE_PROMPTS, AsyncImageGenerator
+from app.async_image_generator import (
+    IMAGE_GENERATION_BASE_PROMPTS,
+    AsyncImageGenerator,
+    get_default_image_model,
+)
 from app.clients.imgur_client import ImgurClient
 from app.clients.reddit_client import RedditClient
 from app.db.database import SessionLocal
@@ -579,12 +583,15 @@ class RedditAgent:
             reddit_client: Optional Reddit client for testing
             task_context: Optional task context data for commissioning
         """
+        default_model = get_default_image_model()
         self.config = config or PipelineConfig(
-            model="dall-e-3",
+            model=default_model,
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
-            prompt_version="1.0.0",
+            prompt_version=IMAGE_GENERATION_BASE_PROMPTS.get(
+                default_model, IMAGE_GENERATION_BASE_PROMPTS["gpt-image-2"]
+            )["version"],
         )
         self.pipeline_run_id = pipeline_run_id
         self.session = session

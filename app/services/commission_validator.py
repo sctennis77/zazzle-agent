@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.agents.reddit_agent import RedditAgent, pick_subreddit
+from app.async_image_generator import get_default_image_model
 from app.clients.reddit_client import RedditClient
 from app.db.database import SessionLocal
 from app.db.models import AgentScannedPost, Donation, Subreddit
@@ -73,11 +74,11 @@ class CommissionValidator:
 
         # Initialize RedditAgent for post finding and validation
         config = PipelineConfig(
-            model="dall-e-3",
+            model=get_default_image_model(),
             zazzle_template_id="test_template",
             zazzle_tracking_code="test_code",
             zazzle_affiliate_id="test_affiliate",
-            prompt_version="1.0.0",
+            prompt_version="1.1.0",
         )
         self.reddit_agent = RedditAgent(
             config=config, pipeline_run_id=None, session=self.session

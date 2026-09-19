@@ -60,19 +60,28 @@ class CommissionWorker:
         self.pipeline_task = None
 
         # Initialize pipeline configuration (same as old pipeline task runner)
+        from app.async_image_generator import (
+            IMAGE_GENERATION_BASE_PROMPTS,
+            get_default_image_model,
+            normalize_app_quality,
+        )
         from app.models import PipelineConfig
         from app.zazzle_templates import ZAZZLE_PRINT_TEMPLATE
 
         # Get image quality from task data, default to standard
         image_quality = task_data.get("image_quality", "standard")
+        image_model = get_default_image_model()
+        prompt_info = IMAGE_GENERATION_BASE_PROMPTS.get(
+            image_model, IMAGE_GENERATION_BASE_PROMPTS["gpt-image-2"]
+        )
 
         self.config = PipelineConfig(
-            model="dall-e-3",
+            model=image_model,
             zazzle_template_id=ZAZZLE_PRINT_TEMPLATE.zazzle_template_id,
             zazzle_tracking_code=ZAZZLE_PRINT_TEMPLATE.zazzle_tracking_code,
             zazzle_affiliate_id=os.getenv("ZAZZLE_AFFILIATE_ID", ""),
-            prompt_version="1.0.0",
-            image_quality=image_quality,
+            prompt_version=prompt_info["version"],
+            image_quality=normalize_app_quality(image_quality),
         )
 
         # Initialize components with proper configuration

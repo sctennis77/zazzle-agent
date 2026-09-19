@@ -68,6 +68,9 @@ class OpenAIUsageTracker:
         "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
         "dall-e-3": {"1024x1024": 0.04, "1024x1792": 0.08, "1792x1024": 0.08},
         "dall-e-2": {"1024x1024": 0.02, "512x512": 0.018, "256x256": 0.016},
+        "gpt-image-1": {"1024x1024": 0.04, "1024x1536": 0.08, "1536x1024": 0.08},
+        "gpt-image-1.5": {"1024x1024": 0.04, "1024x1536": 0.08, "1536x1024": 0.08},
+        "gpt-image-2": {"1024x1024": 0.04, "1024x1536": 0.08, "1536x1024": 0.08},
     }
 
     # Rate limits (requests per minute)
@@ -77,6 +80,9 @@ class OpenAIUsageTracker:
         "gpt-3.5-turbo": {"requests": 3500, "tokens": 90000},
         "dall-e-3": {"requests": 50, "tokens": 0},
         "dall-e-2": {"requests": 50, "tokens": 0},
+        "gpt-image-1": {"requests": 50, "tokens": 0},
+        "gpt-image-1.5": {"requests": 50, "tokens": 0},
+        "gpt-image-2": {"requests": 50, "tokens": 0},
     }
 
     def __init__(self, test_mode: bool = False):

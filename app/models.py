@@ -355,7 +355,7 @@ class PipelineConfig:
     of the product creation pipeline.
 
     Attributes:
-        model (str): The AI model to use (e.g. "dall-e-3")
+        model (str): The AI model to use (e.g. "gpt-image-2")
         zazzle_template_id (str): The Zazzle template ID for product creation
         zazzle_tracking_code (str): The tracking code for Zazzle affiliate links
         zazzle_affiliate_id (str): The Zazzle affiliate ID for link generation
