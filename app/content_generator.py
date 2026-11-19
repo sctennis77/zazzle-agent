@@ -23,6 +23,7 @@ from openai import OpenAI
 
 from app.models import PipelineConfig, ProductIdea, ProductInfo, RedditContext
 from app.utils.logging_config import get_logger
+from app.utils.chat_models import chat_request_kwargs, get_idea_model
 from app.utils.openai_usage_tracker import log_session_summary, track_openai_call
 
 load_dotenv()
@@ -73,18 +74,23 @@ class ContentGenerator:
         @track_openai_call(model=model, operation="chat")
         def _tracked_call():
             response = self.client.chat.completions.create(
-                model=model, messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                **chat_request_kwargs(model),
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if not content or not str(content).strip():
+                raise ValueError(f"Chat model {model} returned an empty response")
+            return str(content).strip()
 
         return _tracked_call()
 
     def _get_model(self) -> str:
         """
         Get the model to use for content generation.
-        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-4o-mini.
+        Uses the OPENAI_IDEA_MODEL environment variable. Retired model ids
+        are remapped onto the current default.
         """
-        return os.getenv("OPENAI_IDEA_MODEL", "gpt-4o-mini")
+        return get_idea_model()
 
     def generate_content(
         self, product_name: str, force_new_content: bool = False

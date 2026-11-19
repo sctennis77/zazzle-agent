@@ -134,7 +134,10 @@ class CommissionWorker:
             if success:
                 self._update_task_status("completed")
             else:
-                self._update_task_status("failed", "Commission processing failed")
+                reason = "Commission processing failed"
+                if self.reddit_agent is not None and self.reddit_agent.last_error:
+                    reason = self.reddit_agent.last_error
+                self._update_task_status("failed", reason)
 
             self._update_donation_status(donation, success)
 

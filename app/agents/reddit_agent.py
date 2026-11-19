@@ -23,6 +23,7 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.affiliate_linker import ZazzleAffiliateLinker
+from app.utils.chat_models import chat_request_kwargs, get_idea_model
 
 # Remove legacy distribution imports
 # from app.distribution.reddit import RedditDistributionChannel, RedditDistributionError
@@ -628,6 +629,7 @@ class RedditAgent:
 
         # Set the idea generation model
         self.idea_model = self._get_idea_model()
+        self.last_error: Optional[str] = None
 
         logger.info(f"Initialized RedditAgent for subreddit: {self.subreddit_name}")
         logger.info(f"Using idea model: {self.idea_model}")
@@ -641,11 +643,13 @@ class RedditAgent:
         log_session_summary()
 
     def _get_idea_model(self) -> str:
+        """Return the chat model used for ideas and comment summaries.
+
+        Retired ids such as gpt-4 and gpt-3.5-turbo are remapped onto the
+        current default. OPENAI_IDEA_MODEL still overrides that default when
+        it names a model the API still serves.
         """
-        Get the model to use for product idea generation.
-        Uses the OPENAI_IDEA_MODEL environment variable, defaults to gpt-4o-mini.
-        """
-        return os.getenv("OPENAI_IDEA_MODEL", "gpt-4o-mini")
+        return get_idea_model()
 
     async def _send_image_generation_progress(
         self, delay: int = 1, image_title: str = None
@@ -700,9 +704,13 @@ class RedditAgent:
         @track_openai_call(model=model, operation="chat")
         def _tracked_call():
             response = self.openai.chat.completions.create(
-                model=model, messages=messages
+                messages=messages,
+                **chat_request_kwargs(model),
             )
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            if not content or not str(content).strip():
+                raise ValueError(f"Chat model {model} returned an empty response")
+            return str(content).strip()
 
         return _tracked_call()
 
@@ -778,6 +786,7 @@ class RedditAgent:
             if not theme or not theme.strip():
                 error_msg = "No theme found in OpenAI response"
                 logger.error(error_msg)
+                self.last_error = error_msg
                 return None
             if not image_description or not image_description.strip():
                 error_msg = "No image description found in OpenAI response"
@@ -827,6 +836,7 @@ class RedditAgent:
             raise
         except Exception as e:
             logger.error(f"Error determining product idea: {str(e)}")
+            self.last_error = f"Error determining product idea: {e}"
             return None
 
     async def find_and_create_product_for_task(self) -> Optional[ProductInfo]:
@@ -842,6 +852,9 @@ class RedditAgent:
             trending_post = await self._find_trending_post_for_task()
             if not trending_post:
                 logger.warning("No suitable trending post found for task")
+                self.last_error = (
+                    self.last_error or "No suitable trending post found for task"
+                )
                 return None
 
             # Log trending post details
@@ -885,6 +898,9 @@ class RedditAgent:
             product_idea = await self._determine_product_idea(reddit_context)
             if not product_idea:
                 logger.warning("Could not determine product idea from post")
+                self.last_error = (
+                    self.last_error or "Could not determine product idea from post"
+                )
                 return None
             if not product_idea.theme or product_idea.theme.lower() == "default theme":
                 raise ValueError("No valid theme was generated from the Reddit context")
@@ -975,6 +991,7 @@ class RedditAgent:
 
             except Exception as e:
                 logger.error(f"Error during image generation: {str(e)}")
+                self.last_error = f"Error during image generation: {e}"
                 # Signal completion even on error so progress task doesn't hang
                 if (
                     hasattr(self, "image_generation_event")
@@ -1119,10 +1136,14 @@ class RedditAgent:
                         return submission
                     else:
                         logger.error(f"Failed to fetch commissioned post {post_id}")
+                        self.last_error = f"Failed to fetch commissioned post {post_id}"
                         return None
                 except Exception as e:
                     logger.error(
                         f"Error fetching commissioned post {post_id}: {str(e)}"
+                    )
+                    self.last_error = (
+                        f"Error fetching commissioned post {post_id}: {e}"
                     )
                     return None
 
@@ -1170,6 +1191,7 @@ class RedditAgent:
             return None
         except Exception as e:
             logger.error(f"Error finding trending post: {str(e)}")
+            self.last_error = f"Error finding trending post: {e}"
             return None
 
     def _generate_comment_summary(self, submission) -> str:
@@ -1190,9 +1212,9 @@ class RedditAgent:
                 comment.body for comment in top_comments if hasattr(comment, "body")
             ]
             if comment_texts:
-                # Use GPT to summarize comments
+                # Use the same live chat model as idea generation. gpt-4
+                # stopped accepting requests on 2026-10-23.
                 response = self.openai.chat.completions.create(
-                    model="gpt-4",
                     messages=[
                         {
                             "role": "system",
@@ -1203,8 +1225,11 @@ class RedditAgent:
                             "content": f"Comments:\n{chr(10).join(comment_texts)}",
                         },
                     ],
+                    **chat_request_kwargs(self._get_idea_model()),
                 )
-                comment_summary = response.choices[0].message.content.strip()
+                comment_summary = (
+                    response.choices[0].message.content or ""
+                ).strip() or "No comments available."
             else:
                 comment_summary = "No comments available."
 
