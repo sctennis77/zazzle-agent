@@ -176,6 +176,7 @@ stripe_service = StripeService()
 
 # Initialize task manager
 task_manager = TaskManager()
+task_monitor = None
 
 
 @app.on_event("startup")
@@ -196,6 +197,14 @@ async def startup_event():
     asyncio.create_task(background_scheduler.start())
     logger.info("Background scheduler started successfully!")
 
+    logger.info("Starting stuck-task monitor...")
+    from app.services.task_monitor import TaskMonitor
+
+    global task_monitor
+    task_monitor = TaskMonitor(task_manager)
+    asyncio.create_task(task_monitor.start_monitoring())
+    logger.info("Stuck-task monitor started successfully!")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -205,6 +214,12 @@ async def shutdown_event():
 
     await background_scheduler.stop()
     logger.info("Background scheduler stopped successfully!")
+
+    global task_monitor
+    if task_monitor is not None:
+        logger.info("Stopping stuck-task monitor...")
+        await task_monitor.stop_monitoring()
+        logger.info("Stuck-task monitor stopped successfully!")
 
     logger.info("Stopping WebSocket manager...")
     await websocket_manager.stop()

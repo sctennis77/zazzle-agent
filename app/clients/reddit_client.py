@@ -28,6 +28,7 @@ class RedditClient:
                 user_agent=os.getenv(
                     "REDDIT_USER_AGENT", "zazzle-agent by u/yourusername"
                 ),
+                timeout=30,
             )
 
             # Determine operation mode (live or dry run)

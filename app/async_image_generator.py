@@ -190,7 +190,7 @@ class AsyncImageGenerator:
         requested_model = model or get_default_image_model()
         self.requested_model = requested_model
         self.model = resolve_image_model(requested_model)
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(api_key=api_key, timeout=180.0)
         self.imgur_client = ImgurClient()
         self.image_processor = ImageProcessor()
         # GPT Image models do not support DALL·E's style parameter.

@@ -55,7 +55,7 @@ class ContentGenerator:
                 for testing purposes.
         """
         self.api_key = api_key or "test_api_key"
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key, timeout=60.0)
         logger.info("Initializing ContentGenerator")
 
     def _make_openai_call(self, prompt: str) -> str:

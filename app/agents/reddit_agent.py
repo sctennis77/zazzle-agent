@@ -625,7 +625,7 @@ class RedditAgent:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
-        self.openai = OpenAI(api_key=openai.api_key)  # Initialize the OpenAI client
+        self.openai = OpenAI(api_key=openai.api_key, timeout=60.0)
 
         # Set the idea generation model
         self.idea_model = self._get_idea_model()
